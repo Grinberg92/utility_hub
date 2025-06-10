@@ -3,14 +3,17 @@ import os
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QGroupBox, QLabel, QFrame, QHBoxLayout, QSizePolicy
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "src")
+ICON_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ui", "icon.png")
 
 class HubApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Utility Hub")
         self.setGeometry(200, 200, 900, 350)
+        self.setWindowIcon(QIcon(ICON_PATH))
 
         #Главный горизонтальный слой
         mainlayout = QHBoxLayout()
