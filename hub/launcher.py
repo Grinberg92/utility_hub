@@ -12,7 +12,10 @@ class HubApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Utility Hub")
-        self.setGeometry(200, 200, 900, 350)
+        if os.name != "posix":
+            self.setGeometry(200, 200, 900, 350)
+        else:
+            self.setGeometry(200, 200, 1100, 350)
         self.setWindowIcon(QIcon(ICON_PATH))
 
         #Главный горизонтальный слой
