@@ -15,7 +15,7 @@ class HubApp(QWidget):
         if os.name != "posix":
             self.setGeometry(200, 200, 900, 350)
         else:
-            self.setGeometry(200, 200, 1100, 350)
+            self.setGeometry(200, 200, 1450, 520)
         self.setWindowIcon(QIcon(ICON_PATH))
 
         #Главный горизонтальный слой
