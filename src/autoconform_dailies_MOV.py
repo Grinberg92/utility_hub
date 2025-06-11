@@ -83,20 +83,18 @@ def is_first_gap(frame_rate, edl_timeline_start_tc, tmln_start_hour, end_tc_trac
         gap_dur = tc(frame_rate, edl_timeline_start_tc).frames - tc(frame_rate, end_tc_tracks[track_ind]).frames
     return gap_dur
 
-def is_edl_start_frame(src_duration, timeline_duration, start_frame):
-    """Функция определяет есть ли захлесты у шота.
-       Если длина исходника больше длины продолжительности шота на таймлайне и равна 6(3 + 3 захлеста), 8 и 10,
-       то прибавляем к стартовому фрейму захлест.
+def is_edl_start_frame(frame_rate, edl_src_start_tc, edl_src_end_tc, source_start_timecode, source_end_timecode):
+    """Функция определяет вхождение сорс диапазона шота в таймлайн диапазон из EDL.
+       Если условие удовлетворяется - получаем стартовый таймкод из EDL и передаем в create_otio для 
+       выставления этого значения в качестве начального таймкода клипа.
        """  
-    # Задаем None по дефолту на случай если искомый захлест не обнаружен
-    otio_clip_start_frame = None
-    if src_duration - timeline_duration == 6:
-        otio_clip_start_frame = float(start_frame + 3)
-    elif src_duration - timeline_duration == 8:
-        otio_clip_start_frame = float(start_frame + 4)
-    elif src_duration - timeline_duration == 10:
-        otio_clip_start_frame = float(start_frame + 5)
-    return otio_clip_start_frame
+    # Задаем None по дефолту на случай если пересечения таймкодов нет
+    edl_src_start_frame = None
+    edl_src_start_tc_in_frames = tc(frame_rate, edl_src_start_tc).frames
+    edl_src_end_tc_in_frames = tc(frame_rate, edl_src_end_tc).frames
+    if edl_src_start_tc_in_frames >= source_start_timecode and edl_src_end_tc_in_frames <= source_end_timecode:  # Обратить внимание
+        edl_src_start_frame = float(edl_src_start_tc_in_frames - 1)
+    return edl_src_start_frame
 
 def format_timecode(timecode_str):
     """
@@ -201,7 +199,6 @@ def is_dublicate(target_name, all_cg_items):
 def get_clip_duration_and_timecode(path, frame_rate):
     try:
         media_info = MediaInfo.parse(path)
-        print(media_info)
         # Получаем длительность и начальный таймкод видео
         for track in media_info.tracks:
             if track.track_type == "Video":
@@ -209,18 +206,14 @@ def get_clip_duration_and_timecode(path, frame_rate):
                 duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
                 duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
                 duration_frames = int(duration_frames) - 1  # Переводим в целое количество кадров. -1 для корректного восприятия в ДВР
-                print("TACK TYPE")
                 # Извлекаем начальный таймкод
                 if track.other_delay:
-                    print("DELAY")
                     timecode = tc(frame_rate, track.other_delay[4]).frames - 1 # -1 для корректного восприятия в ДВР
                 return duration_frames, timecode
         
     except Exception as e:
         print(f"Ошибка при получении длительности видео: {e}")
         return None, None
-
-
 
 def get_shot_name_and_timecodes_from_folder(name, all_files_mov_list, frame_rate, no_dublicates, all_cg_items):
     """
@@ -247,8 +240,7 @@ def get_shot_name_and_timecodes_from_folder(name, all_files_mov_list, frame_rate
             mov_clip_path = target_mov_file
             mov_clip_duration, mov_start_tc = get_clip_duration_and_timecode(mov_clip_path, frame_rate)
 
-                        # Пропускаем шот, если нет
-            print(name, mov_clip_duration, tc(frame_rate, frames=mov_start_tc))
+            # Пропускаем шот, если нет
             if mov_clip_duration is None or mov_start_tc is None:
                 warnings_dict[mov_clip_name] = f'Ошибка при обработке шота. Необходимо добавить его вручную в Media Pool.'
                 return []
@@ -394,21 +386,21 @@ def parse_edl_and_get_clip_data(edl_path, frame_rate, all_folders_list, no_dubli
                     mov_clip_path = mov_info["mov_clip_path"]
                     mov_clip_duration = mov_info["mov_clip_duration"]
                     mov_start_tc = mov_info["mov_start_tc"]
+                    mov_end_tc = mov_start_tc + mov_clip_duration
 
                     is_crash_exr(mov_clip_path)
                     
-
                     # Вычисление таймлайн дюрэйшн
                     timeline_duration = tc(frame_rate, edl_timeline_end_tc).frames - tc(frame_rate, edl_timeline_start_tc).frames
 
-                    # Смещение фазы на 1 фрейм для отрезания слейта по началу
-                    otio_clip_start_frame = mov_start_tc + 1 
+                    mov_start_tc += 1 # Смещение фазы на 1 фрейм для отрезания слейта по началу
 
+                    # Вычисление таймкода для захлеста
+                    otio_clip_start_frame = is_edl_start_frame(frame_rate, edl_src_start_tc, edl_src_end_tc, mov_start_tc, mov_end_tc)
 
                     # Вычисление GAP для клипов
                     gap_dur = is_first_gap(frame_rate, edl_timeline_start_tc, tmln_start_hour, end_tc_tracks, track_ind)
-                    
-                    
+                           
                     # Проверка на длину
                     is_lenght(mov_clip_duration, timeline_duration, mov_clip_name)
 
