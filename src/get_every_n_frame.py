@@ -63,14 +63,14 @@ class CopyWorker(QThread):
 class CopyApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Копирование файлов с n-шагом")
+        self.setWindowTitle("Copy Files n-step")
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
 
         self.current_input = QLineEdit()
-        self.current_btn = QPushButton("Выбрать")
+        self.current_btn = QPushButton("Choose")
         self.current_btn.clicked.connect(self.choose_current)
 
         current_layout = QHBoxLayout()
@@ -79,7 +79,7 @@ class CopyApp(QWidget):
         current_layout.addWidget(self.current_btn)
 
         self.target_input = QLineEdit()
-        self.target_btn = QPushButton("Выбрать")
+        self.target_btn = QPushButton("Choose")
         self.target_btn.clicked.connect(self.choose_target)
 
         target_layout = QHBoxLayout()
@@ -97,7 +97,7 @@ class CopyApp(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setAlignment(Qt.AlignCenter)
 
-        self.start_btn = QPushButton("Начать копирование")
+        self.start_btn = QPushButton("Start")
         self.start_btn.clicked.connect(self.start_copying)
 
         layout.addLayout(current_layout)

@@ -64,30 +64,30 @@ class ResolveGUI:
         frame_size = tk.Frame(self.root)
         frame_size.pack(pady=5)
 
-        tk.Label(frame_size, text="Ширина:").pack(side=tk.LEFT, padx=5)
+        tk.Label(frame_size, text="Width:").pack(side=tk.LEFT, padx=5)
         tk.Entry(frame_size, textvariable=self.glob_width, width=6).pack(side=tk.LEFT)
 
-        tk.Label(frame_size, text="Высота:").pack(side=tk.LEFT, padx=5)
+        tk.Label(frame_size, text="Height:").pack(side=tk.LEFT, padx=5)
         tk.Entry(frame_size, textvariable=self.glob_height, width=6).pack(side=tk.LEFT)
 
         # Поле выбора папки
         frame_folder = tk.Frame(self.root)
         frame_folder.pack(pady=5, fill="x")
 
-        tk.Label(frame_folder, text="Папка рендера:").pack(side=tk.LEFT, padx=5)
+        tk.Label(frame_folder, text="Render path:").pack(side=tk.LEFT, padx=5)
         self.folder_entry = tk.Entry(frame_folder, textvariable=self.output_folder, width=30)
         self.folder_entry.pack(side=tk.LEFT, padx=5, expand=True, fill="x")
-        tk.Button(frame_folder, text="Выбрать", command=self.select_folder).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame_folder, text="Choose", command=self.select_folder).pack(side=tk.LEFT, padx=5)
 
         # Поля выбора пресетов
         frame_presets = tk.Frame(self.root)
         frame_presets.pack(pady=5)
         n = get_project_preset_list()
-        tk.Label(frame_presets, text="Пресет проекта:").pack(side=tk.LEFT, padx=5)
+        tk.Label(frame_presets, text="Project preset:").pack(side=tk.LEFT, padx=5)
         self.project_preset_combo = ttk.Combobox(frame_presets, textvariable=self.project_preset, values=get_project_preset_list())
         self.project_preset_combo.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(frame_presets, text="Пресет рендера:").pack(side=tk.LEFT, padx=5)
+        tk.Label(frame_presets, text="Render preset:").pack(side=tk.LEFT, padx=5)
         self.render_preset_combo = ttk.Combobox(frame_presets, textvariable=self.render_preset, values=get_render_preset_list())
         self.render_preset_combo.pack(side=tk.LEFT, padx=5)
 
@@ -95,12 +95,12 @@ class ResolveGUI:
         frame_lut = tk.Frame(self.root)
         frame_lut.pack(pady=5)
 
-        tk.Label(frame_lut, text="Проект LUT:").pack(side=tk.LEFT, padx=5)
+        tk.Label(frame_lut, text="Project:").pack(side=tk.LEFT, padx=5)
 
         self.lut_project_combo = ttk.Combobox(frame_lut, textvariable=self.lut_project, state="readonly", width=20)
         self.lut_project_combo.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(frame_lut, text="LUT файл:").pack(side=tk.LEFT, padx=5)
+        tk.Label(frame_lut, text="LUT file:").pack(side=tk.LEFT, padx=5)
 
         self.lut_file_combo = ttk.Combobox(frame_lut, textvariable=self.lut_file, state="readonly", width=30)
         self.lut_file_combo.pack(side=tk.LEFT, padx=5)
@@ -112,7 +112,7 @@ class ResolveGUI:
         frame_fps = tk.Frame(self.root)
         frame_fps.pack(pady=5)
 
-        self.fps_checkbox = tk.Checkbutton(frame_fps, text="Установить проектный FPS", variable=self.set_fps_enabled)
+        self.fps_checkbox = tk.Checkbutton(frame_fps, text="Set project FPS", variable=self.set_fps_enabled)
         self.fps_checkbox.pack(side=tk.LEFT, padx=5)
 
         tk.Label(frame_fps, text="FPS:").pack(side=tk.LEFT, padx=(10, 2))
@@ -150,7 +150,7 @@ class ResolveGUI:
         update_lut_projects()
 
         # Кнопка старта рендера
-        tk.Button(self.root, text="Запустить рендер", command=self.start_render).pack(pady=10)
+        tk.Button(self.root, text="Start", command=self.start_render).pack(pady=10)
 
     def select_folder(self):
         folder = filedialog.askdirectory()

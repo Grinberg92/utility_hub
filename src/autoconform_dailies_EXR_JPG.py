@@ -543,12 +543,12 @@ class OTIOConverterApp:
         project_frame.pack(anchor="c", pady=10)
 
         # Метка "Выберите проект" (по центру)
-        tk.Label(project_frame, text="Выберите проект:", font=("Arial", 12)).pack(anchor="c")
+        tk.Label(project_frame, text="Choose project:", font=("Arial", 12)).pack(anchor="c")
 
         # Выбор формата файлов
         format_frame = tk.Frame(root)
         format_frame.pack(anchor="c", pady=10)
-        tk.Label(format_frame, text="Выберите формат файлов:").pack(side=tk.LEFT, padx=10)
+        tk.Label(format_frame, text="Extension:").pack(side=tk.LEFT, padx=10)
         format_menu = tk.OptionMenu(format_frame, self.selected_format, "EXR", "JPG")
         format_menu.pack(side=tk.LEFT)
 
@@ -562,33 +562,33 @@ class OTIOConverterApp:
 
         # Чекбокс "Игнорировать дубликаты шотов"
         self.no_duplicates = tk.BooleanVar()
-        tk.Checkbutton(options_frame, text="Игнорировать дубликаты шотов", variable=self.no_duplicates).pack(side=tk.LEFT, padx=10)
+        tk.Checkbutton(options_frame, text="Ignore shots dublicates", variable=self.no_duplicates).pack(side=tk.LEFT, padx=10)
 
         # Поле ввода диапазона трека
-        tk.Label(options_frame, text="Диапазон треков:").pack(side=tk.LEFT)
+        tk.Label(options_frame, text="Tracks range:").pack(side=tk.LEFT)
         tk.Entry(options_frame, textvariable=self.selected_track_in, width=3).pack(side=tk.LEFT, padx=5)
 
         tk.Label(options_frame, text='-').pack(side=tk.LEFT)
         tk.Entry(options_frame, textvariable=self.selected_track_out, width=3).pack(side=tk.LEFT, padx=5)
 
         # Поля для ввода
-        tk.Label(root, text="Выберите EDL файл:").pack(anchor="c")
+        tk.Label(root, text="Choose EDL file:").pack(anchor="c")
         tk.Entry(root, textvariable=self.edl_path, width=60).pack(anchor="c")
-        tk.Button(root, text="Обзор", command=self.select_edl).pack(anchor="c")
+        tk.Button(root, text="Choose", command=self.select_edl).pack(anchor="c")
 
-        tk.Label(root, text="Выберите папку с секвенциями файлов:").pack(anchor="c")
+        tk.Label(root, text="Choose EXR sequence folder:").pack(anchor="c")
         tk.Entry(root, textvariable=self.exr_folder, width=60).pack(anchor="c")
-        tk.Button(root, text="Обзор", command=self.select_exr_folder).pack(anchor="c")
+        tk.Button(root, text="Choose", command=self.select_exr_folder).pack(anchor="c")
 
-        tk.Label(root, text="Путь для сохранения OTIO файла:").pack(anchor="c")
+        tk.Label(root, text="Save OTIO file:").pack(anchor="c")
         tk.Entry(root, textvariable=self.otio_path, width=60).pack(anchor="c")
-        tk.Button(root, text="Обзор", command=self.save_otio).pack(anchor="c")
+        tk.Button(root, text="Choose", command=self.save_otio).pack(anchor="c")
 
         # Кнопка "Создать OTIO"
-        button_create = tk.Button(root, text="Создать OTIO", command=lambda: on_button_click(button_create, self.create_otio))
+        button_create = tk.Button(root, text="Start", command=lambda: on_button_click(button_create, self.create_otio))
         button_create.pack(anchor="c")
 
-        self.result_label = tk.Label(root, text="Обработано 0 шотов из 0", font=("Arial", 17, "bold"))
+        self.result_label = tk.Label(root, text="Processed 0 from 0 shots", font=("Arial", 17, "bold"))
         self.result_label.pack()
 
         # Фрейм для кнопок внизу

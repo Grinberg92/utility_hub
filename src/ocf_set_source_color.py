@@ -18,7 +18,7 @@ class GUI(QtWidgets.QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Set Shot Colors')
+        self.setWindowTitle('Color&FPS Setter')
         self.setFixedSize(270, 130)
         self.clip_color_list = ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
                                 'Apricot', 'Olive', 'Violet', 'Blue', 'Pink', 'Tan', 'Beige',
@@ -53,7 +53,7 @@ class GUI(QtWidgets.QWidget):
         self.excel_checkbox.hide()  # Скрываем, заменено на combo box
 
         # Run button
-        self.run_button = QtWidgets.QPushButton("Run Script")
+        self.run_button = QtWidgets.QPushButton("Start")
         self.run_button.clicked.connect(self.on_run_clicked)
 
         # Добавляем в основной layout

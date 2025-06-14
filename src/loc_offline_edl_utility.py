@@ -10,7 +10,7 @@ class EDLProcessorGUI:
 
         self.pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)' 
         self.root = root
-        self.root.title("EDL from markers")
+        self.root.title("EDL&Markers Creator")
         root.attributes('-topmost', True)
 
         window_width = 620  
@@ -39,14 +39,14 @@ class EDLProcessorGUI:
         input_frame.pack()
         self.input_entry = tk.Entry(input_frame, textvariable=self.input_file_var, width=45)
         self.input_entry.pack(side=tk.LEFT, padx=5)
-        tk.Button(input_frame, text="Choose path", command=self.select_input_file).pack(side=tk.RIGHT)
+        tk.Button(input_frame, text="Choose", command=self.select_input_file).pack(side=tk.RIGHT)
 
         tk.Label(self.root, text="Save created EDL:").pack(pady=5)
         output_frame = tk.Frame(self.root)
         output_frame.pack()
         self.output_entry = tk.Entry(output_frame, textvariable=self.output_file_var, width=45)
         self.output_entry.pack(side=tk.LEFT, padx=5)
-        tk.Button(output_frame, text="Choose path", command=self.select_output_file).pack(side=tk.RIGHT)
+        tk.Button(output_frame, text="Choose", command=self.select_output_file).pack(side=tk.RIGHT)
 
         # Чекбоксы + поле ввода номера дорожки
         checkbox_frame = tk.Frame(self.root)
@@ -70,7 +70,7 @@ class EDLProcessorGUI:
         tk.Label(fps_frame, text="FPS:").pack(side=tk.LEFT, padx=5)
         tk.Entry(fps_frame, textvariable=self.fps_var, width=3).pack(side=tk.LEFT, padx=5)
 
-        tk.Button(self.root, text="Run script", command=self.run_script, width=15).pack(pady=5)
+        tk.Button(self.root, text="Start", command=self.run_script, width=15).pack(pady=5)
 
         # Привязываем функцию к изменениям состояний чекбоксов
         self.set_markers_var.trace_add("write", lambda *args: self.update_fields_state())

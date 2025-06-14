@@ -8,7 +8,7 @@ class GUI(QtWidgets.QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle('Names from offline')
+        self.setWindowTitle('Names From Offline')
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
         # Размеры окна
@@ -35,7 +35,7 @@ class GUI(QtWidgets.QWidget):
         input_layout.addWidget(self.track_entry)
 
         # Центрированный layout для кнопки
-        button = QtWidgets.QPushButton('Set names')
+        button = QtWidgets.QPushButton('Start')
         button.setFixedWidth(180)
         button.clicked.connect(self.func)
 

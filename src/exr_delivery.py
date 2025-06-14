@@ -34,7 +34,7 @@ class DvrRenderApp(QWidget):
         res_layout = QHBoxLayout()
         self.width_input = QLineEdit("1998")
         self.height_input = QLineEdit("1080")
-        res_layout.addWidget(QLabel("Разрешение:"))
+        res_layout.addWidget(QLabel("Resolution:"))
         res_layout.addWidget(self.width_input)
         res_layout.addWidget(QLabel("x"))
         res_layout.addWidget(self.height_input)
@@ -47,26 +47,26 @@ class DvrRenderApp(QWidget):
         self.preset_combo.setCurrentText("GRN_EXR_1998x1054")
         self.handle_input = QLineEdit("3")
         self.handle_input.setFixedWidth(40)
-        preset_layout.addWidget(QLabel("Пресет:"))
+        preset_layout.addWidget(QLabel("Project preset:"))
         preset_layout.addWidget(self.preset_combo)
-        preset_layout.addWidget(QLabel("Захлест:"))
+        preset_layout.addWidget(QLabel("Handles:"))
         preset_layout.addWidget(self.handle_input)
         layout.addLayout(preset_layout)
 
         # --- Путь рендера ---
         path_layout = QHBoxLayout()
         self.path_input = QLineEdit()
-        browse_btn = QPushButton("Обзор...")
+        browse_btn = QPushButton("Choose")
         browse_btn.clicked.connect(self.select_folder)
-        path_layout.addWidget(QLabel("Путь рендера:"))
+        path_layout.addWidget(QLabel("Render path:"))
         path_layout.addWidget(self.path_input)
         path_layout.addWidget(browse_btn)
         layout.addLayout(path_layout)
 
         # --- Кнопка запуска ---
-        self.run_button = QPushButton("Запустить рендер")
+        self.run_button = QPushButton("Start")
         self.run_button.clicked.connect(self.run_render)
-        layout.addWidget(self.run_button, alignment=Qt.AlignCenter)
+        layout.addWidget(self.run_button)
 
         self.setLayout(layout)
 

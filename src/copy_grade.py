@@ -73,7 +73,7 @@ class TransferWorker(QThread):
 class ColorGradeApplyApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Apply Grade")
+        self.setWindowTitle("Copy Grade")
         self.setFixedSize(420, 200)
 
         self.resolve = DaVinciResolveScript.scriptapp("Resolve")
@@ -82,7 +82,7 @@ class ColorGradeApplyApp(QMainWindow):
         self.timeline = None
 
         self.lut_list = {
-            None: "Не применять LUT",
+            None: "No LUT",
             "/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/VFX IO/AP0_to_AlexaLogC_v2.cube": "AP0_to_AlexaLogC_v2",
             "/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/CLF_TEST/cmp_0020_0050_pregrade.clf": "cmp_0020_0050_pregrade"
         }
@@ -122,7 +122,7 @@ class ColorGradeApplyApp(QMainWindow):
         self.refresh_button.clicked.connect(self.refresh_timeline_data)
         layout.addWidget(self.refresh_button)
 
-        self.apply_button = QPushButton("Apply")
+        self.apply_button = QPushButton("Start")
         self.apply_button.clicked.connect(self.start_transfer)
         layout.addWidget(self.apply_button)
 
@@ -168,8 +168,3 @@ if __name__ == "__main__":
     window.show()
     sys.exit(app.exec_())
 
-'''
-Причесать код
-Добавить Project.RefreshLUTList перед применением лута
-Сначала добавить копирование в папку лутов по дням, делать рефреш, затем применять лат
-'''

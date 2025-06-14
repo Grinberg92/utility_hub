@@ -77,7 +77,7 @@ class GetShotDvr(QWidget):
         layout.addWidget(self.progress_bar)
 
         # Кнопка обработки
-        self.process_button = QPushButton("Run Script")
+        self.process_button = QPushButton("Start")
         self.process_button.clicked.connect(self.run)
         layout.addWidget(self.process_button)
 
