@@ -1,39 +1,54 @@
 import DaVinciResolveScript as dvrs
-import tkinter as tk
-from tkinter import messagebox
+from PyQt5 import QtWidgets, QtCore
+import sys
 
-class GUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title('Set shots name')
-        root.attributes("-topmost", True)
+class GUI(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
 
-        # Позиция окна
+    def init_ui(self):
+        self.setWindowTitle('Names from offline')
+        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
+
+        # Размеры окна
         window_width = 230
         window_height = 100
+        self.setFixedSize(window_width, window_height)
 
-        screen_width = root.winfo_screenwidth()
-        screen_height = root.winfo_screenheight()
+        # Центрирование окна
+        screen = QtWidgets.QDesktopWidget().screenGeometry()
+        x = (screen.width() - window_width) // 2
+        y = (screen.height() - window_height) // 2
+        self.move(x, y)
 
-        x = (screen_width // 2) - (window_width // 2)
-        y = ((screen_height // 2) - (window_height // 2))
+        # Главный вертикальный layout
+        main_layout = QtWidgets.QVBoxLayout()
 
-        root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        # Горизонтальный layout для ввода номера трека
+        input_layout = QtWidgets.QHBoxLayout()
+        label = QtWidgets.QLabel('Offline track number:')
+        self.track_entry = QtWidgets.QLineEdit()
+        self.track_entry.setFixedWidth(50)
 
-        # Создание виджетов
-        self.create_widgets()
+        input_layout.addWidget(label)
+        input_layout.addWidget(self.track_entry)
 
-    def create_widgets(self):
-        # Строка с label и полем ввода на одной строке
-        label = tk.Label(self.root, text='Offline track number:')
-        label.grid(row=0, column=0, padx=10, pady=10, sticky='e')  # Выравнивание по правому краю
+        # Центрированный layout для кнопки
+        button = QtWidgets.QPushButton('Set names')
+        button.setFixedWidth(180)
+        button.clicked.connect(self.func)
 
-        self.track_entry = tk.Entry(self.root, width=5)  # Настроена ширина поля ввода
-        self.track_entry.grid(row=0, column=1, padx=10, pady=10, sticky='w')  # Выравнивание по левому краю
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(button)
+        button_layout.addStretch()
 
-        # Кнопка
-        btn = tk.Button(self.root, text='Set names', command=self.func, width=20)
-        btn.grid(row=1, column=0, columnspan=2, pady=10)  # Настроена ширина кнопки
+        # Добавление всех layout'ов в основной
+        main_layout.addLayout(input_layout)
+        main_layout.addLayout(button_layout)
+
+        self.setLayout(main_layout)
 
     def func(self):
         try:
@@ -45,14 +60,22 @@ class GUI:
             tlStart = timeline.GetStartFrame()
 
             count_of_tracks = timeline.GetTrackCount('video')
-            track_number = int(self.track_entry.get())
+
+            # Проверка и преобразование номера дорожки
+            try:
+                track_number = int(self.track_entry.text())
+            except ValueError:
+                raise ValueError('Введите корректный номер дорожки')
+
             clips = timeline.GetItemListInTrack('video', track_number)
 
             for clip in clips:
                 clipName = clip.GetName()
+                # Расчёт средней точки клипа (примерно центр)
                 clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - tlStart
                 timeline.AddMarker(clip_start, 'Blue', clipName, "", 1, 'Renamed')
 
+                # Применение кастомного имени на другие клипы, совпадающие по старту
                 for track_index in range(1, count_of_tracks):
                     clips_under = timeline.GetItemListInTrack('video', track_index)
                     if clips_under:
@@ -61,14 +84,14 @@ class GUI:
                                 clip_under.AddVersion(clipName, 0)
                                 print(f'Добавлено кастомное имя "{clipName}" в клип на треке {track_index}')
 
-            messagebox.showinfo("Success", "Кастомные имена применены на все клипы")
-        except ValueError:
-            messagebox.showerror('Error', 'Введите корректный номер дорожки')
+            QtWidgets.QMessageBox.information(self, "Success", "Кастомные имена применены на все клипы")
+        except ValueError as ve:
+            QtWidgets.QMessageBox.critical(self, 'Ошибка', str(ve))
         except Exception as e:
-            messagebox.showerror('Error', f'Произошла ошибка: {str(e)}')
-
+            QtWidgets.QMessageBox.critical(self, 'Ошибка', f'Произошла ошибка: {str(e)}')
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = GUI(root)
-    root.mainloop()
+    app = QtWidgets.QApplication(sys.argv)
+    window = GUI()
+    window.show()
+    sys.exit(app.exec_())
