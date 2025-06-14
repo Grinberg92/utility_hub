@@ -68,6 +68,9 @@ class GUI(QtWidgets.QWidget):
                 raise ValueError('Введите корректный номер дорожки')
 
             clips = timeline.GetItemListInTrack('video', track_number)
+            if clips is None:
+                QtWidgets.QMessageBox.warning(self, "Внимание", f"Дорожка {track_number} не существует.")
+                return
 
             for clip in clips:
                 clipName = clip.GetName()
