@@ -12,52 +12,73 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         self.pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)'
         self.setWindowTitle("EDL&Markers Creator")
-        self.resize(620, 220)
+        self.resize(620, 270)
         self.setMinimumSize(400, 200)
 
         self.init_ui()
 
     def init_ui(self):
-        layout = QtWidgets.QVBoxLayout()
-        self.setLayout(layout)
+        main_layout = QtWidgets.QVBoxLayout()
+        self.setLayout(main_layout)
 
-        # === Input file ===
-        layout.addWidget(QtWidgets.QLabel("Choose EDL-file:"))
-        input_layout = QtWidgets.QHBoxLayout()
-        self.input_entry = QtWidgets.QLineEdit()
-        input_btn = QtWidgets.QPushButton("Choose")
-        input_btn.clicked.connect(self.select_input_file)
-        input_layout.addWidget(self.input_entry)
-        input_layout.addWidget(input_btn)
-        layout.addLayout(input_layout)
+        # === FPS + Locator From (по центру, в одной строке) ===
+        fps_layout = QtWidgets.QHBoxLayout()
+        fps_layout.setAlignment(QtCore.Qt.AlignCenter)
 
-        # === Output file ===
-        layout.addWidget(QtWidgets.QLabel("Save created EDL:"))
-        output_layout = QtWidgets.QHBoxLayout()
-        self.output_entry = QtWidgets.QLineEdit()
-        output_btn = QtWidgets.QPushButton("Choose")
-        output_btn.clicked.connect(self.select_output_file)
-        output_layout.addWidget(self.output_entry)
-        output_layout.addWidget(output_btn)
-        layout.addLayout(output_layout)
+        # FPS
+        fps_label = QtWidgets.QLabel("Project FPS:")
+        fps_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
 
-        # === Checkboxes ===
-        checkboxes_layout = QtWidgets.QGridLayout()
+        self.fps_entry = QtWidgets.QLineEdit("24")
+        self.fps_entry.setMaximumWidth(50)
+        self.fps_entry.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
 
-        self.set_markers_checkbox = QtWidgets.QCheckBox("Set locators")
+        # Locator From
+        locator_label = QtWidgets.QLabel("Marker name from:")
+        locator_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
+        self.locator_from_combo = QtWidgets.QComboBox()
+        self.locator_from_combo.addItems(["name", "note"])
+        self.locator_from_combo.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
+        # Add to layout with spacing
+        fps_layout.addWidget(fps_label)
+        fps_layout.addSpacing(6)
+        fps_layout.addWidget(self.fps_entry)
+        fps_layout.addSpacing(20)
+        fps_layout.addWidget(locator_label)
+        fps_layout.addSpacing(6)
+        fps_layout.addWidget(self.locator_from_combo)
+
+        main_layout.addLayout(fps_layout)
+
+
+        # === Блок 1: Locators / Track / Export Locators ===
+        block1_group = QtWidgets.QGroupBox("Markers Options")
+        block1_group_layout = QtWidgets.QVBoxLayout()
+
+        layout_container = QtWidgets.QWidget()
+        layout_container.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+        inner_layout = QtWidgets.QHBoxLayout()
+        inner_layout.setAlignment(QtCore.Qt.AlignLeft)
+
+        self.set_markers_checkbox = QtWidgets.QCheckBox("Set markers")
         self.set_markers_checkbox.stateChanged.connect(self.update_fields_state)
-        checkboxes_layout.addWidget(self.set_markers_checkbox, 0, 0)
+        inner_layout.addWidget(self.set_markers_checkbox)
+        inner_layout.addSpacing(20)
 
-        # Track label + input combined
+        # Track layout (единый, неразъезжаемый виджет)
         track_widget = QtWidgets.QWidget()
         track_layout = QtWidgets.QHBoxLayout()
         track_layout.setContentsMargins(0, 0, 0, 0)
-        track_layout.setSpacing(4)  # чуть-чуть отступа
-        track_label = QtWidgets.QLabel("Track:")
+        track_layout.setSpacing(4)
+        track_layout.setAlignment(QtCore.Qt.AlignLeft)
+
+        track_label = QtWidgets.QLabel("from track:")
         track_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
 
         self.track_entry = QtWidgets.QLineEdit("1")
-        self.track_entry.setMaximumWidth(50)
+        self.track_entry.setMaximumWidth(40)
         self.track_entry.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
 
         track_layout.addWidget(track_label)
@@ -65,53 +86,80 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         track_widget.setLayout(track_layout)
         track_widget.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
 
-        checkboxes_layout.addWidget(track_widget, 0, 1, alignment=QtCore.Qt.AlignLeft)
+        inner_layout.addWidget(track_widget)
+        inner_layout.addSpacing(20)
 
-
-        self.export_loc_checkbox = QtWidgets.QCheckBox("Export locators")
+        self.export_loc_checkbox = QtWidgets.QCheckBox("Export locators to AVID")
         self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
-        checkboxes_layout.addWidget(self.export_loc_checkbox, 0, 2)
+        inner_layout.addWidget(self.export_loc_checkbox)
+
+        layout_container.setLayout(inner_layout)
+        block1_group_layout.addWidget(layout_container)
+        block1_group.setLayout(block1_group_layout)
+        main_layout.addWidget(block1_group)
+
+        # === Блок 2: Offline/Dailies + Input/Output paths ===
+        block2_group = QtWidgets.QGroupBox("EDL Options")
+        block2_group_layout = QtWidgets.QVBoxLayout()
+
+        # Верх: чекбоксы (выровнены влево)
+        checks_container = QtWidgets.QWidget()
+        checks_layout = QtWidgets.QHBoxLayout()
+        checks_layout.setAlignment(QtCore.Qt.AlignLeft)
+        checks_layout.setContentsMargins(0, 0, 0, 0)
+        checks_layout.setSpacing(20)
 
         self.offline_clips_checkbox = QtWidgets.QCheckBox("Offline EDL")
         self.offline_clips_checkbox.stateChanged.connect(self.update_fields_state)
-        checkboxes_layout.addWidget(self.offline_clips_checkbox, 0, 3)
+        checks_layout.addWidget(self.offline_clips_checkbox)
 
         self.edl_for_dailies_checkbox = QtWidgets.QCheckBox("Dailies EDL")
         self.edl_for_dailies_checkbox.stateChanged.connect(self.update_fields_state)
-        checkboxes_layout.addWidget(self.edl_for_dailies_checkbox, 0, 4)
+        checks_layout.addWidget(self.edl_for_dailies_checkbox)
 
-        layout.addLayout(checkboxes_layout)
+        checks_container.setLayout(checks_layout)
+        block2_group_layout.addWidget(checks_container)
 
-        # === FPS ===
-        fps_widget = QtWidgets.QWidget()
-        fps_layout = QtWidgets.QHBoxLayout()
-        fps_layout.setContentsMargins(0, 0, 0, 0)
-        fps_layout.setSpacing(4)
-        fps_label = QtWidgets.QLabel("FPS:")
-        fps_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        # Низ: input / output
+        path_form = QtWidgets.QFormLayout()
+        path_form.setLabelAlignment(QtCore.Qt.AlignLeft)
 
-        self.fps_entry = QtWidgets.QLineEdit("24")
-        self.fps_entry.setMaximumWidth(50)
-        self.fps_entry.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        # Input
+        input_path_widget = QtWidgets.QWidget()
+        input_layout = QtWidgets.QHBoxLayout()
+        input_layout.setContentsMargins(0, 0, 0, 0)
+        input_layout.setSpacing(6)
+        self.input_entry = QtWidgets.QLineEdit()
+        input_btn = QtWidgets.QPushButton("Choose")
+        input_btn.clicked.connect(self.select_input_file)
+        input_layout.addWidget(self.input_entry)
+        input_layout.addWidget(input_btn)
+        input_path_widget.setLayout(input_layout)
+        path_form.addRow("Choose EDL-file:", input_path_widget)
 
-        fps_layout.addWidget(fps_label)
-        fps_layout.addWidget(self.fps_entry)
-        fps_widget.setLayout(fps_layout)
-        fps_widget.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        # Output
+        output_path_widget = QtWidgets.QWidget()
+        output_layout = QtWidgets.QHBoxLayout()
+        output_layout.setContentsMargins(0, 0, 0, 0)
+        output_layout.setSpacing(6)
+        self.output_entry = QtWidgets.QLineEdit()
+        output_btn = QtWidgets.QPushButton("Choose")
+        output_btn.clicked.connect(self.select_output_file)
+        output_layout.addWidget(self.output_entry)
+        output_layout.addWidget(output_btn)
+        output_path_widget.setLayout(output_layout)
+        path_form.addRow("Save created EDL:", output_path_widget)
 
-        fps_center_layout = QtWidgets.QHBoxLayout()
-        fps_center_layout.addStretch()
-        fps_center_layout.addWidget(fps_widget)
-        fps_center_layout.addStretch()
+        block2_group_layout.addLayout(path_form)
+        block2_group.setLayout(block2_group_layout)
+        main_layout.addWidget(block2_group)
 
-        layout.addLayout(fps_center_layout)
 
-        # === Start button ===
+        # === Start Button ===
         self.run_button = QtWidgets.QPushButton("Start")
         self.run_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.run_button.clicked.connect(self.run_script)
-        layout.addWidget(self.run_button)
-
+        main_layout.addWidget(self.run_button)
 
 
     def select_input_file(self):
@@ -193,9 +241,10 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         '''
         Получение маркеров для работы других функций
         '''
+        marker_from = self.locator_from_combo.currentText()
         markers_list = []
         for timecode, name in self.timeline.GetMarkers().items():
-            name = name['note'].strip()
+            name = name[marker_from].strip()
             if name and re.search(self.pattern_short, name):
                 timecode_marker = tc(self.fps_entry.text(), frames=timecode + timeline_start_timecode) + 1  
                 markers_list.append((name, timecode_marker))
