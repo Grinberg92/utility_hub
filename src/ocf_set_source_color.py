@@ -158,6 +158,8 @@ class GUI(QtWidgets.QWidget):
         self.create_excel = self.checkbox_excel.isChecked()
         self.set_fps = self.checkbox_fps.isChecked()
         self.exel_folder = self.path_input.text()
+        self.output_res_height = self.height_entry.text()
+        self.output_res_width = self.width_entry.text()
 
         Thread(target=self.run_script_wrapper).start()
 
@@ -304,18 +306,18 @@ class GUI(QtWidgets.QWidget):
                 Функция получает разрешение для стандартной 2к выдачи
                 '''
                 if aspect == "Square":
-                    calculate_height = int(math.ceil(((height * target_resolution_width / width) / 2) * 2))
+                    calculate_height = int((math.ceil((height * target_resolution_width / width) / 2) * 2))
                     return (target_resolution_width, calculate_height)
                 else:
-                    calculate_width = int(math.ceil(((width * target_resolution_height / height) / 2) * 2))
+                    calculate_width = int((math.ceil((width * target_resolution_height / height) / 2) * 2))
                     return (calculate_width, target_resolution_height)
                 
             def rescale_1_5_and_2_x(width, height, mult=None):
                 '''
                 Функция пересчитывает стандартное 2к разрешение в 1.5 кратноме и 2 кратное разрешение
                 '''
-                result_width = int(math.ceil((width * mult) / 2) * 2)
-                result_height = int(math.ceil((height * mult) / 2) * 2)
+                result_width = int((math.ceil((width * mult) / 2)) * 2)
+                result_height = int((math.ceil((height * mult) / 2)) * 2)
                 return result_width, result_height
             
             def rescale_avid(width, height):
@@ -323,13 +325,13 @@ class GUI(QtWidgets.QWidget):
                 avid_target_resolution_width = 1920
                 avid_target_resolution_height = 1080
 
-                calculate_height = int(math.ceil(((height * avid_target_resolution_width / width) / 2) * 2))
+                calculate_height = int((math.ceil((height * avid_target_resolution_width / width) / 2) * 2))
                 return (avid_target_resolution_width, calculate_height)
                 
             
             # Целевое финальное разрешение
-            target_resolution_height = 858
-            target_resolution_width = 2048
+            target_resolution_height = int(self.output_res_height)
+            target_resolution_width = int(self.output_res_width)
 
             # Получили сортировку и цвета такие же как для расцветовки OCF
             data_zip = list(zip(self.clip_color_list, sorted(data.items(), key=lambda x: len(x[1]), reverse=True)))
