@@ -1,143 +1,142 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
+from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtWidgets import QMessageBox
 import re
 from timecode import Timecode as tc
 import DaVinciResolveScript as dvr
+import sys
 
 
-class EDLProcessorGUI:
-    def __init__(self, root):
+class EDLProcessorGUI(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
 
-        self.pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)' 
-        self.root = root
-        self.root.title("EDL&Markers Creator")
-        root.attributes('-topmost', True)
+        self.pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)'
+        self.setWindowTitle("EDL&Markers Creator")
+        self.setFixedSize(620, 250)
 
-        window_width = 620  
-        window_height = 250  
-        screen_width = root.winfo_screenwidth()
-        screen_height = root.winfo_screenheight()
+        self.fps = "24"
+        self.track_number = "1"
 
-        x = (screen_width // 2) - (window_width // 2)
-        y = int((screen_height * 7 / 10) - (window_height / 2))
-        root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        self.init_ui()
+        self.update_fields_state()
 
-        self.input_file_var = tk.StringVar()
-        self.output_file_var = tk.StringVar()
-        self.fps_var = tk.StringVar(value="24")
-        self.track_number_var = tk.StringVar(value="1")
+    def init_ui(self):
+        layout = QtWidgets.QVBoxLayout()
 
-        # Флаги чекбоксов
-        self.set_markers_var = tk.BooleanVar()
-        self.export_loc_var = tk.BooleanVar()
-        self.offline_clips_var = tk.BooleanVar()
-        self.edl_for_dailies_var = tk.BooleanVar()
+        # === Input file ===
+        layout.addWidget(QtWidgets.QLabel("Choose EDL-file:"))
+        input_layout = QtWidgets.QHBoxLayout()
+        self.input_entry = QtWidgets.QLineEdit()
+        input_btn = QtWidgets.QPushButton("Choose")
+        input_btn.clicked.connect(self.select_input_file)
+        input_layout.addWidget(self.input_entry)
+        input_layout.addWidget(input_btn)
+        layout.addLayout(input_layout)
 
-        # Поля ввода
-        tk.Label(self.root, text="Choose EDL-file:").pack(pady=5)
-        input_frame = tk.Frame(self.root)
-        input_frame.pack()
-        self.input_entry = tk.Entry(input_frame, textvariable=self.input_file_var, width=45)
-        self.input_entry.pack(side=tk.LEFT, padx=5)
-        tk.Button(input_frame, text="Choose", command=self.select_input_file).pack(side=tk.RIGHT)
+        # === Output file ===
+        layout.addWidget(QtWidgets.QLabel("Save created EDL:"))
+        output_layout = QtWidgets.QHBoxLayout()
+        self.output_entry = QtWidgets.QLineEdit()
+        output_btn = QtWidgets.QPushButton("Choose")
+        output_btn.clicked.connect(self.select_output_file)
+        output_layout.addWidget(self.output_entry)
+        output_layout.addWidget(output_btn)
+        layout.addLayout(output_layout)
 
-        tk.Label(self.root, text="Save created EDL:").pack(pady=5)
-        output_frame = tk.Frame(self.root)
-        output_frame.pack()
-        self.output_entry = tk.Entry(output_frame, textvariable=self.output_file_var, width=45)
-        self.output_entry.pack(side=tk.LEFT, padx=5)
-        tk.Button(output_frame, text="Choose", command=self.select_output_file).pack(side=tk.RIGHT)
+        # === Checkboxes ===
+        checkboxes_layout = QtWidgets.QHBoxLayout()
 
-        # Чекбоксы + поле ввода номера дорожки
-        checkbox_frame = tk.Frame(self.root)
-        checkbox_frame.pack(pady=7)
-        # Чекбоксы
-        set_locators_frame = tk.Frame(checkbox_frame)
-        set_locators_frame.pack(side=tk.LEFT, padx=5)
-        tk.Checkbutton(set_locators_frame, text="Set locators", variable=self.set_markers_var).pack(side=tk.LEFT)
-        tk.Label(set_locators_frame, text="Track:").pack(side=tk.LEFT, padx=5)
-        self.track_number_entry = tk.Entry(set_locators_frame, textvariable=self.track_number_var, width=3)
-        self.track_number_entry.pack(side=tk.LEFT)
-        self.track_number_entry.config(state="disabled")
+        self.set_markers_checkbox = QtWidgets.QCheckBox("Set locators")
+        self.set_markers_checkbox.stateChanged.connect(self.update_fields_state)
 
-        # Остальные чекбоксы
-        tk.Checkbutton(checkbox_frame, text="Export locators", variable=self.export_loc_var).pack(side=tk.LEFT, padx=5)
-        tk.Checkbutton(checkbox_frame, text="Offline EDL", variable=self.offline_clips_var).pack(side=tk.LEFT, padx=5)
-        tk.Checkbutton(checkbox_frame, text="Dailies EDL", variable=self.edl_for_dailies_var).pack(side=tk.LEFT, padx=5)
+        checkboxes_layout.addWidget(self.set_markers_checkbox)
+        checkboxes_layout.addWidget(QtWidgets.QLabel("Track:"))
+        self.track_entry = QtWidgets.QLineEdit("1")
+        self.track_entry.setFixedWidth(30)
+        checkboxes_layout.addWidget(self.track_entry)
 
-        fps_frame = tk.Frame(self.root)
-        fps_frame.pack(pady=3)
-        tk.Label(fps_frame, text="FPS:").pack(side=tk.LEFT, padx=5)
-        tk.Entry(fps_frame, textvariable=self.fps_var, width=3).pack(side=tk.LEFT, padx=5)
+        self.export_loc_checkbox = QtWidgets.QCheckBox("Export locators")
+        self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
+        self.offline_clips_checkbox = QtWidgets.QCheckBox("Offline EDL")
+        self.offline_clips_checkbox.stateChanged.connect(self.update_fields_state)
+        self.edl_for_dailies_checkbox = QtWidgets.QCheckBox("Dailies EDL")
+        self.edl_for_dailies_checkbox.stateChanged.connect(self.update_fields_state)
 
-        tk.Button(self.root, text="Start", command=self.run_script, width=15).pack(pady=5)
+        checkboxes_layout.addWidget(self.export_loc_checkbox)
+        checkboxes_layout.addWidget(self.offline_clips_checkbox)
+        checkboxes_layout.addWidget(self.edl_for_dailies_checkbox)
 
-        # Привязываем функцию к изменениям состояний чекбоксов
-        self.set_markers_var.trace_add("write", lambda *args: self.update_fields_state())
-        self.export_loc_var.trace_add("write", lambda *args: self.update_fields_state())
-        self.offline_clips_var.trace_add("write", lambda *args: self.update_fields_state())
-        self.edl_for_dailies_var.trace_add("write", lambda *args: self.update_fields_state())
+        layout.addLayout(checkboxes_layout)
+
+        # === FPS ===
+        fps_layout = QtWidgets.QHBoxLayout()
+        fps_layout.addWidget(QtWidgets.QLabel("FPS:"))
+        self.fps_entry = QtWidgets.QLineEdit("24")
+        self.fps_entry.setFixedWidth(30)
+        fps_layout.addWidget(self.fps_entry)
+        layout.addLayout(fps_layout)
+
+        # === Start button ===
+        self.run_button = QtWidgets.QPushButton("Start")
+        self.run_button.clicked.connect(self.run_script)
+        layout.addWidget(self.run_button, alignment=QtCore.Qt.AlignCenter)
+
+        self.setLayout(layout)
 
     def select_input_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("EDL файлы", "*.edl")])
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select EDL file", "", "EDL files (*.edl)")
         if file_path:
-            self.input_file_var.set(file_path)
+            self.input_entry.setText(file_path)
 
     def select_output_file(self):
-        default_extension = ".txt" if self.export_loc_var.get() else ".edl"
-        filetypes = [("Текстовые файлы", "*.txt")] if self.export_loc_var.get() else [("EDL файлы", "*.edl")]
-        
-        file_path = filedialog.asksaveasfilename(defaultextension=default_extension, filetypes=filetypes)
+        if self.export_loc_checkbox.isChecked():
+            ext = ".txt"
+            filter = "Text files (*.txt)"
+        else:
+            ext = ".edl"
+            filter = "EDL files (*.edl)"
+
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save As", "", filter)
         if file_path:
-            self.output_file_var.set(file_path)
+            self.output_entry.setText(file_path)
 
     def update_fields_state(self):
-        """ 
-        Блокирует или разблокирует поля в зависимости от состояния чекбоксов
-        """
-        if self.set_markers_var.get():
-            # Если включен "Set locators", разблокируем поле ввода номера дорожки
-            self.track_number_entry.config(state="normal")
-        else:
-            self.track_number_entry.config(state="disabled")
+        self.track_entry.setEnabled(self.set_markers_checkbox.isChecked())
 
-        if self.set_markers_var.get():
-            # Если включен "Set locators", блокируем оба поля
-            self.input_entry.config(state="disabled")
-            self.output_entry.config(state="disabled")
-        elif self.export_loc_var.get():
-            # Если включен "Export locators", блокируем только input
-            self.input_entry.config(state="disabled")
-            self.output_entry.config(state="normal")
+        if self.set_markers_checkbox.isChecked():
+            self.input_entry.setEnabled(False)
+            self.output_entry.setEnabled(False)
+        elif self.export_loc_checkbox.isChecked():
+            self.input_entry.setEnabled(False)
+            self.output_entry.setEnabled(True)
         else:
-            # Если включен "Offline EDL" или "Dailies EDL", разблокируем оба
-            self.input_entry.config(state="normal")
-            self.output_entry.config(state="normal")
+            self.input_entry.setEnabled(True)
+            self.output_entry.setEnabled(True)
 
 
     def run_script(self):
-        edl_path = self.input_file_var.get()
-        output_path = self.output_file_var.get()
-        export_loc = self.export_loc_var.get()
-        set_markers = self.set_markers_var.get()
-        fps = self.fps_var.get()
-        process_edl = self.edl_for_dailies_var.get() or self.offline_clips_var.get()
+        edl_path = self.input_entry.text()
+        output_path = self.output_entry.text()
+        export_loc = self.export_loc_checkbox.isChecked()
+        set_markers = self.set_markers_checkbox.isChecked()
+        fps = self.fps_entry.text()
+        process_edl = self.edl_for_dailies_checkbox.isChecked() or self.offline_clips_checkbox.isChecked()
 
         if process_edl and (not edl_path or not output_path):
-            messagebox.showerror("Ошибка", "Выберите файлы EDL!")
+            QMessageBox.critical(self,"Ошибка", "Выберите файлы EDL!")
             return
 
         try:
             fps = int(fps)
         except ValueError:
-            messagebox.showerror("Ошибка", "FPS должен быть числом!")
+            QMessageBox.critical(self,"Ошибка", "FPS должен быть числом!")
             return
 
-        track_number = self.track_number_var.get()
+        track_number = self.track_entry.text()
         try:
             track_number = int(track_number)
         except ValueError:
-            messagebox.showerror("Ошибка", "Номер дорожки должен быть числом!")
+            QMessageBox.critical(self,"Ошибка", "Номер дорожки должен быть числом!")
             return
 
         try:
@@ -155,9 +154,9 @@ class EDLProcessorGUI:
             if export_loc:
                 self.export_locators_to_avid(output_path)
 
-            messagebox.showinfo("Готово", "Обработка завершена!")
+            QMessageBox.information(self, "Готово", "Обработка завершена!")
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Произошла ошибка: {e}")
+            QMessageBox.critical(self, "Ошибка", f"Произошла ошибка: {e}")
 
     def get_markers(self, timeline_start_timecode): 
         '''
@@ -167,7 +166,7 @@ class EDLProcessorGUI:
         for timecode, name in self.timeline.GetMarkers().items():
             name = name['name'].strip()
             if name and re.search(self.pattern_short, name):
-                timecode_marker = tc(self.fps_var.get(), frames=timecode + timeline_start_timecode) + 1  
+                timecode_marker = tc(self.fps_entry.text(), frames=timecode + timeline_start_timecode) + 1  
                 markers_list.append((name, timecode_marker))
         return markers_list
 
@@ -198,8 +197,8 @@ class EDLProcessorGUI:
         """
         Выводит EDL для дейлизов и EDL с оффлайн клипами
         """
-        offline_clips = self.offline_clips_var.get()
-        edl_for_dailies = self.edl_for_dailies_var.get()
+        offline_clips = self.offline_clips_checkbox.isChecked()
+        edl_for_dailies = self.edl_for_dailies_checkbox.isChecked()
 
         def parse_edl():
             markers_list = self.get_markers(self.timeline_start_tc)
@@ -234,9 +233,8 @@ class EDLProcessorGUI:
 
         parse_edl()
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = EDLProcessorGUI(root)
-    root.mainloop()
-
-
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+    window = EDLProcessorGUI()
+    window.show()
+    sys.exit(app.exec_())
