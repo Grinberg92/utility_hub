@@ -8,6 +8,7 @@ from openpyxl.utils import get_column_letter
 import pandas as pd
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtCore import Qt
 from threading import Thread
 import sys
 
@@ -19,7 +20,8 @@ class GUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Color&FPS Setter')
-        self.setFixedSize(270, 130)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.resize(400, 130)
         self.clip_color_list = ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
                                 'Apricot', 'Olive', 'Violet', 'Blue', 'Pink', 'Tan', 'Beige',
                                 'Brown', 'Chocolate']
@@ -31,38 +33,98 @@ class GUI(QtWidgets.QWidget):
     def init_ui(self):
         layout = QtWidgets.QVBoxLayout()
 
-        # FPS row
+        # === Ряд с чекбоксами и FPS-инпутом ===
+        options_layout = QtWidgets.QHBoxLayout()
+
+        self.checkbox_color = QtWidgets.QCheckBox("Set color")
+        self.checkbox_fps = QtWidgets.QCheckBox("Set FPS")
+        self.checkbox_excel = QtWidgets.QCheckBox("Create Excel")
+
+        # FPS label + input в одном layout
         fps_layout = QtWidgets.QHBoxLayout()
-        fps_label = QtWidgets.QLabel('FPS:')
+        fps_label = QtWidgets.QLabel("FPS:")
+        fps_label.setContentsMargins(0, 0, 2, 0)  # Минимальный отступ
         self.fps_entry = QtWidgets.QLineEdit()
+        self.fps_entry.setFixedWidth(40)
         self.fps_entry.setText("24")
+
         fps_layout.addWidget(fps_label)
         fps_layout.addWidget(self.fps_entry)
+        fps_widget = QtWidgets.QWidget()
+        fps_widget.setLayout(fps_layout)
 
-        # Выбор режима запуска
-        self.mode_combo = QtWidgets.QComboBox()
-        self.mode_combo.addItems([
-            "Запустить оба (цвет + Excel)", 
-            "Присвоить цвета и проектный FPS", 
-            "Создать таблицу Excel"
-        ])
+        # Применяем расширяющиеся size policy
+        for widget in [self.checkbox_color, self.checkbox_fps, self.checkbox_excel, fps_widget]:
+            widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
-        # Checkbox остаётся, если вдруг понадобится позже
-        self.excel_checkbox = QtWidgets.QCheckBox("Создать Excel таблицу")
-        self.excel_checkbox.setChecked(True)
-        self.excel_checkbox.hide()  # Скрываем, заменено на combo box
+        # Добавляем всё в layout
+        options_layout.addWidget(self.checkbox_color)
+        options_layout.addWidget(self.checkbox_fps)
+        options_layout.addWidget(self.checkbox_excel)
+        options_layout.addWidget(fps_widget)
 
-        # Run button
+        self.checkbox_color.stateChanged.connect(self.update_input_state)
+        self.checkbox_excel.stateChanged.connect(self.update_input_state)
+        self.checkbox_fps.stateChanged.connect(self.update_input_state)
+
+        # === Ряд с шириной и высотой ===
+        resolution_layout = QtWidgets.QHBoxLayout()
+        resolution_layout.setContentsMargins(0, 0, 0, 0)
+        resolution_layout.setSpacing(5)  # Уменьшаем отступ между виджетами
+
+        self.width_entry = QtWidgets.QLineEdit("2048")
+        self.width_entry.setPlaceholderText("Widthа")
+        self.width_entry.setMaximumWidth(80)  # или setFixedWidth
+
+        self.separator = QtWidgets.QLabel("x")
+
+        self.height_entry = QtWidgets.QLineEdit("858")
+        self.height_entry.setPlaceholderText("Height")
+        self.height_entry.setMaximumWidth(80)
+
+        resolution_layout.addWidget(QtWidgets.QLabel("Resolution:"))
+        resolution_layout.addWidget(self.width_entry)
+        resolution_layout.addWidget(self.separator)
+        resolution_layout.addWidget(self.height_entry)
+
+        # Оборачиваем в виджет, чтобы выравнивать
+        resolution_widget = QtWidgets.QWidget()
+        resolution_widget.setLayout(resolution_layout)
+
+        # --- Путь рендера ---
+        path_layout = QtWidgets.QHBoxLayout()
+        self.path_input = QtWidgets.QLineEdit()
+        browse_btn = QtWidgets.QPushButton("Choose")
+        browse_btn.clicked.connect(self.select_file)
+        path_layout.addWidget(QtWidgets.QLabel("Exel path:"))
+        path_layout.addWidget(self.path_input)
+        path_layout.addWidget(browse_btn)
+
+        # === Кнопка запуска ===
         self.run_button = QtWidgets.QPushButton("Start")
         self.run_button.clicked.connect(self.on_run_clicked)
 
-        # Добавляем в основной layout
-        layout.addLayout(fps_layout)
-        layout.addWidget(self.mode_combo)
-        layout.addWidget(self.excel_checkbox)
+        # === Добавление в layout ===
+        layout.addLayout(options_layout)
+        layout.addWidget(resolution_widget, alignment=QtCore.Qt.AlignCenter)
+        layout.addLayout(path_layout)
         layout.addWidget(self.run_button)
 
         self.setLayout(layout)
+        self.update_input_state()  # Инициализируем доступность FPS поля
+
+    def select_file(self):
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Выбор файла Excel",
+            filter="Excel Files (*.xlsx);;All Files (*)",
+            directory="Exel_Resolution_Spreadsheet.xlsx"  # имя по умолчанию
+        )
+        if path:
+            # Убедимся, что расширение есть
+            if not path.endswith(".xlsx"):
+                path += ".xlsx"
+            self.path_input.setText(path)
 
     def show_message_box(self, title, message):
         if title == "Ошибка":
@@ -70,36 +132,46 @@ class GUI(QtWidgets.QWidget):
         else:
             QMessageBox.information(self, title, message)
 
+    def update_input_state(self):
+
+        # Блокировка инпута FPS
+        if not self.checkbox_fps.isChecked():
+            self.fps_entry.setEnabled(False)
+        else:
+            self.fps_entry.setEnabled(True)
+
+        # Блокировка инпута Resolution
+        if not self.checkbox_excel.isChecked():
+            self.width_entry.setEnabled(False)
+            self.height_entry.setEnabled(False)
+            self.path_input.setEnabled(False)
+        else:
+            self.width_entry.setEnabled(True)
+            self.height_entry.setEnabled(True)
+            self.path_input.setEnabled(True)
+
     def on_run_clicked(self):
         self.run_button.setEnabled(False)
+
+        # Получаем флаги с чекбоксов
+        self.run_coloring = self.checkbox_color.isChecked()
+        self.create_excel = self.checkbox_excel.isChecked()
+        self.set_fps = self.checkbox_fps.isChecked()
+        self.exel_folder = self.path_input.text()
+
         Thread(target=self.run_script_wrapper).start()
 
     def run_script_wrapper(self):
         try:
-            fps_value = self.fps_entry.text()
-            mode_text = self.mode_combo.currentText()
-            # Определяем по выбору, какие флаги передать
-            if mode_text == "Запустить оба (цвет + Excel)":
-                run_color = True
-                run_excel = True
-            elif mode_text == "Присвоить цвета и проектный FPS":
-                run_color = True
-                run_excel = False
-            elif mode_text == "Создать таблицу Excel":
-                run_color = False
-                run_excel = True
-            else:
-                run_color = True
-                run_excel = True
-
-            self.run_da_vinci_script(fps_value, create_exel=run_excel, run_coloring=run_color)
+            fps_value = self.fps_entry.text() if self.set_fps else None
+            self.run_da_vinci_script(fps_value, create_exel=self.create_excel, run_coloring=self.run_coloring)
         finally:
             self.run_button.setEnabled(True)
 
     def run_script(self):
         # Старая реализация, если требуется
         fps_value = self.fps_entry.text()
-        self.run_da_vinci_script(fps_value, create_exel=True)
+        self.run_da_vinci_script(fps_value, create_exel=False)
 
     def run_da_vinci_script(self, fps_value, create_exel, run_coloring=True):
         """Основная логика скрипта для DaVinci Resolve"""
@@ -184,9 +256,9 @@ class GUI(QtWidgets.QWidget):
                         row.append("")
 
                 df = pd.DataFrame(table_data_list[1:], columns=table_data_list[0])
-                df.to_excel("Exel_project_document.xlsx", index=False, startrow=2)
+                df.to_excel(self.exel_folder, index=False, startrow=2)
 
-                wb = openpyxl.load_workbook("Exel_project_document.xlsx")
+                wb = openpyxl.load_workbook(self.exel_folder)
                 ws = wb.active
 
                 num_columns = len(headers)
@@ -225,7 +297,7 @@ class GUI(QtWidgets.QWidget):
                         bottom=Side(style='thin')
                     )
 
-                wb.save("Exel_project_document.xlsx")
+                wb.save(self.exel_folder)
 
             def rescale_resolution(width, height, aspect):
                 '''
@@ -306,7 +378,7 @@ class GUI(QtWidgets.QWidget):
                     # Находит анаморф, вычисляет ширину по аспекту
                     if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
-                        if clip.GetClipProperty("FPS") != fps_value and not create_exel:
+                        if clip.GetClipProperty("FPS") != fps_value and self.set_fps:
                             clip.SetClipProperty("FPS", "24")
 
                         aspect = clip.GetClipProperty('PAR')
@@ -316,7 +388,7 @@ class GUI(QtWidgets.QWidget):
                         spreadsheet_info_dict.setdefault((resolution, aspect), []).append(clip) # Данные для таблицы
                     else:
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
-                        if clip.GetClipProperty("FPS") != fps_value  and not create_exel:
+                        if clip.GetClipProperty("FPS") != fps_value and self.set_fps:
                             clip.SetClipProperty("FPS", "24")
 
                         aspect = clip.GetClipProperty('PAR')
@@ -338,7 +410,7 @@ class GUI(QtWidgets.QWidget):
                         for clip in clips_dict[res]:
                             clip.SetClipColor(color)
 
-            self.finished_signal.emit("Успех", f"Обработка закончена. Найдено {len(clips)} клипов в OCF и её подпапках.")
+            self.finished_signal.emit("Успех", f"Обработка закончена.")
 
         except Exception as e:
             self.error_signal.emit("Ошибка", f"Произошла ошибка: {str(e)}")
