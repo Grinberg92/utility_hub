@@ -12,16 +12,14 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         self.pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)'
         self.setWindowTitle("EDL&Markers Creator")
-        self.setFixedSize(620, 250)
-
-        self.fps = "24"
-        self.track_number = "1"
+        self.resize(620, 220)
+        self.setMinimumSize(400, 200)
 
         self.init_ui()
-        self.update_fields_state()
 
     def init_ui(self):
         layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
 
         # === Input file ===
         layout.addWidget(QtWidgets.QLabel("Choose EDL-file:"))
@@ -44,44 +42,77 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         layout.addLayout(output_layout)
 
         # === Checkboxes ===
-        checkboxes_layout = QtWidgets.QHBoxLayout()
+        checkboxes_layout = QtWidgets.QGridLayout()
 
         self.set_markers_checkbox = QtWidgets.QCheckBox("Set locators")
         self.set_markers_checkbox.stateChanged.connect(self.update_fields_state)
+        checkboxes_layout.addWidget(self.set_markers_checkbox, 0, 0)
 
-        checkboxes_layout.addWidget(self.set_markers_checkbox)
-        checkboxes_layout.addWidget(QtWidgets.QLabel("Track:"))
+        # Track label + input combined
+        track_widget = QtWidgets.QWidget()
+        track_layout = QtWidgets.QHBoxLayout()
+        track_layout.setContentsMargins(0, 0, 0, 0)
+        track_layout.setSpacing(4)  # чуть-чуть отступа
+        track_label = QtWidgets.QLabel("Track:")
+        track_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
         self.track_entry = QtWidgets.QLineEdit("1")
-        self.track_entry.setFixedWidth(30)
-        checkboxes_layout.addWidget(self.track_entry)
+        self.track_entry.setMaximumWidth(50)
+        self.track_entry.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
+        track_layout.addWidget(track_label)
+        track_layout.addWidget(self.track_entry)
+        track_widget.setLayout(track_layout)
+        track_widget.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
+        checkboxes_layout.addWidget(track_widget, 0, 1, alignment=QtCore.Qt.AlignLeft)
+
 
         self.export_loc_checkbox = QtWidgets.QCheckBox("Export locators")
         self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
+        checkboxes_layout.addWidget(self.export_loc_checkbox, 0, 2)
+
         self.offline_clips_checkbox = QtWidgets.QCheckBox("Offline EDL")
         self.offline_clips_checkbox.stateChanged.connect(self.update_fields_state)
+        checkboxes_layout.addWidget(self.offline_clips_checkbox, 0, 3)
+
         self.edl_for_dailies_checkbox = QtWidgets.QCheckBox("Dailies EDL")
         self.edl_for_dailies_checkbox.stateChanged.connect(self.update_fields_state)
-
-        checkboxes_layout.addWidget(self.export_loc_checkbox)
-        checkboxes_layout.addWidget(self.offline_clips_checkbox)
-        checkboxes_layout.addWidget(self.edl_for_dailies_checkbox)
+        checkboxes_layout.addWidget(self.edl_for_dailies_checkbox, 0, 4)
 
         layout.addLayout(checkboxes_layout)
 
         # === FPS ===
+        fps_widget = QtWidgets.QWidget()
         fps_layout = QtWidgets.QHBoxLayout()
-        fps_layout.addWidget(QtWidgets.QLabel("FPS:"))
+        fps_layout.setContentsMargins(0, 0, 0, 0)
+        fps_layout.setSpacing(4)
+        fps_label = QtWidgets.QLabel("FPS:")
+        fps_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
         self.fps_entry = QtWidgets.QLineEdit("24")
-        self.fps_entry.setFixedWidth(30)
+        self.fps_entry.setMaximumWidth(50)
+        self.fps_entry.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
+        fps_layout.addWidget(fps_label)
         fps_layout.addWidget(self.fps_entry)
-        layout.addLayout(fps_layout)
+        fps_widget.setLayout(fps_layout)
+        fps_widget.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
+        fps_center_layout = QtWidgets.QHBoxLayout()
+        fps_center_layout.addStretch()
+        fps_center_layout.addWidget(fps_widget)
+        fps_center_layout.addStretch()
+
+        layout.addLayout(fps_center_layout)
 
         # === Start button ===
         self.run_button = QtWidgets.QPushButton("Start")
+        self.run_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.run_button.clicked.connect(self.run_script)
-        layout.addWidget(self.run_button, alignment=QtCore.Qt.AlignCenter)
+        layout.addWidget(self.run_button)
 
-        self.setLayout(layout)
+
 
     def select_input_file(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select EDL file", "", "EDL files (*.edl)")
@@ -164,7 +195,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         '''
         markers_list = []
         for timecode, name in self.timeline.GetMarkers().items():
-            name = name['name'].strip()
+            name = name['note'].strip()
             if name and re.search(self.pattern_short, name):
                 timecode_marker = tc(self.fps_entry.text(), frames=timecode + timeline_start_timecode) + 1  
                 markers_list.append((name, timecode_marker))
