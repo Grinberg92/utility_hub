@@ -247,6 +247,15 @@ class DvrRenderApp(QWidget):
             project.SetRenderSettings(render_settings)
             render_item = project.AddRenderJob()
             return render_item, width, height
+        
+        def create_empty_tracks(start):
+            "Функция создает дополнительные дорожки при значении < 5 на таймлайне"
+            for _ in range(5 - start):
+                timeline.AddTrack("video")
+
+        # Проверка на наличие 5 обязательных дорожек
+        if timeline.GetTrackCount("video") < 5:
+            create_empty_tracks(timeline.GetTrackCount("video"))
 
         # Получение объектов таймлайна с дорожек 2-5, представленных в виде пользовательского класса DvrTimelineObject
         pipeline_scale_track_2 = get_mediapoolitems(end_track=2, start_track=2)
