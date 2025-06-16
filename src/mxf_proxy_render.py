@@ -7,37 +7,37 @@ import time
 import DaVinciResolveScript as dvr
 import tkinter as tk
 from tkinter import ttk, filedialog
+from PyQt5 import QtWidgets, QtCore
 
-class ResolveGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Proxy Render")
+class ResolveGUI(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Proxy Render")
+        self.resize(470, 300)
+        self.setMinimumWidth(400)
+        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
-        window_width = 670 
-        window_height = 215 
- 
-        screen_width = root.winfo_screenwidth() 
-        screen_height = root.winfo_screenheight() 
- 
-        # Вычисляем координаты x и y 
-        x = (screen_width // 2) - (window_width // 2) 
-        y = int((screen_height * 7 / 10) - (window_height / 2)) 
-        root.geometry(f"{window_width}x{window_height}+{x}+{y}") 
+        # === Глобальные переменные ===
+        self.glob_width = QtWidgets.QLineEdit("1920")
+        self.glob_width.setFixedWidth(50)
+        self.glob_height = QtWidgets.QLineEdit("1080")
+        self.glob_height.setFixedWidth(50)
+        self.output_folder = QtWidgets.QLineEdit("J:/003_transcode_to_vfx/kraken/tst")
 
-        # --- Глобальные настройки ---
-        self.glob_width = tk.StringVar(value="1920")
-        self.glob_height = tk.StringVar(value="1080")
-        self.output_folder = tk.StringVar(value="J:/003_transcode_to_vfx/kraken/tst")
-        self.project_preset = tk.StringVar(value="for_conform_1920x1080")
-        self.render_preset = tk.StringVar(value="MXF_AVID_HD_Render")
-        self.lut_project = tk.StringVar()
-        self.lut_file = tk.StringVar()
-        self.set_fps_enabled = tk.BooleanVar(value=False)
-        self.project_fps_value = tk.StringVar(value="24")
-        self.set_arri_cdl_and_lut = tk.BooleanVar(value=False)
+        self.project_preset = QtWidgets.QComboBox()
+        self.render_preset = QtWidgets.QComboBox()
+
+        self.lut_project = QtWidgets.QComboBox()
+        self.lut_file = QtWidgets.QComboBox()
+        self.apply_arricdl_lut = QtWidgets.QCheckBox("Apply ARRI CDL LUT")
+
+        self.set_fps_checkbox = QtWidgets.QCheckBox("Set Project FPS")
+        self.project_fps_value = QtWidgets.QLineEdit("24")
+        self.project_fps_value.setFixedWidth(50)
+
         self.lut_path_nx = r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY'
         self.lut_path_posix = '/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/'
-        self.lut_base_path = (self.lut_path_nx, self.lut_path_posix)[os.name == "posix"]
+        self.lut_base_path = self.lut_path_posix if os.name == "posix" else self.lut_path_nx
 
         # Подключение к Resolve
         self.resolve = dvr.scriptapp("Resolve")
@@ -47,122 +47,120 @@ class ResolveGUI:
         self.timeline = self.project.GetCurrentTimeline()
 
         # Создание интерфейса
-        self.create_widgets()
-
         if not self.project:
             print("Ошибка: нет активного проекта.")
             sys.exit()
 
-    def create_widgets(self):
-        def get_project_preset_list():
-            return [preset["Name"] for preset in self.project.GetPresetList()]
+        self.init_ui()
+        self.get_project_preset_list()
+        self.get_render_preset_list()
+        self.update_lut_projects()
+
+    def init_ui(self):
         
-        def get_render_preset_list():
-            return [preset for preset in self.project.GetRenderPresetList()]
-        
-        # Поля для ширины и высоты (в одной строке)
-        frame_size = tk.Frame(self.root)
-        frame_size.pack(pady=5)
+        layout = QtWidgets.QVBoxLayout(self)
 
-        tk.Label(frame_size, text="Width:").pack(side=tk.LEFT, padx=5)
-        tk.Entry(frame_size, textvariable=self.glob_width, width=6).pack(side=tk.LEFT)
+        # Resolution
+        res_layout = QtWidgets.QHBoxLayout()
+        res_layout.addStretch()
+        res_layout.addWidget(QtWidgets.QLabel("Width:"))
+        res_layout.addWidget(self.glob_width)
+        res_layout.addSpacing(20)
+        res_layout.addWidget(QtWidgets.QLabel("Height:"))
+        res_layout.addWidget(self.glob_height)
+        res_layout.addStretch()
+        layout.addLayout(res_layout)
 
-        tk.Label(frame_size, text="Height:").pack(side=tk.LEFT, padx=5)
-        tk.Entry(frame_size, textvariable=self.glob_height, width=6).pack(side=tk.LEFT)
+        # === Presets group ===
+        presets_group = QtWidgets.QGroupBox("Presets")
+        presets_layout = QtWidgets.QVBoxLayout()
+        presets_layout.addWidget(QtWidgets.QLabel("Project Preset:"))
+        presets_layout.addWidget(self.project_preset)
+        presets_layout.addWidget(QtWidgets.QLabel("Render Preset:"))
+        presets_layout.addWidget(self.render_preset)
+        presets_group.setLayout(presets_layout)
+        layout.addWidget(presets_group)
 
-        # Поле выбора папки
-        frame_folder = tk.Frame(self.root)
-        frame_folder.pack(pady=5, fill="x")
+        # === Color group ===
+        color_group = QtWidgets.QGroupBox("Color")
+        color_layout = QtWidgets.QVBoxLayout()
+        color_layout.addWidget(QtWidgets.QLabel("LUT Project:"))
+        color_layout.addWidget(self.lut_project)
+        self.lut_project.currentTextChanged.connect(self.update_lut_files)
+        color_layout.addWidget(QtWidgets.QLabel("LUT File:"))
+        color_layout.addWidget(self.lut_file)
+        color_layout.addWidget(self.apply_arricdl_lut)
+        color_group.setLayout(color_layout)
+        layout.addWidget(color_group)
 
-        tk.Label(frame_folder, text="Render path:").pack(side=tk.LEFT, padx=5)
-        self.folder_entry = tk.Entry(frame_folder, textvariable=self.output_folder, width=30)
-        self.folder_entry.pack(side=tk.LEFT, padx=5, expand=True, fill="x")
-        tk.Button(frame_folder, text="Choose", command=self.select_folder).pack(side=tk.LEFT, padx=5)
+        # === FPS group ===
+        fps_group = QtWidgets.QGroupBox("FPS")
+        fps_layout = QtWidgets.QHBoxLayout()
+        fps_layout.addWidget(self.set_fps_checkbox)
+        fps_layout.addSpacing(10)
+        fps_layout.addWidget(QtWidgets.QLabel("FPS:"))
+        fps_layout.addWidget(self.project_fps_value)
+        fps_layout.addStretch()
+        fps_group.setLayout(fps_layout)
+        layout.addWidget(fps_group)
 
-        # Поля выбора пресетов
-        frame_presets = tk.Frame(self.root)
-        frame_presets.pack(pady=5)
-        n = get_project_preset_list()
-        tk.Label(frame_presets, text="Project preset:").pack(side=tk.LEFT, padx=5)
-        self.project_preset_combo = ttk.Combobox(frame_presets, textvariable=self.project_preset, values=get_project_preset_list())
-        self.project_preset_combo.pack(side=tk.LEFT, padx=5)
+        # === Render path ===
+        path_layout = QtWidgets.QHBoxLayout()
+        path_layout.addWidget(QtWidgets.QLabel("Render Path:"))
+        path_layout.addWidget(self.output_folder)
+        path_btn = QtWidgets.QPushButton("Choose")
+        path_btn.clicked.connect(self.select_folder)
+        path_layout.addWidget(path_btn)
+        layout.addLayout(path_layout)
 
-        tk.Label(frame_presets, text="Render preset:").pack(side=tk.LEFT, padx=5)
-        self.render_preset_combo = ttk.Combobox(frame_presets, textvariable=self.render_preset, values=get_render_preset_list())
-        self.render_preset_combo.pack(side=tk.LEFT, padx=5)
+        # === Start button ===
+        self.start_button = QtWidgets.QPushButton("Start")
+        self.start_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.start_button.clicked.connect(self.start_render)
+        layout.addWidget(self.start_button)
 
-        # Поля выбора LUT-папок и LUT-файлов
-        frame_lut = tk.Frame(self.root)
-        frame_lut.pack(pady=5)
+    # === Функции LUT ===
+    def update_lut_projects(self):
+        """ Сканирует подпапки в LUT-папке """
+        if os.path.isdir(self.lut_base_path):
+            subfolders = [name for name in os.listdir(self.lut_base_path)
+                        if os.path.isdir(os.path.join(self.lut_base_path, name))]
+            self.lut_project.clear()
+            self.lut_project.addItems(subfolders)
+            if subfolders:
+                self.lut_project.setCurrentIndex(0)
+                self.update_lut_files()
 
-        tk.Label(frame_lut, text="Project:").pack(side=tk.LEFT, padx=5)
+    def update_lut_files(self):
+        """ Сканирует .cube файлы в выбранной папке LUT """
+        selected_project = self.lut_project.currentText()
+        selected_path = os.path.join(self.lut_base_path, selected_project)
+        if os.path.isdir(selected_path):
+            cube_files = [f for f in os.listdir(selected_path)
+                        if f.lower().endswith(".cube")]
+            cube_files.insert(0, "No LUT")
+            self.lut_file.clear()
+            self.lut_file.addItems(cube_files)
 
-        self.lut_project_combo = ttk.Combobox(frame_lut, textvariable=self.lut_project, state="readonly", width=20)
-        self.lut_project_combo.pack(side=tk.LEFT, padx=5)
+    def get_project_preset_list(self):
+        project_preset_list = [preset["Name"] for preset in self.project.GetPresetList()]
+        self.project_preset.addItems(project_preset_list)
+    def get_render_preset_list(self):
+        render_presets_list = [preset for preset in self.project.GetRenderPresetList()]
+        self.render_preset.addItems(render_presets_list)
 
-        tk.Label(frame_lut, text="LUT file:").pack(side=tk.LEFT, padx=5)
-
-        self.lut_file_combo = ttk.Combobox(frame_lut, textvariable=self.lut_file, state="readonly", width=30)
-        self.lut_file_combo.pack(side=tk.LEFT, padx=5)
-
-        self.fps_checkbox = tk.Checkbutton(frame_lut, text="ApplyArriCDLandLUT", variable=self.set_arri_cdl_and_lut)
-        self.fps_checkbox.pack(side=tk.LEFT, padx=5)
-
-        # Установка проектного FPS
-        frame_fps = tk.Frame(self.root)
-        frame_fps.pack(pady=5)
-
-        self.fps_checkbox = tk.Checkbutton(frame_fps, text="Set project FPS", variable=self.set_fps_enabled)
-        self.fps_checkbox.pack(side=tk.LEFT, padx=5)
-
-        tk.Label(frame_fps, text="FPS:").pack(side=tk.LEFT, padx=(10, 2))
-        self.fps_entry = tk.Entry(frame_fps, textvariable=self.project_fps_value, width=5)
-        self.fps_entry.pack(side=tk.LEFT)
-
-        def update_lut_projects():
-            """Сканирует подпапки в LUT-папке"""
-            if os.path.isdir(self.lut_base_path):
-                subfolders = [name for name in os.listdir(self.lut_base_path)
-                              if os.path.isdir(os.path.join(self.lut_base_path, name))]
-                self.lut_project_combo["values"] = subfolders
-                if subfolders:
-                    self.lut_project.set(subfolders[0])
-                    update_lut_files()
-
-        def update_lut_files(*args):
-            """Сканирует .cube файлы в выбранной папке LUT"""
-            selected_project = self.lut_project.get()
-            if not selected_project:
-                return
-            selected_path = os.path.join(self.lut_base_path, selected_project)
-            if os.path.isdir(selected_path):
-                cube_files = [f for f in os.listdir(selected_path)
-                              if f.lower().endswith(".cube")]
-                cube_files.insert(0, "No LUT")
-                self.lut_file_combo["values"] = cube_files
-                if cube_files:
-                    self.lut_file.set(cube_files[0])
-                else:
-                    self.lut_file.set("")
-
-        self.lut_project.trace_add("write", update_lut_files)
-
-        update_lut_projects()
-
-        # Кнопка старта рендера
-        tk.Button(self.root, text="Start", command=self.start_render).pack(pady=10)
-
+    # === Выбор папки ===
     def select_folder(self):
-        folder = filedialog.askdirectory()
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Выбор папки")
         if folder:
-            self.output_folder.set(folder)
+            self.output_folder.setText(folder)
 
     def start_render(self):
-        glob_width = self.glob_width.get()
-        glob_height = self.glob_height.get()
-        output_folder = self.output_folder.get()
-        project_preset = self.project_preset.get()
-        render_preset = self.render_preset.get()
+        glob_width = self.glob_width.text()
+        glob_height = self.glob_height.text()
+        output_folder = self.output_folder.text()
+        project_preset = self.project_preset.currentText()
+        render_preset = self.render_preset.currentText()
 
         print(f"Рендер с параметрами: {glob_width}x{glob_height}, Папка: {output_folder}, Проектный пресет: {project_preset}, Рендер-пресет: {render_preset}")
         
@@ -202,7 +200,7 @@ class ResolveGUI:
                 for clip in folder.GetClipList():
                     name = clip.GetName().lower()
                     if any(name.endswith(ext) for ext in valid_extensions):
-                        if self.set_fps_enabled.get():
+                        if self.set_fps_checkbox.isChecked():
                             set_project_fps(clip)
                         collected.append(clip)
                 for subfolder in folder.GetSubFolderList():
@@ -233,7 +231,7 @@ class ResolveGUI:
         def set_project_fps(clip):
 
             "Функция устанавливает проектный FPS"
-            clip.SetClipProperty("FPS", self.project_fps_value.get())
+            clip.SetClipProperty("FPS", self.project_fps_value.text())
 
         def get_bin_items():
 
@@ -242,7 +240,7 @@ class ResolveGUI:
             curr_source_folder = self.media_pool.GetCurrentFolder()
             for clip in curr_source_folder.GetClipList():
                 if "." in clip.GetName() and not clip.GetName().lower().endswith(('.mov', '.mp4', '.jpg')):
-                    if self.set_fps_enabled.get():
+                    if self.set_fps_checkbox.isChecked():
                         set_project_fps(clip)
                     cur_bin_items_list.append(clip)
             return cur_bin_items_list, curr_source_folder
@@ -308,15 +306,15 @@ class ResolveGUI:
 
             "Функция устанавливает заданный LUT(распаковывает AriiCDLLut) на все клипы на таймлайне"
             self.project.RefreshLUTList()
-            if not self.set_arri_cdl_and_lut.get() and self.lut_file == "No LUT":
+            if not self.apply_arricdl_lut.isChecked() and self.lut_file == "No LUT":
                 return
             current_timeline = self.project.GetCurrentTimeline()
             for track in range(1, current_timeline.GetTrackCount("video") + 1):
                 for tmln_item in current_timeline.GetItemListInTrack("video", track):
-                    if self.set_arri_cdl_and_lut.get():
+                    if self.apply_arricdl_lut.isChecked():
                         tmln_item.GetNodeGraph(1).ApplyArriCdlLut()  
                     if not self.lut_file == "No LUT":
-                        lut_path = os.path.join(self.lut_base_path, self.lut_project.get(), self.lut_file.get())
+                        lut_path = os.path.join(self.lut_base_path, self.lut_project.currentText(), self.lut_file.currentText())
                         tmln_item.SetLUT(1, lut_path)
         
         def get_render_list(new_timelines):
@@ -392,7 +390,7 @@ class ResolveGUI:
         # Получаем данные по целевым клипам
         # 2 сценария:
         # 1 - рендер прокси в DNxHD и вписывание любых разрешений в 1920x1080
-        if self.render_preset.get() == "MXF_AVID_HD_Render":
+        if self.render_preset.currentText() == "MXF_AVID_HD_Render":
             clips_dict = {"1920x1080": cur_bin_items_list}
         # 2 - рендер прокси в DNxHR и пересчет аспекта каждого разрешения под ширину 1920
         else:
@@ -404,7 +402,8 @@ class ResolveGUI:
         start_render(render_queue)
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = ResolveGUI(root)
-    root.mainloop()
+    app = QtWidgets.QApplication(sys.argv)
+    gui = ResolveGUI()
+    gui.show()
+    sys.exit(app.exec_())
 
