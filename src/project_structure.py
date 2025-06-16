@@ -211,10 +211,10 @@ class MainWindow(QWidget):
         # Avid group 
         self.avid_group = QGroupBox("Avid Options")
         avid_form = QFormLayout()
-        self.avid_path_label = QLabel("Не выбран")
-        self.avid_path_button = QPushButton("Выбрать папку...")
-        avid_form.addRow(QLabel("Путь:"), self.avid_path_button)
-        avid_form.addRow(QLabel("Выбранный путь:"), self.avid_path_label)
+        self.avid_path_label = QLabel()
+        self.avid_path_button = QPushButton("Choose")
+        avid_form.addRow(QLabel("Path:"), self.avid_path_button)
+        avid_form.addRow(QLabel("Chosen Path:"), self.avid_path_label)
         self.avid_group.setLayout(avid_form)
         layout.addWidget(self.avid_group)
 

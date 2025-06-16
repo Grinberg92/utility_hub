@@ -21,7 +21,7 @@ class GUI(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle('Color&FPS Setter')
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-        self.resize(400, 130)
+        self.resize(450, 130)
         self.clip_color_list = ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
                                 'Apricot', 'Olive', 'Violet', 'Blue', 'Pink', 'Tan', 'Beige',
                                 'Brown', 'Chocolate']
@@ -96,7 +96,7 @@ class GUI(QtWidgets.QWidget):
         self.path_input = QtWidgets.QLineEdit()
         browse_btn = QtWidgets.QPushButton("Choose")
         browse_btn.clicked.connect(self.select_file)
-        path_layout.addWidget(QtWidgets.QLabel("Exel path:"))
+        path_layout.addWidget(QtWidgets.QLabel("Excel Path:"))
         path_layout.addWidget(self.path_input)
         path_layout.addWidget(browse_btn)
 

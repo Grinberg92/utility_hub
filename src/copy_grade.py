@@ -98,15 +98,17 @@ class ColorGradeApplyApp(QMainWindow):
 
         # --- Дорожки ---
         track_layout = QHBoxLayout()
-        track_layout.addWidget(QLabel("Source track:"))
+        track_layout.addStretch()
+        track_layout.addWidget(QLabel("Source Track:"))
         self.track_1_input = QLineEdit()
         self.track_1_input.setFixedWidth(40)
         track_layout.addWidget(self.track_1_input)
 
-        track_layout.addWidget(QLabel("Target track:"))
+        track_layout.addWidget(QLabel("Target Track:"))
         self.track_2_input = QLineEdit()
         self.track_2_input.setFixedWidth(40)
         track_layout.addWidget(self.track_2_input)
+        track_layout.addStretch()
         layout.addLayout(track_layout)
 
         # --- LUT ---
