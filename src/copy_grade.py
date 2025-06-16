@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QPushButton, QMessageBox
 )
-from PyQt5.QtCore import pyqtSignal, QObject, QThread
+from PyQt5.QtCore import pyqtSignal, QObject, QThread, Qt
 import DaVinciResolveScript
 import sys
 
@@ -75,6 +75,7 @@ class ColorGradeApplyApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Copy Grade")
         self.setFixedSize(420, 200)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
         self.resolve = DaVinciResolveScript.scriptapp("Resolve")
         self.project_manager = self.resolve.GetProjectManager()

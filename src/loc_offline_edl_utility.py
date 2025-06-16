@@ -14,6 +14,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.setWindowTitle("EDL&Markers Creator")
         self.resize(620, 300)
         self.setMinimumSize(400, 200)
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
 
         self.init_ui()
 

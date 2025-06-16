@@ -12,6 +12,7 @@ class HubApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Utility Hub")
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
         if os.name != "posix":
             self.setGeometry(200, 200, 900, 350)
         else:
