@@ -12,7 +12,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         self.pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)'
         self.setWindowTitle("EDL&Markers Creator")
-        self.resize(620, 270)
+        self.resize(620, 300)
         self.setMinimumSize(400, 200)
 
         self.init_ui()
@@ -98,6 +98,27 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         block1_group.setLayout(block1_group_layout)
         main_layout.addWidget(block1_group)
 
+        # Path to save markers (ввод + кнопка Choose)
+        save_path_widget = QtWidgets.QWidget()
+        save_path_layout = QtWidgets.QHBoxLayout()
+        save_path_layout.setContentsMargins(0, 0, 0, 0)
+        save_path_layout.setSpacing(6)
+
+        self.save_locators_path_entry = QtWidgets.QLineEdit()
+        save_path_btn = QtWidgets.QPushButton("Choose")
+        save_path_btn.clicked.connect(self.select_save_markers_file)
+
+        save_path_layout.addWidget(self.save_locators_path_entry)
+        save_path_layout.addWidget(save_path_btn)
+        save_path_widget.setLayout(save_path_layout)
+
+        # Добавляем строку в layout с подписью
+        form_layout = QtWidgets.QFormLayout()
+        form_layout.setLabelAlignment(QtCore.Qt.AlignLeft)
+        form_layout.addRow("Save created locators:", save_path_widget)
+
+        block1_group_layout.addLayout(form_layout)
+
         # === Блок 2: Offline/Dailies + Input/Output paths ===
         block2_group = QtWidgets.QGroupBox("EDL Options")
         block2_group_layout = QtWidgets.QVBoxLayout()
@@ -167,6 +188,12 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         if file_path:
             self.input_entry.setText(file_path)
 
+    def select_save_markers_file(self):
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Markers File", "", "Text Files (*.txt);;All Files (*)")
+        if file_path:
+            self.save_locators_path_entry.setText(file_path)
+
+
     def select_output_file(self):
         if self.export_loc_checkbox.isChecked():
             ext = ".txt"
@@ -183,14 +210,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.track_entry.setEnabled(self.set_markers_checkbox.isChecked())
 
         if self.set_markers_checkbox.isChecked():
-            self.input_entry.setEnabled(False)
-            self.output_entry.setEnabled(False)
-        elif self.export_loc_checkbox.isChecked():
-            self.input_entry.setEnabled(False)
-            self.output_entry.setEnabled(True)
+            self.save_locators_path_entry.setEnabled(False)
         else:
-            self.input_entry.setEnabled(True)
-            self.output_entry.setEnabled(True)
+            self.save_locators_path_entry.setEnabled(True)
 
 
     def run_script(self):
@@ -200,9 +222,13 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         set_markers = self.set_markers_checkbox.isChecked()
         fps = self.fps_entry.text()
         process_edl = self.edl_for_dailies_checkbox.isChecked() or self.offline_clips_checkbox.isChecked()
+        locators_output_path = self.save_locators_path_entry.text()
 
         if process_edl and (not edl_path or not output_path):
             QMessageBox.critical(self,"Ошибка", "Выберите файлы EDL!")
+            return
+        if not locators_output_path and export_loc:
+            QMessageBox.critical(self, "Ошибка", "Введите путь для сохранения локаторов")
             return
 
         try:
@@ -231,7 +257,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
                 self.set_markers(self.timeline, track_number)
 
             if export_loc:
-                self.export_locators_to_avid(output_path)
+                self.export_locators_to_avid(locators_output_path)
 
             QMessageBox.information(self, "Готово", "Обработка завершена!")
         except Exception as e:
