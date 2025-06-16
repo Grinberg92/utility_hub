@@ -33,6 +33,7 @@ class GUI(QtWidgets.QWidget):
 
         input_layout.addWidget(label)
         input_layout.addWidget(self.track_entry)
+        input_layout.addStretch()
 
         # Центрированный layout для кнопки
         button = QtWidgets.QPushButton('Start')
