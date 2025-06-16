@@ -195,14 +195,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
 
     def select_output_file(self):
-        if self.export_loc_checkbox.isChecked():
-            ext = ".txt"
-            filter = "Text files (*.txt)"
-        else:
-            ext = ".edl"
-            filter = "EDL files (*.edl)"
-
-        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save As", "", filter)
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save As", "", "EDL files (*.edl));;All Files (*)")
         if file_path:
             self.output_entry.setText(file_path)
 
