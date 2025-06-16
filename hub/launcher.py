@@ -54,7 +54,7 @@ class HubApp(QWidget):
             script_name="get_shot_in_dvr.py"
         )
         row6 = self.create_button_description_row(
-            button_name="Render MXF Proxy",
+            button_name="Render Proxy",
             description_text="Автоматический рендер MXF прокси для Avid",
             script_name="mxf_proxy_render.py"
         )
