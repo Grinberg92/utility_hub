@@ -147,9 +147,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.track_entry.setEnabled(self.set_markers_checkbox.isChecked())
 
         if self.set_markers_checkbox.isChecked():
-            self.save_locators_path_entry.setEnabled(True)
-        else:
             self.save_locators_path_entry.setEnabled(False)
+        else:
+            self.save_locators_path_entry.setEnabled(True)
 
 
     def run_script(self):
