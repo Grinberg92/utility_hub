@@ -298,7 +298,7 @@ class MainWindow(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка: {e}")
             logger.exception(f"Не удалось создать структуру папок в Resolve")
-
+            return
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
