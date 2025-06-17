@@ -7,6 +7,9 @@ from PyQt5.QtWidgets import (
     QComboBox, QLineEdit, QPushButton, QSpinBox, QGroupBox, QFormLayout,
     QMessageBox, QFileDialog 
 )
+from dvr_tools.logger_config import get_logger
+
+logger = get_logger(__file__)
 
 J_SRTUCTURE = [
     "J:/001_sources",
@@ -104,67 +107,11 @@ RESOLVE_REEL_FOLDER = RESOLVE_REEL_FOLDER = {
     "008_TMP": {}
 }
 
-
-def create_folder_structure(structure, base_path):
-    for folder, subfolders in structure.items():
-        folder_path = os.path.join(base_path, folder)
-        os.makedirs(folder_path, exist_ok=True)
-        if subfolders:
-            create_folder_structure(subfolders, folder_path)
-
-def create_avid_structure(base_path):
-    os.makedirs(base_path, exist_ok=True)
-    create_folder_structure(AVID_FOLDER_STRUCTURE, base_path)
-
-def create_project(project_name, base_path):
-    project_path = os.path.join(base_path, f"CC_{project_name.upper()}" if base_path == "R:/" else project_name)
-    os.makedirs(project_path, exist_ok=True)
-    if "001_sources" in base_path:
-        create_folder_structure(STRUCTURE_001_FOLDER, project_path)
-    elif "004_masters" in base_path:
-        create_folder_structure(STRUCTURE_004_MASTERS, project_path)
-    if base_path == "R:/":
-        create_folder_structure(R_FOLDER_STRUCTURE, project_path)
-
-def recursive_resolve(media_pool, parent_folder, structure):
-    for name, subfolders in structure.items():
-        new_folder = media_pool.AddSubFolder(parent_folder, name)
-        if subfolders:
-            recursive_resolve(media_pool, new_folder, subfolders)
-
-
-def create_resolve_structure(project_name, type_project_resolve, reels_number):
-    resolve = dvr.scriptapp("Resolve")
-    project = resolve.GetProjectManager()
-
-    if type_project_resolve == "OCF":
-        reels_folder = f"{project_name.upper()}"
-        project.CreateFolder(reels_folder)
-        project.OpenFolder(reels_folder)
-
-        new_project = project.CreateProject(f"{project_name.upper()}_OCF")
-        current_project = resolve.GetProjectManager().GetCurrentProject()
-        media_pool = current_project.GetMediaPool()
-        root_folder = media_pool.GetRootFolder()
-        recursive_resolve(media_pool, root_folder, RESOLVE_OCF_FOLDER)
-
-    elif type_project_resolve == "REEL":
-        reels_folder = f"{project_name.upper()}_CC"
-        project.CreateFolder(reels_folder)
-        project.OpenFolder(reels_folder)
-
-        for i in range(1, reels_number + 1):
-            new_project = project.CreateProject(f"{project_name.upper()}_CC_REEL_0{i}")
-            current_project = resolve.GetProjectManager().GetCurrentProject()
-            media_pool = current_project.GetMediaPool()
-            root_folder = media_pool.GetRootFolder()
-            recursive_resolve(media_pool, root_folder, RESOLVE_REEL_FOLDER)
-
-
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Project Structure Creator")
+        self.resize(300, 200)
         self.setup_ui()
 
     def setup_ui(self):
@@ -219,7 +166,7 @@ class MainWindow(QWidget):
         layout.addWidget(self.avid_group)
 
         # Create button
-        self.create_button = QPushButton("Create")
+        self.create_button = QPushButton("Start")
         layout.addWidget(self.create_button)
 
         self.setLayout(layout)
@@ -265,9 +212,9 @@ class MainWindow(QWidget):
                 return
             if disk == "J":
                 for folder in J_SRTUCTURE:
-                    create_project(project_name, folder)
+                    self.create_project(project_name, folder)
             else:
-                create_project(project_name, R_STRUCTURE)
+                self.create_project(project_name, R_STRUCTURE)
 
         elif self.resolve_radio.isChecked():
             type_proj = self.type_selector.currentText()
@@ -276,18 +223,85 @@ class MainWindow(QWidget):
                 QMessageBox.warning(self, "Ошибка", "Пожалуйста, укажите имя проекта для Resolve.")
                 return
             reels = self.reels_input.value()
-            create_resolve_structure(project_name, type_proj, reels)
+            self.create_resolve_structure(project_name, type_proj, reels)
 
         elif self.avid_radio.isChecked():
             if not hasattr(self, 'avid_selected_path') or not self.avid_selected_path:
                 QMessageBox.warning(self, "Ошибка", "Пожалуйста, выберите путь для Avid структуры.")
                 return
-            create_avid_structure(self.avid_selected_path)
+            self.create_avid_structure(self.avid_selected_path)
+
+    # Методы исполняющие создание фолдеров
+    def create_folder_structure(self, structure, base_path):
+        try:
+            for folder, subfolders in structure.items():
+                folder_path = os.path.join(base_path, folder)
+                os.makedirs(folder_path, exist_ok=True)
+                if subfolders:
+                    self.create_folder_structure(subfolders, folder_path)
+        except Exception as e:
+            logger.exception(f"Не удалось создать структуру папок {base_path}")
+
+    def create_avid_structure(self, base_path):
+        os.makedirs(base_path, exist_ok=True)
+        self.create_folder_structure(AVID_FOLDER_STRUCTURE, base_path)
+
+    def create_project(self, project_name, base_path):
+        project_path = os.path.join(base_path, f"CC_{project_name.upper()}" if base_path == "R:/" else project_name)
+        os.makedirs(project_path, exist_ok=True)
+        if "001_sources" in base_path:
+            self.create_folder_structure(STRUCTURE_001_FOLDER, project_path)
+        elif "004_masters" in base_path:
+            self.create_folder_structure(STRUCTURE_004_MASTERS, project_path)
+        if base_path == "R:/":
+            self.create_folder_structure(R_FOLDER_STRUCTURE, project_path)
+
+    def recursive_resolve(self, media_pool, parent_folder, structure):
+        for name, subfolders in structure.items():
+            new_folder = media_pool.AddSubFolder(parent_folder, name)
+            if subfolders:
+                self.recursive_resolve(media_pool, new_folder, subfolders)
+
+    def create_resolve_structure(self, project_name, type_project_resolve, reels_number):
+        try:
+            try:
+                resolve = dvr.scriptapp("Resolve")
+                project = resolve.GetProjectManager()
+            except Exception:
+                QMessageBox.critical(self, "Ошибка", "Пожалуйста, откройте Resolve")
+                logger.exception("Пожалуйста, откройте Resolve")
+                return
+
+            if type_project_resolve == "OCF":
+                reels_folder = f"{project_name.upper()}"
+                project.CreateFolder(reels_folder)
+                project.OpenFolder(reels_folder)
+
+                new_project = project.CreateProject(f"{project_name.upper()}_OCF")
+                current_project = resolve.GetProjectManager().GetCurrentProject()
+                media_pool = current_project.GetMediaPool()
+                root_folder = media_pool.GetRootFolder()
+                self.recursive_resolve(media_pool, root_folder, RESOLVE_OCF_FOLDER)
+
+            elif type_project_resolve == "REEL":
+                reels_folder = f"{project_name.upper()}_CC"
+                project.CreateFolder(reels_folder)
+                project.OpenFolder(reels_folder)
+
+                for i in range(1, reels_number + 1):
+                    new_project = project.CreateProject(f"{project_name.upper()}_CC_REEL_0{i}")
+                    current_project = resolve.GetProjectManager().GetCurrentProject()
+                    media_pool = current_project.GetMediaPool()
+                    root_folder = media_pool.GetRootFolder()
+                    self.recursive_resolve(media_pool, root_folder, RESOLVE_REEL_FOLDER)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка: {e}")
+            logger.exception(f"Не удалось создать структуру папок в Resolve")
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-    window.resize(300, 200)
     window.show()
     sys.exit(app.exec_())
