@@ -1,6 +1,9 @@
 import DaVinciResolveScript as dvrs
 from PyQt5 import QtWidgets, QtCore
 import sys
+from dvr_tools.logger_config import get_logger
+
+logger = get_logger(__file__)
 
 class GUI(QtWidgets.QWidget):
     def __init__(self):
@@ -66,13 +69,16 @@ class GUI(QtWidgets.QWidget):
             try:
                 track_number = int(self.track_entry.text())
             except ValueError:
+                logger.exception('Введите корректный номер дорожки')
                 raise ValueError('Введите корректный номер дорожки')
 
             clips = timeline.GetItemListInTrack('video', track_number)
             if clips is None:
+                logger.warning(f"Дорожка {track_number} не существует.")
                 QtWidgets.QMessageBox.warning(self, "Внимание", f"Дорожка {track_number} не существует.")
                 return
             if clips == []:
+                logger.warning(f"На дорожке {track_number} отсутствуют объекты.")
                 QtWidgets.QMessageBox.warning(self, "Внимание", f"На дорожке {track_number} отсутствуют объекты.")
                 return
 
@@ -90,11 +96,12 @@ class GUI(QtWidgets.QWidget):
                             if clip_under.GetStart() == clip.GetStart():
                                 clip_under.AddVersion(clipName, 0)
                                 print(f'Добавлено кастомное имя "{clipName}" в клип на треке {track_index}')
-
+            logger.info("Имена из оффлайн клипов применены на все клипы")
             QtWidgets.QMessageBox.information(self, "Success", "Имена из оффлайн клипов применены на все клипы")
         except ValueError as ve:
             QtWidgets.QMessageBox.critical(self, 'Ошибка', str(ve))
         except Exception as e:
+            logger.exception(f'Произошла ошибка: {str(e)}')
             QtWidgets.QMessageBox.critical(self, 'Ошибка', f'Произошла ошибка: {str(e)}')
 
 if __name__ == "__main__":
