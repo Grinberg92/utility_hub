@@ -72,12 +72,15 @@ class GUI(QtWidgets.QWidget):
             if clips is None:
                 QtWidgets.QMessageBox.warning(self, "Внимание", f"Дорожка {track_number} не существует.")
                 return
+            if clips == []:
+                QtWidgets.QMessageBox.warning(self, "Внимание", f"На дорожке {track_number} отсутствуют объекты.")
+                return
 
             for clip in clips:
                 clipName = clip.GetName()
-                # Расчёт средней точки клипа (примерно центр)
-                clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - tlStart
-                timeline.AddMarker(clip_start, 'Blue', clipName, "", 1, 'Renamed')
+                # Расчёт средней точки клипа (примерно центр)   (заморозил)
+                #clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - tlStart
+                #timeline.AddMarker(clip_start, 'Blue', clipName, "", 1, 'Renamed')
 
                 # Применение кастомного имени на другие клипы, совпадающие по старту
                 for track_index in range(1, count_of_tracks):
@@ -88,7 +91,7 @@ class GUI(QtWidgets.QWidget):
                                 clip_under.AddVersion(clipName, 0)
                                 print(f'Добавлено кастомное имя "{clipName}" в клип на треке {track_index}')
 
-            QtWidgets.QMessageBox.information(self, "Success", "Кастомные имена применены на все клипы")
+            QtWidgets.QMessageBox.information(self, "Success", "Имена из оффлайн клипов применены на все клипы")
         except ValueError as ve:
             QtWidgets.QMessageBox.critical(self, 'Ошибка', str(ve))
         except Exception as e:
