@@ -8,7 +8,7 @@ class GUI(QtWidgets.QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle('Names From Offline')
+        self.setWindowTitle('Names from Offline')
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
         # Размеры окна
@@ -27,7 +27,7 @@ class GUI(QtWidgets.QWidget):
 
         # Горизонтальный layout для ввода номера трека
         input_layout = QtWidgets.QHBoxLayout()
-        label = QtWidgets.QLabel('Offline track number:')
+        label = QtWidgets.QLabel('Offline Track Number:')
         self.track_entry = QtWidgets.QLineEdit()
         self.track_entry.setFixedWidth(50)
 
