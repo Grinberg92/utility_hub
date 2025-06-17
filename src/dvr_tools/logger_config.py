@@ -3,6 +3,7 @@ import os
 import platform
 import getpass
 import socket
+import sys
 
 def get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
@@ -35,5 +36,9 @@ def get_logger(name: str) -> logging.Logger:
 
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
+
+    script_name = os.path.basename(sys.argv[0])
+    header = f"\n{'=' * 80}\n START SCRIPT: {script_name}\n{'=' * 80}"
+    logger.info(header)
 
     return logger
