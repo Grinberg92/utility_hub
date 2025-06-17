@@ -5,12 +5,15 @@ import math
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+from dvr_tools.logger_config import get_logger
 import pandas as pd
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import Qt
 from threading import Thread
 import sys
+
+logger = get_logger(__file__)
 
 class GUI(QtWidgets.QWidget):
 
@@ -157,7 +160,14 @@ class GUI(QtWidgets.QWidget):
         self.run_coloring = self.checkbox_color.isChecked()
         self.create_excel = self.checkbox_excel.isChecked()
         self.set_fps = self.checkbox_fps.isChecked()
+        self.fps_input = self.fps_entry.text()
         self.exel_folder = self.path_input.text()
+        if not self.exel_folder and self.create_excel:
+            QMessageBox.warning(self, "Предупреждение", "Пожалуйста, укажите путь для таблицы")
+            logger.warning("Пожалуйста, укажите путь для таблицы")
+            self.run_button.setEnabled(True)
+            return 
+        
         self.output_res_height = self.height_entry.text()
         self.output_res_width = self.width_entry.text()
 
@@ -169,11 +179,6 @@ class GUI(QtWidgets.QWidget):
             self.run_da_vinci_script(fps_value, create_exel=self.create_excel, run_coloring=self.run_coloring)
         finally:
             self.run_button.setEnabled(True)
-
-    def run_script(self):
-        # Старая реализация, если требуется
-        fps_value = self.fps_entry.text()
-        self.run_da_vinci_script(fps_value, create_exel=False)
 
     def run_da_vinci_script(self, fps_value, create_exel, run_coloring=True):
         """Основная логика скрипта для DaVinci Resolve"""
@@ -300,6 +305,7 @@ class GUI(QtWidgets.QWidget):
                     )
 
                 wb.save(self.exel_folder)
+                logger.info("Таблица Excel успешно сформировна")
 
             def rescale_resolution(width, height, aspect):
                 '''
@@ -368,7 +374,7 @@ class GUI(QtWidgets.QWidget):
 
             target_bin = self.find_target_bin(media_pool)  # Ищем папку OCF
             if not target_bin:
-                self.show_message_signal.emit("Ошибка", "Папка OCF не найдена.")
+                self.finished_signal.emit("Ошибка", "Папка OCF не найдена.")
                 return
 
             clips_dict = {}  # Словарь с данными разрешение: список клипов с таким разрешением
@@ -411,11 +417,14 @@ class GUI(QtWidgets.QWidget):
                     if res in clips_dict:
                         for clip in clips_dict[res]:
                             clip.SetClipColor(color)
+                        logger.debug(f"Установлен цвет на группу разрешения {res}")
 
             self.finished_signal.emit("Успех", f"Обработка закончена.")
-
+            logger.info(f"Обработка закончена.")
+            
         except Exception as e:
             self.error_signal.emit("Ошибка", f"Произошла ошибка: {str(e)}")
+            logger.exception(f"Произошла ошибка: {str(e)}")
 
     def get_clips_from_bin(self, bin):
         """Рекурсивно получает все клипы из папки и её подпапок."""
