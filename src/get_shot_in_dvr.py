@@ -9,16 +9,9 @@ from PyQt5.QtWidgets import (
     QComboBox, QTextEdit, QCheckBox, QMessageBox, QProgressBar
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from dvr_tools.logger_config import get_logger
 
-try:
-    resolve = dvr.scriptapp("Resolve")
-    project_manager = resolve.GetProjectManager()
-    project = project_manager.GetCurrentProject()
-    media_pool = project.GetMediaPool()
-    cur_bin = media_pool.GetCurrentFolder()
-    timeline = project.GetCurrentTimeline()
-except:
-    QMessageBox.critical(None, 'Ошибка', 'Откройте проект Davinci Resolve')
+logger = get_logger(__file__)
 
 
 class WorkerThread(QThread):
@@ -120,14 +113,44 @@ class GetShotDvr(QWidget):
         return result_path
 
     def run(self):
+        
+        # Проверка открытого Resolve
+        try:
+            self.resolve = dvr.scriptapp("Resolve")
+            self.project_manager = self.resolve.GetProjectManager()
+            self.project = self.project_manager.GetCurrentProject()
+            self.media_pool = self.project.GetMediaPool()
+            self.cur_bin = self.media_pool.GetCurrentFolder()
+            self.timeline = self.project.GetCurrentTimeline()
+        except:
+            logger.exception('Откройте проект Davinci Resolve')
+            QMessageBox.critical(None, 'Ошибка', 'Откройте проект Davinci Resolve')
+            return
+        # Проверка на наличие хотя бы одного путя в text_widget
         self.toggle_button(True)
         shot_paths = [shot.strip() for shot in self.text_widget.toPlainText().split('\n') if shot.strip()]
 
         if not shot_paths:
             self.show_message('Ошибка', 'Отсутствуют данные для обработки', True)
+            logger.exception('Отсутствуют данные для обработки')
+            self.toggle_button(False)
+            return
+        
+        # Проверка существования путей
+        invalid_paths = []
+        for path in shot_paths:
+            resolved_path = self.cross_platform_name(path)
+            if not resolved_path.exists():
+                invalid_paths.append(str(resolved_path))
+
+        if invalid_paths:
+            msg = "Указанные пути не существуют:\n" + "\n".join(invalid_paths)
+            self.show_message('Ошибка', msg, True)
+            logger.warning("Указаны несуществующие пути:\n" + "\n".join(invalid_paths))
             self.toggle_button(False)
             return
 
+        logger.info(f"Начата обработка {len(shot_paths)} шотов")
         self.worker = WorkerThread(self, shot_paths)
         self.worker.finished_signal.connect(self.on_task_completed)
         self.worker.error_signal.connect(self.on_task_failed)
@@ -144,10 +167,12 @@ class GetShotDvr(QWidget):
 
     def on_task_completed(self):
         self.show_message('Успех', 'Все файлы скопированы')
+        logger.info('Все файлы скопированы')
         self.toggle_button(False)
 
     def on_task_failed(self, message):
         self.show_message('Ошибка', f'Ошибка обработки: {message}', True)
+        logger.exception(f'Ошибка обработки: {message}')
         self.toggle_button(False)
 
     def process_shot(self, shot_path, progress_signal):
@@ -156,15 +181,17 @@ class GetShotDvr(QWidget):
 
         frames_list = self.copy_sequence_files(shot_path, progress_signal)
         if frames_list:
-            media_pool.ImportMedia(frames_list)
+            logger.info(f"Шот {os.path.basename(frames_list[0])} скопирован и импортирован")
+            self.media_pool.ImportMedia(frames_list)
 
         if self.is_append.isChecked():
-            for item in cur_bin.GetClipList():
+            for item in self.cur_bin.GetClipList():
                 if re.search(shot_name, item.GetName()):
                     self.append_to_timeline(item)
+                    logger.info(f"Шот {item.GetName()} добавлен на таймлайн")
 
     def get_timeline_item(self, mediapool_item):
-        for tmln_item in timeline.GetItemListInTrack("video", 1):
+        for tmln_item in self.timeline.GetItemListInTrack("video", 1):
             if mediapool_item.GetName() == tmln_item.GetName():
                 return tmln_item
 
@@ -173,15 +200,24 @@ class GetShotDvr(QWidget):
             normalize_lut = r"/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/'VFX IO/AP0_to_P3D65.cube"
             timeline_item = self.get_timeline_item(item)
             timeline_item.SetLUT(1, normalize_lut)
+            logger.info(f"Применен LUT к шоту {item.GetName()}")
         except Exception as e:
+            logger.exception("Не удалось установить LUT")
             self.show_message("Ошибка", f"Не удалось установить LUT {e}", True)
 
     def append_to_timeline(self, item):
+        # Проверка на активный таймлайн
+        if self.is_append.isChecked() and not self.timeline:
+            self.show_message('Ошибка', 'Добавление на таймлайн невозможно — ни один таймлайн не открыт.', True)
+            logger.warning('Попытка добавления на таймлайн без активного таймлайна.')
+            self.toggle_button(False)
+            return
         try:
-            media_pool.AppendToTimeline(item)
+            self.media_pool.AppendToTimeline(item)
             if self.is_normalize.isChecked():
                 self.set_normalize_lut(item)
         except Exception as e:
+            logger.exception('Не удалось добавить клип на таймлайн')
             self.show_message('Ошибка', f'Не удалось добавить клип на таймлайн: {e}', True)
 
     def copy_sequence_files(self, seq_path, progress_signal):
@@ -215,6 +251,7 @@ class GetShotDvr(QWidget):
 
         except Exception as e:
             self.show_message('Ошибка', f'Ошибка копирования файлов: {e}', True)
+            logger.exception(f'Ошибка копирования файлов')
 
         return target_list
 
