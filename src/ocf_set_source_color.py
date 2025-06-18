@@ -97,11 +97,11 @@ class GUI(QtWidgets.QWidget):
         # --- Путь рендера ---
         path_layout = QtWidgets.QHBoxLayout()
         self.path_input = QtWidgets.QLineEdit()
-        browse_btn = QtWidgets.QPushButton("Choose")
-        browse_btn.clicked.connect(self.select_file)
+        self.browse_btn = QtWidgets.QPushButton("Choose")
+        self.browse_btn.clicked.connect(self.select_file)
         path_layout.addWidget(QtWidgets.QLabel("Excel Path:"))
         path_layout.addWidget(self.path_input)
-        path_layout.addWidget(browse_btn)
+        path_layout.addWidget(self.browse_btn)
 
         # === Кнопка запуска ===
         self.run_button = QtWidgets.QPushButton("Start")
@@ -148,10 +148,12 @@ class GUI(QtWidgets.QWidget):
             self.width_entry.setEnabled(False)
             self.height_entry.setEnabled(False)
             self.path_input.setEnabled(False)
+            self.browse_btn.setEnabled(False)
         else:
             self.width_entry.setEnabled(True)
             self.height_entry.setEnabled(True)
             self.path_input.setEnabled(True)
+            self.browse_btn.setEnabled(True)
 
     def on_run_clicked(self):
         self.run_button.setEnabled(False)
@@ -375,6 +377,7 @@ class GUI(QtWidgets.QWidget):
             target_bin = self.find_target_bin(media_pool)  # Ищем папку OCF
             if not target_bin:
                 self.finished_signal.emit("Ошибка", "Папка OCF не найдена.")
+                logger.critical('Папка OCF не найдена.')
                 return
 
             clips_dict = {}  # Словарь с данными разрешение: список клипов с таким разрешением
