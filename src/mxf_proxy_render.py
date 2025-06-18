@@ -245,11 +245,16 @@ class ResolveGUI(QtWidgets.QWidget):
                     cur_bin_items_list.append(clip)
             return cur_bin_items_list, curr_source_folder
         
-        def turn_on_burn_in():
+        def turn_on_burn_in(aspect):
 
             "Функция устанавливает пресет burn in"
-            self.project.LoadBurnInPreset("python_proxy_preset") 
 
+            if aspect == "anam":
+                self.project.LoadBurnInPreset("python_proxy_preset_anam") 
+                print("Применен пресет burn in: python_proxy_preset_anam")
+            elif aspect == "square":
+                self.project.LoadBurnInPreset("python_proxy_preset_square") 
+                print("Применен пресет burn in: python_proxy_preset_square")
         def set_project_preset():
 
             "Функция устанавливает пресет проекта"
@@ -341,8 +346,7 @@ class ResolveGUI(QtWidgets.QWidget):
                     "FormatWidth": int(width), 
                     "FormatHeight": int(height)
                 }
-                self.project.SetRenderSettings(render_settings)
-                
+                self.project.SetRenderSettings(render_settings)        
 
                 # Добавляем в очередь рендера
                 render_item = self.project.AddRenderJob()  
@@ -368,7 +372,10 @@ class ResolveGUI(QtWidgets.QWidget):
                 print("Разрешение",resolution)
                 self.project.SetSetting("timelineResolutionWidth", width)
                 self.project.SetSetting("timelineResolutionHeight", height)
-
+                if int(height) < 1000:
+                    turn_on_burn_in("anam")
+                else:
+                    turn_on_burn_in("square")
                 self.project.StartRendering(render)
 
         # Основной блок
@@ -377,7 +384,6 @@ class ResolveGUI(QtWidgets.QWidget):
         # Устанавливаем пресет для burn in и проекта
         cur_bin_items_list, current_source_folder = get_bin_items()
         filterd_clips = copy_filtered_clips_to_ocf_folder(current_source_folder)
-        turn_on_burn_in()
         set_project_preset()
 
         # Формирование таймлайнов для фильтрованных клипов(mov, mp4, jpg)
