@@ -5,9 +5,33 @@ import re
 import math
 import time
 import DaVinciResolveScript as dvr
-import tkinter as tk
-from tkinter import ttk, filedialog
 from PyQt5 import QtWidgets, QtCore
+from dvr_tools.logger_config import get_logger
+
+logger = get_logger(__file__)
+
+class RenderThread(QtCore.QThread):
+
+    error_signal = QtCore.pyqtSignal(str)
+    success_signal = QtCore.pyqtSignal()
+    warning_signal = QtCore.pyqtSignal(str)
+    info_signal = QtCore.pyqtSignal(str)
+
+    def __init__(self, parent, glob_width, glob_height, output_folder, project_preset, render_preset):
+        super().__init__(parent)
+        self.parent = parent
+        self.glob_width = glob_width
+        self.glob_height = glob_height
+        self.output_folder = output_folder
+        self.project_preset = project_preset
+        self.render_preset = render_preset
+
+    def run(self):
+        # Запускаем процесс рендера
+        try:
+            self.parent.process_render(self.glob_width, self.glob_height, self.output_folder, self.project_preset, self.render_preset)
+        except Exception as e:
+            self.error_signal.emit(f"Ошибка рендера: {e}")
 
 class ResolveGUI(QtWidgets.QWidget):
     def __init__(self):
@@ -40,17 +64,17 @@ class ResolveGUI(QtWidgets.QWidget):
         self.lut_base_path = self.lut_path_posix if os.name == "posix" else self.lut_path_nx
 
         # Подключение к Resolve
-        self.resolve = dvr.scriptapp("Resolve")
-        self.project_manager = self.resolve.GetProjectManager()
-        self.project = self.project_manager.GetCurrentProject()
-        self.media_pool = self.project.GetMediaPool()
-        self.timeline = self.project.GetCurrentTimeline()
-
-        # Создание интерфейса
-        if not self.project:
-            print("Ошибка: нет активного проекта.")
+        try:
+            self.resolve = dvr.scriptapp("Resolve")
+            self.project_manager = self.resolve.GetProjectManager()
+            self.project = self.project_manager.GetCurrentProject()
+            self.media_pool = self.project.GetMediaPool()
+            self.timeline = self.project.GetCurrentTimeline()
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Ошибка подключения к Resolve: {e}")
+            logger.exception(f"Ошибка подключения к Resolve: {e}")
             sys.exit()
-
+            
         self.init_ui()
         self.get_project_preset_list()
         self.get_render_preset_list()
@@ -162,10 +186,55 @@ class ResolveGUI(QtWidgets.QWidget):
         project_preset = self.project_preset.currentText()
         render_preset = self.render_preset.currentText()
 
+        if not glob_height or not glob_width:
+            QtWidgets.QMessageBox.warning(self, "Предупреждение", "Значения ширины или высоты не указаны")
+            logger.warning("Значения ширины или высоты не указаны")
+            return
+        
+        if self.set_fps_checkbox.isChecked() and not self.project_fps_value.text():
+            QtWidgets.QMessageBox.warning(self, "Предупреждение", "Укажите значение FPS")
+            logger.warning("Укажите значение FPS")
+            return      
+        
+        if not output_folder:
+            QtWidgets.QMessageBox.warning(self, "Предупреждение", "Укажите путь для рендера")
+            logger.warning("Укажите путь для рендера")
+            return      
+
         print(f"Рендер с параметрами: {glob_width}x{glob_height}, Папка: {output_folder}, Проектный пресет: {project_preset}, Рендер-пресет: {render_preset}")
         
         # Вызываем основной процесс рендера
-        self.process_render(glob_width, glob_height, output_folder, project_preset, render_preset)
+        self.thread = RenderThread(
+            self,
+            glob_width,
+            glob_height,
+            output_folder,
+            project_preset,
+            render_preset
+        )
+        self.start_button.setEnabled(False)
+        self.thread.finished.connect(lambda: self.start_button.setEnabled(True))
+        self.thread.error_signal.connect(self.on_error_signal)
+        self.thread.success_signal.connect(self.on_success_signal)
+        self.thread.warning_signal.connect(self.on_warning_signal)
+        self.thread.info_signal.connect(self.on_info_signal)
+        self.thread.start()
+    
+    def on_error_signal(self, message):
+        QtWidgets.QMessageBox.critical(self, "Ошибка", message)
+        logger.critical(f"Ошибка: {message}")
+
+    def on_success_signal(self):
+        QtWidgets.QMessageBox.information(self, "Успех", "Рендер успешно завершен")
+        logger.info("Рендер успешно завершен")
+
+    def on_warning_signal(self, message):
+        QtWidgets.QMessageBox.warning(self, "Предупреждение", message)
+        logger.warning(f"Предупреждение: {message}")
+
+    def on_info_signal(self, message):
+        QtWidgets.QMessageBox.information(self, "Инфо", message)
+        logger.info(f"{message}")
 
     def process_render(self, glob_width, glob_height, output_folder, project_preset, render_preset):
 
@@ -181,16 +250,16 @@ class ResolveGUI(QtWidgets.QWidget):
             # --- Найти или создать папку 001_OCF ---
             ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == "001_OCF"), None)
             if not ocf_folder:
-                print("Папка '001_OCF' не найдена.")
-                return
+                self.thread.error_signal.emit("Папка '001_OCF' не найдена")
+                return None
 
             # --- Найти или создать папку mov_mp4_jpg ---
             base_folder = next((f for f in ocf_folder.GetSubFolderList() if f.GetName() == "mov_mp4_jpg"), None)
             if not base_folder:
                 base_folder = self.media_pool.AddSubFolder(ocf_folder, "mov_mp4_jpg")
                 if not base_folder:
-                    print("Не удалось создать папку 'mov_mp4_jpg'.")
-                    return
+                    self.thread.error_signal.emit("Не удалось создать папку 'mov_mp4_jpg'.")
+                    return None
 
             # --- Сбор клипов с подходящими расширениями ---
             def collect_valid_clips(folder):
@@ -200,7 +269,7 @@ class ResolveGUI(QtWidgets.QWidget):
                 for clip in folder.GetClipList():
                     name = clip.GetName().lower()
                     if any(name.endswith(ext) for ext in valid_extensions):
-                        if self.set_fps_checkbox.isChecked():
+                        if self.set_fps_checkbox.isChecked() and float(clip.GetClipProperty("FPS")) != float(self.project_fps_value.text()):
                             set_project_fps(clip)
                         collected.append(clip)
                 for subfolder in folder.GetSubFolderList():
@@ -210,9 +279,9 @@ class ResolveGUI(QtWidgets.QWidget):
             clips_to_move = collect_valid_clips(current_source_folder)
 
             if not clips_to_move:
-                print(f"Нет .mov, .jpg, .mp4 клипов для перемещения.")
+                logger.debug("Нет .mov, .jpg, .mp4 клипов для перемещения.")
                 self.media_pool.SetCurrentFolder(current_source_folder) 
-                return  
+                return []
             else:
                 # --- Создать вложенную подпапку с именем текущего исходного бин-фолдера ---
                 source_folder_name = current_source_folder.GetName()
@@ -220,8 +289,8 @@ class ResolveGUI(QtWidgets.QWidget):
                 if not target_folder:
                     target_folder = self.media_pool.AddSubFolder(base_folder, source_folder_name)
                     if not target_folder:
-                        print(f"Не удалось создать папку '{source_folder_name}' внутри 'mov_mp4_jpg'.")
-                        return
+                        self.thread.error_signal.emit(f"Не удалось создать папку '{source_folder_name}' внутри 'mov_mp4_jpg'.")
+                        return None
                     
             # Переключаемся в нужный подбин
             self.media_pool.SetCurrentFolder(target_folder)
@@ -232,6 +301,7 @@ class ResolveGUI(QtWidgets.QWidget):
 
             "Функция устанавливает проектный FPS"
             clip.SetClipProperty("FPS", self.project_fps_value.text())
+            logger.debug(f"Установлен FPS {self.project_fps_value.text()} на клип {clip.GetName()}")
 
         def get_bin_items():
 
@@ -240,29 +310,32 @@ class ResolveGUI(QtWidgets.QWidget):
             curr_source_folder = self.media_pool.GetCurrentFolder()
             for clip in curr_source_folder.GetClipList():
                 if "." in clip.GetName() and not clip.GetName().lower().endswith(('.mov', '.mp4', '.jpg')):
-                    if self.set_fps_checkbox.isChecked():
+                    if self.set_fps_checkbox.isChecked() and float(clip.GetClipProperty("FPS")) != float(self.project_fps_value.text()):
                         set_project_fps(clip)
                     cur_bin_items_list.append(clip)
+
+            logger.debug(f"Получен список таймлайн объектов в текущем фолдере {curr_source_folder.GetName()}")
             return cur_bin_items_list, curr_source_folder
         
         def turn_on_burn_in(aspect):
 
             "Функция устанавливает пресет burn in"
-
             if aspect == "anam":
-                self.project.LoadBurnInPreset("python_proxy_preset_anam") 
-                print("Применен пресет burn in: python_proxy_preset_anam")
+                self.project.LoadBurnInPreset("python_proxy_preset_anam")
+                logger.debug("Применен пресет burn in: python_proxy_preset_anam") 
+
             elif aspect == "square":
                 self.project.LoadBurnInPreset("python_proxy_preset_square") 
-                print("Применен пресет burn in: python_proxy_preset_square")
+                logger.debug("Применен пресет burn in: python_proxy_preset_square")
+
         def set_project_preset():
 
             "Функция устанавливает пресет проекта"
 
             if self.project.SetPreset(project_preset):
-                print(f"Применен пресет проекта: {project_preset}")
+                logger.debug(f"Применен пресет проекта: {project_preset}")
             else:
-                print(f"Ошибка: Не удалось применить пресет проекта {project_preset}")
+                logger.debug(f"Ошибка: Не удалось применить пресет проекта {project_preset}")
 
         def get_sep_resolution_list(cur_bin_items_list, extentions=None):
 
@@ -297,14 +370,13 @@ class ResolveGUI(QtWidgets.QWidget):
                 self.media_pool.AppendToTimeline(items)
                 
                 if timeline:
-                    print(f"Создан таймлайн: {timeline_name}")
+                    logger.debug(f"Создан таймлайн: {timeline_name}")
                     new_timelines.append(timeline)
                 else:
-                    print(f"Ошибка при создании таймлайна: {timeline_name}")
+                    logger.critical(f"Ошибка при создании таймлайна: {timeline_name}")
 
             if not new_timelines:
-                print("Не удалось создать ни одного таймлайна.")
-                exit()
+                logger.debug("Не удалось создать ни одного таймлайна.")
             return new_timelines
         
         def set_lut():
@@ -312,6 +384,7 @@ class ResolveGUI(QtWidgets.QWidget):
             "Функция устанавливает заданный LUT(распаковывает AriiCDLLut) на все клипы на таймлайне"
             self.project.RefreshLUTList()
             if not self.apply_arricdl_lut.isChecked() and self.lut_file == "No LUT":
+                logger.debug(f"LUT не применялся")
                 return
             current_timeline = self.project.GetCurrentTimeline()
             for track in range(1, current_timeline.GetTrackCount("video") + 1):
@@ -321,7 +394,8 @@ class ResolveGUI(QtWidgets.QWidget):
                     if not self.lut_file == "No LUT":
                         lut_path = os.path.join(self.lut_base_path, self.lut_project.currentText(), self.lut_file.currentText())
                         tmln_item.SetLUT(1, lut_path)
-        
+            logger.debug(f"LUT установлен на все клипы на таймлайне {current_timeline.GetName()}")
+
         def get_render_list(new_timelines):
 
             "Функция создает рендер джобы из всех собранных таймлайнов"
@@ -332,13 +406,13 @@ class ResolveGUI(QtWidgets.QWidget):
                 timeline_name = timeline.GetName()
                 resolution = re.search(r'\d{3,4}x\d{3,4}', timeline_name).group(0)
                 width, height = resolution.split("x")
-                print(f"Добавляю в очередь рендеринга: {timeline_name}")
+                logger.debug(f"Добавляю в очередь рендеринга: {timeline_name}")
 
                 # Применяем пресет рендера
                 if self.project.LoadRenderPreset(render_preset):
-                    print(f"Применен пресет рендера: {render_preset}")
+                    logger.debug(f"Применен пресет рендера: {render_preset}")
                 else:
-                    print(f"Ошибка: Не удалось загрузить пресет рендера {render_preset}")
+                    logger.critical(f"Ошибка: Не удалось загрузить пресет рендера {render_preset}")
                 
                 # Устанавливаем настройки рендера
                 render_settings = {
@@ -361,15 +435,14 @@ class ResolveGUI(QtWidgets.QWidget):
         def start_render(render_queue):
 
             "Функция запуска рендера"
-            print("Запускаю рендер...")
+            logger.debug("Запускаю рендер...")
             for render, timeline_name in render_queue:
                 resolution = re.search(r'\d{3,4}x\d{3,4}', timeline_name).group(0)
                 width, height = resolution.split("x")
                 # Проверяем закончился ли предыдущий рендер
                 while rendering_in_progress():
-                    print("Ожидание")
                     time.sleep(1)
-                print("Разрешение",resolution)
+                logger.debug(f"Разрешение {resolution}")
                 self.project.SetSetting("timelineResolutionWidth", width)
                 self.project.SetSetting("timelineResolutionHeight", height)
                 if int(height) < 1000:
@@ -378,12 +451,22 @@ class ResolveGUI(QtWidgets.QWidget):
                     turn_on_burn_in("square")
                 self.project.StartRendering(render)
 
+            # Ожидаем завершения последнего активного рендера
+            while rendering_in_progress():
+                time.sleep(1)
+
+            self.thread.success_signal.emit()
+
         # Основной блок
 
         # Получаем список с целевыми клипами( не включая расширения mov, mp4, jpg), основной фолдер с целевыми клипами
         # Устанавливаем пресет для burn in и проекта
         cur_bin_items_list, current_source_folder = get_bin_items()
         filterd_clips = copy_filtered_clips_to_ocf_folder(current_source_folder)
+
+        if filterd_clips is None:
+            return
+        
         set_project_preset()
 
         # Формирование таймлайнов для фильтрованных клипов(mov, mp4, jpg)
