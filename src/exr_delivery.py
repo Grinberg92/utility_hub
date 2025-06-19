@@ -21,6 +21,7 @@ class DvrRenderApp(QWidget):
     success_message = pyqtSignal()
     empty_track_warning = pyqtSignal()
     render_settings_error = pyqtSignal()
+    resolve_connect_error = pyqtSignal()
 
     class RenderThread(QThread):
         def __init__(self, parent):
@@ -41,6 +42,7 @@ class DvrRenderApp(QWidget):
         self.success_message.connect(self.on_success_message)
         self.empty_track_warning.connect(self.on_empty_track_warning)
         self.render_settings_error.connect(self.on_render_settings_error)
+        self.resolve_connect_error.connect(self.on_resolve_connect_error)
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -106,6 +108,9 @@ class DvrRenderApp(QWidget):
     def on_render_settings_error(self, message):
         QMessageBox.critical(self, "Ошибка установки разрешения в настройки рендера", message)
 
+    def on_resolve_connect_error(self):
+        QMessageBox.critical(self, "Ошибка", "Ошибка запуска. Откройте Resolve")
+
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Выбор папки")
         if folder:
@@ -148,9 +153,12 @@ class DvrRenderApp(QWidget):
                 self.clip_end = self.clip_start_tmln + (self.clip_dur - 1)
                 self.source_start = source_start
                 self.source_end = source_end
+        try:
+            resolve = dvr.scriptapp("Resolve")
+            project_manager = resolve.GetProjectManager()
+        except Exception as e:
+            self.resolve_connect_error.emit()
 
-        resolve = dvr.scriptapp("Resolve")
-        project_manager = resolve.GetProjectManager()
         project = project_manager.GetCurrentProject()
         media_pool = project.GetMediaPool()
         timeline = project.GetCurrentTimeline()
@@ -388,6 +396,7 @@ class DvrRenderApp(QWidget):
                 time.sleep(1)
             resolve.OpenPage("edit")
         self.success_message.emit()
+        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = DvrRenderApp()
