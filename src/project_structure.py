@@ -209,25 +209,34 @@ class MainWindow(QWidget):
             project_name = self.explorer_project_name.text().strip()
             if not project_name:
                 QMessageBox.warning(self, "Ошибка", "Пожалуйста, укажите имя проекта для Explorer.")
+                logger.warning("Пожалуйста, укажите имя проекта для Explorer.")
                 return
             if disk == "J":
                 for folder in J_SRTUCTURE:
                     self.create_project(project_name, folder)
+                QMessageBox.information(self, "Успех", "Структура папок на диске J:/ успешно создана")
+                logger.info("Структура папок на диске J:/ успешно создана")
             else:
                 self.create_project(project_name, R_STRUCTURE)
+                QMessageBox.information(self, "Успех", "Структура папок на диске R:/ успешно создана")
+                logger.info("Структура папок на диске R:/ успешно создана")
 
         elif self.resolve_radio.isChecked():
             type_proj = self.type_selector.currentText()
             project_name = self.resolve_project_name.text().strip()
             if not project_name:
                 QMessageBox.warning(self, "Ошибка", "Пожалуйста, укажите имя проекта для Resolve.")
+                logger.warning("Пожалуйста, укажите имя проекта для Resolve.")
                 return
             reels = self.reels_input.value()
             self.create_resolve_structure(project_name, type_proj, reels)
+            QMessageBox.information(self, "Успех", "Структура папок в Resolve успешно создана")
+            logger.info("Структура папок в Resolve успешно создана")
 
         elif self.avid_radio.isChecked():
             if not hasattr(self, 'avid_selected_path') or not self.avid_selected_path:
                 QMessageBox.warning(self, "Ошибка", "Пожалуйста, выберите путь для Avid структуры.")
+                logger.warning("Пожалуйста, выберите путь для Avid структуры.")
                 return
             self.create_avid_structure(self.avid_selected_path)
 
@@ -240,21 +249,28 @@ class MainWindow(QWidget):
                 if subfolders:
                     self.create_folder_structure(subfolders, folder_path)
         except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось создать структуру папок {base_path}")
             logger.exception(f"Не удалось создать структуру папок {base_path}")
+            return
 
     def create_avid_structure(self, base_path):
         os.makedirs(base_path, exist_ok=True)
         self.create_folder_structure(AVID_FOLDER_STRUCTURE, base_path)
 
     def create_project(self, project_name, base_path):
-        project_path = os.path.join(base_path, f"CC_{project_name.upper()}" if base_path == "R:/" else project_name)
-        os.makedirs(project_path, exist_ok=True)
-        if "001_sources" in base_path:
-            self.create_folder_structure(STRUCTURE_001_FOLDER, project_path)
-        elif "004_masters" in base_path:
-            self.create_folder_structure(STRUCTURE_004_MASTERS, project_path)
-        if base_path == "R:/":
-            self.create_folder_structure(R_FOLDER_STRUCTURE, project_path)
+        try:
+            project_path = os.path.join(base_path, f"CC_{project_name.upper()}" if base_path == "R:/" else project_name)
+            os.makedirs(project_path, exist_ok=True)
+            if "001_sources" in base_path:
+                self.create_folder_structure(STRUCTURE_001_FOLDER, project_path)
+            elif "004_masters" in base_path:
+                self.create_folder_structure(STRUCTURE_004_MASTERS, project_path)
+            if base_path == "R:/":
+                self.create_folder_structure(R_FOLDER_STRUCTURE, project_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Путь {base_path} не найден")
+            logger.exception(f"Путь {base_path} не найден")
+            return
 
     def recursive_resolve(self, media_pool, parent_folder, structure):
         for name, subfolders in structure.items():
@@ -296,8 +312,8 @@ class MainWindow(QWidget):
                     self.recursive_resolve(media_pool, root_folder, RESOLVE_REEL_FOLDER)
 
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Ошибка: {e}")
-            logger.exception(f"Не удалось создать структуру папок в Resolve")
+            QMessageBox.critical(self, "Ошибка", f"Не удалось создать структуру папок в Resolve: {e}")
+            logger.exception(f"Не удалось создать структуру папок в Resolve: {e}")
             return
 
 if __name__ == "__main__":
