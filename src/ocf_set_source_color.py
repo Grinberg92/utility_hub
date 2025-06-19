@@ -307,7 +307,7 @@ class GUI(QtWidgets.QWidget):
                     )
 
                 wb.save(self.exel_folder)
-                logger.info("Таблица Excel успешно сформировна")
+                logger.info(f"Таблица Excel успешно сформировнаю Путь: {self.exel_folder}")
 
             def rescale_resolution(width, height, aspect):
                 '''
@@ -391,6 +391,7 @@ class GUI(QtWidgets.QWidget):
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
                         if clip.GetClipProperty("FPS") != fps_value and self.set_fps:
                             clip.SetClipProperty("FPS", "24")
+                            logger.debug(f"Изменен FPS на {self.set_fps} для клипа {clip.GetName()}")
 
                         aspect = clip.GetClipProperty('PAR')
                         width, height = clip.GetClipProperty('Resolution').split('x')
@@ -401,6 +402,7 @@ class GUI(QtWidgets.QWidget):
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
                         if clip.GetClipProperty("FPS") != fps_value and self.set_fps:
                             clip.SetClipProperty("FPS", "24")
+                            logger.debug(f"Изменен FPS на {self.set_fps} для клипа {clip.GetName()}")
 
                         aspect = clip.GetClipProperty('PAR')
                         clips_dict.setdefault(clip.GetClipProperty('Resolution'), []).append(clip)
@@ -420,7 +422,7 @@ class GUI(QtWidgets.QWidget):
                     if res in clips_dict:
                         for clip in clips_dict[res]:
                             clip.SetClipColor(color)
-                        logger.debug(f"Установлен цвет на группу разрешения {res}")
+                        logger.debug(f"Установлен цвет {color} на группу разрешения {res}")
 
             self.finished_signal.emit("Успех", f"Обработка закончена.")
             logger.info(f"Обработка закончена.")
