@@ -136,7 +136,11 @@ class DvrRenderApp(QWidget):
             logger.warning("Укажите значение захлеста")
             return
         
-        logger.info(f"SetUp: Resolution - {self.width_res_glob}x{self.height_res_glob}, Handles - {self.frame_handles}, Path - {self.output_folder}")
+        logger.debug("SetUp:", 
+                     f"Resolution: {self.width_res_glob}x{self.height_res_glob}", 
+                     f"Handles - {self.frame_handles}", 
+                     f"Path - {self.output_folder}")
+        
         self.render_thread = self.RenderThread(self)
         self.render_thread.start()
 
@@ -181,7 +185,7 @@ class DvrRenderApp(QWidget):
             # Устанавливаем пресет проекта
             try:
                 project.SetPreset(project_preset_name)
-                logger.info(f"Применен пресет проекта: {project_preset_name}")
+                logger.debug(f"Применен пресет проекта: {project_preset_name}")
                 return True
             except Exception as e:
                 self.project_preset_error.emit(f"Не удалось применить пресет проекта {project_preset_name}: {e}")
@@ -296,7 +300,7 @@ class DvrRenderApp(QWidget):
                 for preset in preset_list:
                     if re.match(calc_handl, preset):
                         project.LoadRenderPreset(preset)
-                        logger.info(f"Установлен пресет рендера: {calc_handl} ")
+                        logger.debug(f"Установлен пресет рендера: {calc_handl} ")
                         return True
             except Exception as e:
                 self.render_preset_error.emit(f"Не удалось применить пресет рендера {calc_handl}: {e}")
@@ -342,7 +346,7 @@ class DvrRenderApp(QWidget):
         scale_2x_track_4 = get_mediapoolitems(end_track=4, start_track=4)
         full_res_track_5 = get_mediapoolitems(end_track=5, start_track=5)
         all_tracks = (pipeline_scale_track_2, scale_1_5x_track_3, scale_2x_track_4, full_res_track_5)
-        logger.info("Собраны списки медиапул объектов со всех дорожек")
+        logger.debug("Собраны списки медиапул объектов со всех дорожек")
 
         # Установка пресета проекта
         set_project_preset_var = set_project_preset()
@@ -359,7 +363,7 @@ class DvrRenderApp(QWidget):
 
             try:
                 set_enable_for_track(track[0].track_type_ind)
-                logger.info(f"Начало работы с {track[0].track_type_ind} треком")
+                logger.debug(f"Начало работы с {track[0].track_type_ind} треком")
             except IndexError:
                 continue
 
@@ -383,12 +387,12 @@ class DvrRenderApp(QWidget):
                 if not render_item or not width_res or not height_res:
                     return
                 
-                logger.info(f"Установлено разрешение с настройках рендера: {width_res}x{height_res}")
+                logger.debug(f"Установлено разрешение с настройках рендера: {width_res}x{height_res}")
 
                 # Установка разрешение проекта
                 project.SetSetting("timelineResolutionWidth", width_res)
                 project.SetSetting("timelineResolutionHeight", height_res)
-                logger.info(f"Запустился рендер клипа {clip.mp_item.GetName()} с разрешением {width_res}x{height_res}")
+                logger.debug(f"Запустился рендер клипа {clip.mp_item.GetName()} с разрешением {width_res}x{height_res}")
 
                 # Запуск текущего render job
                 project.StartRendering(render_item)

@@ -133,6 +133,7 @@ class CopyApp(QWidget):
     def start_copying(self):
         current = self.current_input.text()
         target = self.target_input.text()
+        step = self.step_input.text()
         try:
             step = int(self.step_input.text())
         except ValueError:
@@ -145,6 +146,7 @@ class CopyApp(QWidget):
             logger.warning("Пожалуйста, заполните все поля.")
             return
 
+        logger.debug("\n".join(("SetUp:", f"Current Path: {current}", f"Target Folder: {target}", f"Step: {step}")))
         self.worker = CopyWorker(current, target, step)
         self.worker.progress_changed.connect(self.progress_bar.setValue)
         self.worker.copy_finished.connect(self.on_copy_finished)
