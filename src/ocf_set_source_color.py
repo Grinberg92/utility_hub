@@ -173,7 +173,7 @@ class GUI(QtWidgets.QWidget):
             self.run_button.setEnabled(True)
             return 
 
-        logger.debug("\n".join((f"Set color: {self.run_coloring}", f"Set FPS: {self.set_fps}",
+        logger.debug("\n".join((f"SetUp:", f"Set color: {self.run_coloring}", f"Set FPS: {self.set_fps}",
                                f"FPS: {self.fps_entry}", f"Create Excel: {self.create_excel}",
                                f"Resolution: {self.output_res_width}x{self.output_res_height}",
                                f"Excel Path: {self.exel_folder}")))

@@ -155,7 +155,9 @@ class GetShotDvr(QWidget):
             self.toggle_button(False)
             return
 
-        logger.info(f"Начата обработка {len(shot_paths)} шотов")
+        logger.debug("\n".join((f"SetUp:", f"Choose Project: {self.selected_project.currentText()}", f"Add to timeline: {self.is_append.isChecked()}",
+                                f"Set Normalize: {self.is_normalize.isChecked()}", f"Shot Paths: {shot_paths}")))
+        logger.debug(f"Начата обработка {len(shot_paths)} шотов")
         self.worker = WorkerThread(self, shot_paths)
         self.worker.finished_signal.connect(self.on_task_completed)
         self.worker.error_signal.connect(self.on_task_failed)
@@ -172,7 +174,7 @@ class GetShotDvr(QWidget):
 
     def on_task_completed(self):
         self.show_message('Успех', 'Все файлы скопированы')
-        logger.info('Все файлы скопированы')
+        logger.debug('Все файлы скопированы')
         self.toggle_button(False)
 
     def on_task_failed(self, message):
@@ -186,14 +188,14 @@ class GetShotDvr(QWidget):
 
         frames_list = self.copy_sequence_files(shot_path, progress_signal)
         if frames_list:
-            logger.info(f"Шот {os.path.basename(frames_list[0])} скопирован и импортирован")
+            logger.debug(f"Шот {os.path.basename(frames_list[0])} скопирован и импортирован")
             self.media_pool.ImportMedia(frames_list)
 
         if self.is_append.isChecked():
             for item in self.cur_bin.GetClipList():
                 if re.search(shot_name, item.GetName()):
                     self.append_to_timeline(item)
-                    logger.info(f"Шот {item.GetName()} добавлен на таймлайн")
+                    logger.debug(f"Шот {item.GetName()} добавлен на таймлайн")
 
     def get_timeline_item(self, mediapool_item):
         for tmln_item in self.timeline.GetItemListInTrack("video", 1):
@@ -205,7 +207,7 @@ class GetShotDvr(QWidget):
             normalize_lut = r"/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/'VFX IO/AP0_to_P3D65.cube"
             timeline_item = self.get_timeline_item(item)
             timeline_item.SetLUT(1, normalize_lut)
-            logger.info(f"Применен LUT к шоту {item.GetName()}")
+            logger.debug(f"Применен LUT к шоту {item.GetName()}")
         except Exception as e:
             logger.exception("Не удалось установить LUT")
             self.show_message("Ошибка", f"Не удалось установить LUT {e}", True)
