@@ -164,15 +164,20 @@ class GUI(QtWidgets.QWidget):
         self.set_fps = self.checkbox_fps.isChecked()
         self.fps_input = self.fps_entry.text()
         self.exel_folder = self.path_input.text()
+        self.output_res_height = self.height_entry.text()
+        self.output_res_width = self.width_entry.text()
+
         if not self.exel_folder and self.create_excel:
             QMessageBox.warning(self, "Предупреждение", "Пожалуйста, укажите путь для таблицы")
             logger.warning("Пожалуйста, укажите путь для таблицы")
             self.run_button.setEnabled(True)
             return 
-        
-        self.output_res_height = self.height_entry.text()
-        self.output_res_width = self.width_entry.text()
 
+        logger.debug("\n".join((f"Set color: {self.run_coloring}", f"Set FPS: {self.set_fps}",
+                               f"FPS: {self.fps_entry}", f"Create Excel: {self.create_excel}",
+                               f"Resolution: {self.output_res_width}x{self.output_res_height}",
+                               f"Excel Path: {self.exel_folder}")))
+        
         Thread(target=self.run_script_wrapper).start()
 
     def run_script_wrapper(self):
@@ -256,7 +261,9 @@ class GUI(QtWidgets.QWidget):
                             cell = ws.cell(row=row, column=color_col_idx)
                             cell.fill = fill
 
-                headers = ["Цвет", "Камера", "Оптика", "Исходное разрешение", "Разрешение выдачи", "Разрешение 1.5x", "Разрешение 2x", "Mxf для AVID", "Доп информация"]
+                headers = ["Цвет", "Камера", "Оптика", "Исходное разрешение",
+                            "Разрешение выдачи", "Разрешение 1.5x", "Разрешение 2x",
+                            "Mxf для AVID", "Доп информация"]
                 table_data_list.insert(0, headers)
 
                 expected_columns = len(headers)
@@ -389,9 +396,9 @@ class GUI(QtWidgets.QWidget):
                     # Находит анаморф, вычисляет ширину по аспекту
                     if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
-                        if clip.GetClipProperty("FPS") != fps_value and self.set_fps:
+                        if float(clip.GetClipProperty("FPS")) != float(fps_value) and self.set_fps:
                             clip.SetClipProperty("FPS", "24")
-                            logger.debug(f"Изменен FPS на {self.set_fps} для клипа {clip.GetName()}")
+                            logger.debug(f"Изменен FPS на {fps_value} для клипа {clip.GetName()}")
 
                         aspect = clip.GetClipProperty('PAR')
                         width, height = clip.GetClipProperty('Resolution').split('x')
@@ -400,9 +407,9 @@ class GUI(QtWidgets.QWidget):
                         spreadsheet_info_dict.setdefault((resolution, aspect), []).append(clip) # Данные для таблицы
                     else:
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
-                        if clip.GetClipProperty("FPS") != fps_value and self.set_fps:
+                        if float(clip.GetClipProperty("FPS")) != float(fps_value) and self.set_fps:
                             clip.SetClipProperty("FPS", "24")
-                            logger.debug(f"Изменен FPS на {self.set_fps} для клипа {clip.GetName()}")
+                            logger.debug(f"Изменен FPS на {fps_value} для клипа {clip.GetName()}")
 
                         aspect = clip.GetClipProperty('PAR')
                         clips_dict.setdefault(clip.GetClipProperty('Resolution'), []).append(clip)
@@ -425,7 +432,7 @@ class GUI(QtWidgets.QWidget):
                         logger.debug(f"Установлен цвет {color} на группу разрешения {res}")
 
             self.finished_signal.emit("Успех", f"Обработка закончена.")
-            logger.info(f"Обработка закончена.")
+            logger.debug(f"Обработка закончена.")
             
         except Exception as e:
             self.error_signal.emit("Ошибка", f"Произошла ошибка: {str(e)}")
