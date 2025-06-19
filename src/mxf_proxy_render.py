@@ -253,7 +253,11 @@ class ResolveGUI(QtWidgets.QWidget):
 
         logger.debug("\n".join(("SetUp:", f"Рендер с параметрами: {glob_width}x{glob_height}",
                       f"Папка: {output_folder}",f"Проектный пресет: {project_preset}", 
-                      f"Рендер-пресет: {render_preset}")))
+                      f"Рендер-пресет: {render_preset}", f"LUT Project: {self.lut_project.currentText()}", 
+                      f"LUT file: {self.lut_file.currentText()}", f"ArriCDLandLUT: {self.apply_arricdl_lut.isChecked()}", 
+                      f"Set FPS: {self.set_fps_checkbox.isChecked()}", f"FPS: {self.project_fps_value.text()}", 
+                      f"Set Burn in: {self.set_burn_in_checkbox.isChecked()}", f"Add .mov, .mp4, .jpg: {self.add_mov_mp4.isChecked()}",
+                      f"Folder: {[item.data(QtCore.Qt.UserRole) for item in self.ocf_folders_list.selectedItems()]}")))
         
         # Вызываем основной процесс рендера
         self.thread = RenderThread(
