@@ -37,8 +37,7 @@ class ResolveGUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Proxy Render")
-        self.resize(470, 300)
-        self.setMinimumWidth(400)
+        self.resize(470, 500)
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
         # === Глобальные переменные ===
@@ -59,6 +58,12 @@ class ResolveGUI(QtWidgets.QWidget):
         self.project_fps_value = QtWidgets.QLineEdit("24")
         self.project_fps_value.setFixedWidth(50)
 
+        self.set_burn_in_checkbox = QtWidgets.QCheckBox("Set Burn in")
+        self.add_mov_mp4 = QtWidgets.QCheckBox("Add .mov, .mp4, .jpg")
+
+        self.ocf_folders_list = QtWidgets.QListWidget()
+        self.ocf_folders_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+
         self.lut_path_nx = r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY'
         self.lut_path_posix = '/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/'
         self.lut_base_path = self.lut_path_posix if os.name == "posix" else self.lut_path_nx
@@ -74,7 +79,7 @@ class ResolveGUI(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Ошибка", f"Ошибка подключения к Resolve: {e}")
             logger.exception(f"Ошибка подключения к Resolve: {e}")
             sys.exit()
-            
+
         self.init_ui()
         self.get_project_preset_list()
         self.get_render_preset_list()
@@ -128,6 +133,23 @@ class ResolveGUI(QtWidgets.QWidget):
         fps_group.setLayout(fps_layout)
         layout.addWidget(fps_group)
 
+        # === Advanced Group ===
+
+        adv_group = QtWidgets.QGroupBox("Advanced Group")
+        adv_layout = QtWidgets.QHBoxLayout()
+        adv_layout.addWidget(self.set_burn_in_checkbox)
+        self.set_burn_in_checkbox.setChecked(True)
+        adv_layout.addSpacing(30)
+        adv_layout.addWidget(self.add_mov_mp4)
+        self.ocf_folders_list = QtWidgets.QListWidget()
+        self.ocf_folders_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        self.ocf_folders_list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.ocf_folders_list.setFixedHeight(100) 
+        adv_layout.addWidget(self.ocf_folders_list)
+        adv_group.setLayout(adv_layout)
+        layout.addWidget(adv_group)
+        adv_layout.addStretch()
+
         # === Render path ===
         path_layout = QtWidgets.QHBoxLayout()
         path_layout.addWidget(QtWidgets.QLabel("Render Path:"))
@@ -142,6 +164,8 @@ class ResolveGUI(QtWidgets.QWidget):
         self.start_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.start_button.clicked.connect(self.start_render)
         layout.addWidget(self.start_button)
+
+        self.load_ocf_subfolders()
 
     # === Функции LUT ===
     def update_lut_projects(self):
@@ -169,6 +193,7 @@ class ResolveGUI(QtWidgets.QWidget):
     def get_project_preset_list(self):
         project_preset_list = [preset["Name"] for preset in self.project.GetPresetList()]
         self.project_preset.addItems(project_preset_list)
+
     def get_render_preset_list(self):
         render_presets_list = [preset for preset in self.project.GetRenderPresetList()]
         self.render_preset.addItems(render_presets_list)
@@ -178,6 +203,22 @@ class ResolveGUI(QtWidgets.QWidget):
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Выбор папки")
         if folder:
             self.output_folder.setText(folder)
+
+    def load_ocf_subfolders(self):
+        root_folder = self.media_pool.GetRootFolder()
+        ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == "001_OCF"), None)
+        
+        if not ocf_folder:
+            self.thread.error_signal.emit("Папка '001_OCF' не найдена")
+            return
+        
+        self.ocf_folders_list.clear()
+        self.ocf_folders_list.addItem("Current Folder")
+        for subfolder in ocf_folder.GetSubFolderList():
+            item = QtWidgets.QListWidgetItem(subfolder.GetName())
+            item.setData(QtCore.Qt.UserRole, subfolder)  # Привязываем MediaPoolFolder
+            self.ocf_folders_list.addItem(item)
+
 
     def start_render(self):
         glob_width = self.glob_width.text()
@@ -314,19 +355,24 @@ class ResolveGUI(QtWidgets.QWidget):
                         set_project_fps(clip)
                     cur_bin_items_list.append(clip)
 
-            logger.debug(f"Получен список таймлайн объектов в текущем фолдере {curr_source_folder.GetName()}")
+            logger.debug(f"Получен список таймлайн объектов в фолдере {curr_source_folder.GetName()}")
             return cur_bin_items_list, curr_source_folder
         
         def turn_on_burn_in(aspect):
 
             "Функция устанавливает пресет burn in"
-            if aspect == "anam":
-                self.project.LoadBurnInPreset("python_proxy_preset_anam")
-                logger.debug("Применен пресет burn in: python_proxy_preset_anam") 
 
-            elif aspect == "square":
-                self.project.LoadBurnInPreset("python_proxy_preset_square") 
-                logger.debug("Применен пресет burn in: python_proxy_preset_square")
+            if not self.set_burn_in_checkbox.isChecked():
+                self.project.LoadBurnInPreset("python_no_burn_in")
+                logger.debug("Применен пресет burn in: python_no_burn_in")    
+            else:
+                if aspect == "anam":
+                    self.project.LoadBurnInPreset("python_proxy_preset_anam")
+                    logger.debug("Применен пресет burn in: python_proxy_preset_anam") 
+
+                elif aspect == "square":
+                    self.project.LoadBurnInPreset("python_proxy_preset_square") 
+                    logger.debug("Применен пресет burn in: python_proxy_preset_square")
 
         def set_project_preset():
 
@@ -455,40 +501,54 @@ class ResolveGUI(QtWidgets.QWidget):
             while rendering_in_progress():
                 time.sleep(1)
 
-            self.thread.success_signal.emit()
 
         # Основной блок
-
-        # Получаем список с целевыми клипами( не включая расширения mov, mp4, jpg), основной фолдер с целевыми клипами
-        # Устанавливаем пресет для burn in и проекта
-        cur_bin_items_list, current_source_folder = get_bin_items()
-        filterd_clips = copy_filtered_clips_to_ocf_folder(current_source_folder)
-
-        if filterd_clips is None:
-            return
         
+        selected_folders = [item.data(QtCore.Qt.UserRole) for item in self.ocf_folders_list.selectedItems()]
+
+        # Установка пресета проекта
         set_project_preset()
 
-        # Формирование таймлайнов для фильтрованных клипов(mov, mp4, jpg)
-        if filterd_clips:
-            filtred_clips_dict = get_sep_resolution_list(filterd_clips, extentions=('.mov', '.mp4', '.jpg'))
-            get_timelines(filtred_clips_dict)
-            # Возвращаемся в основной фолдер с рабочими клипами
-            self.media_pool.SetCurrentFolder(current_source_folder)
+        # Цикл по выбранным в GUI фолдерам selected_folders
+        for folder in selected_folders:
 
-        # Получаем данные по целевым клипам
-        # 2 сценария:
-        # 1 - рендер прокси в DNxHD и вписывание любых разрешений в 1920x1080
-        if self.render_preset.currentText() == "MXF_AVID_HD_Render":
-            clips_dict = {"1920x1080": cur_bin_items_list}
-        # 2 - рендер прокси в DNxHR и пересчет аспекта каждого разрешения под ширину 1920
-        else:
-            clips_dict = get_sep_resolution_list(cur_bin_items_list, extentions=(".mxf", ".braw", ".arri", ".r3d", ".dng"))
+            logger.debug(f"Начало работы с фолдером {folder.GetName()}")
 
-        # Формирование таймлайнов для целевых клипов и запуск рендера
-        new_timelines = get_timelines(clips_dict)       
-        render_queue = get_render_list(new_timelines)
-        start_render(render_queue)
+            if folder is None: # Если выбран Current Folder
+                ...
+            else:
+                current_source_folder = self.media_pool.SetCurrentFolder(folder)
+
+            # Получаем список с целевыми клипами( не включая расширения mov, mp4, jpg), основной фолдер с целевыми клипами
+            # Устанавливаем пресет для burn in и проекта
+            cur_bin_items_list, current_source_folder = get_bin_items()
+            filterd_clips = copy_filtered_clips_to_ocf_folder(current_source_folder)
+
+            if filterd_clips is None:
+                return
+
+            # Формирование таймлайнов для фильтрованных клипов(mov, mp4, jpg)
+            if filterd_clips:
+                filtred_clips_dict = get_sep_resolution_list(filterd_clips, extentions=('.mov', '.mp4', '.jpg'))
+                get_timelines(filtred_clips_dict)
+                # Возвращаемся в основной фолдер с рабочими клипами
+                self.media_pool.SetCurrentFolder(current_source_folder)
+
+            # Получаем данные по целевым клипам
+            # 2 сценария:
+            # 1 - рендер прокси в DNxHD и вписывание любых разрешений в 1920x1080
+            if self.render_preset.currentText() == "MXF_AVID_HD_Render":
+                clips_dict = {"1920x1080": cur_bin_items_list}
+            # 2 - рендер прокси в DNxHR и пересчет аспекта каждого разрешения под ширину 1920
+            else:
+                clips_dict = get_sep_resolution_list(cur_bin_items_list, extentions=(".mxf", ".braw", ".arri", ".r3d", ".dng"))
+
+            # Формирование таймлайнов для целевых клипов и запуск рендера
+            new_timelines = get_timelines(clips_dict)       
+            render_queue = get_render_list(new_timelines)
+            start_render(render_queue)
+
+        self.thread.success_signal.emit()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
