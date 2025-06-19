@@ -16,11 +16,11 @@ logger = get_logger(__file__)
 
 class DvrRenderApp(QWidget):
 
-    render_preset_error = pyqtSignal()
-    project_preset_error = pyqtSignal()
+    render_preset_error = pyqtSignal(str)
+    project_preset_error = pyqtSignal(str)
     success_message = pyqtSignal()
     empty_track_warning = pyqtSignal()
-    render_settings_error = pyqtSignal()
+    render_settings_error = pyqtSignal(str)
     resolve_connect_error = pyqtSignal()
 
     class RenderThread(QThread):
