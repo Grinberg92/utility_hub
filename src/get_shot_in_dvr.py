@@ -45,7 +45,12 @@ class GetShotDvr(QWidget):
         layout = QVBoxLayout()
 
         # Выбор проекта
-        self.projects = os.listdir(self.cross_platform_name('R:/'))
+        try:
+            self.projects = os.listdir(self.cross_platform_name('R:/'))
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", "Ошибка запуска. Не подключен диск RAID")
+            logger.exception("Ошибка запуска. Не подключен диск RAID")
+            
         self.selected_project = QComboBox()
         self.selected_project.addItems(self.projects)
         self.selected_project.setCurrentIndex(10)
