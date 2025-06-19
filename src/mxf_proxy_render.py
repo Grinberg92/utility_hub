@@ -31,7 +31,7 @@ class RenderThread(QtCore.QThread):
         try:
             self.parent.process_render(self.glob_width, self.glob_height, self.output_folder, self.project_preset, self.render_preset)
         except Exception as e:
-            self.error_signal.emit(f"Ошибка рендера: {e}")
+            self.error_signal.emit(f"Критическая ошибка: {e}")
 
 class ResolveGUI(QtWidgets.QWidget):
     def __init__(self):
@@ -92,10 +92,9 @@ class ResolveGUI(QtWidgets.QWidget):
         # Resolution
         res_layout = QtWidgets.QHBoxLayout()
         res_layout.addStretch()
-        res_layout.addWidget(QtWidgets.QLabel("Width:"))
+        res_layout.addWidget(QtWidgets.QLabel("Resolution:"))
         res_layout.addWidget(self.glob_width)
-        res_layout.addSpacing(20)
-        res_layout.addWidget(QtWidgets.QLabel("Height:"))
+        res_layout.addWidget(QtWidgets.QLabel("x:"))
         res_layout.addWidget(self.glob_height)
         res_layout.addStretch()
         layout.addLayout(res_layout)
@@ -139,12 +138,13 @@ class ResolveGUI(QtWidgets.QWidget):
         adv_layout = QtWidgets.QHBoxLayout()
         adv_layout.addWidget(self.set_burn_in_checkbox)
         self.set_burn_in_checkbox.setChecked(True)
-        adv_layout.addSpacing(30)
+        adv_layout.addSpacing(20)
         adv_layout.addWidget(self.add_mov_mp4)
         self.ocf_folders_list = QtWidgets.QListWidget()
         self.ocf_folders_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
         self.ocf_folders_list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         self.ocf_folders_list.setFixedHeight(100) 
+        adv_layout.addSpacing(20)
         adv_layout.addWidget(self.ocf_folders_list)
         adv_group.setLayout(adv_layout)
         layout.addWidget(adv_group)
@@ -219,6 +219,10 @@ class ResolveGUI(QtWidgets.QWidget):
             item.setData(QtCore.Qt.UserRole, subfolder)  # Привязываем MediaPoolFolder
             self.ocf_folders_list.addItem(item)
 
+        # Установка Current Folder по умолчанию
+        self.ocf_folders_list.setCurrentRow(0)
+        self.ocf_folders_list.item(0).setSelected(True)
+
 
     def start_render(self):
         glob_width = self.glob_width.text()
@@ -240,9 +244,16 @@ class ResolveGUI(QtWidgets.QWidget):
         if not output_folder:
             QtWidgets.QMessageBox.warning(self, "Предупреждение", "Укажите путь для рендера")
             logger.warning("Укажите путь для рендера")
-            return      
+            return    
 
-        print(f"Рендер с параметрами: {glob_width}x{glob_height}, Папка: {output_folder}, Проектный пресет: {project_preset}, Рендер-пресет: {render_preset}")
+        if not self.ocf_folders_list.selectedItems():
+            QtWidgets.QMessageBox.warning(self, "Предупреждение", "Укажите хотя бы один фолдер")
+            logger.warning("Укажите хотя бы один фолдер")
+            return 
+
+        logger.debug("\n".join(("SetUp:", f"Рендер с параметрами: {glob_width}x{glob_height}",
+                      f"Папка: {output_folder}",f"Проектный пресет: {project_preset}", 
+                      f"Рендер-пресет: {render_preset}")))
         
         # Вызываем основной процесс рендера
         self.thread = RenderThread(
@@ -263,7 +274,7 @@ class ResolveGUI(QtWidgets.QWidget):
     
     def on_error_signal(self, message):
         QtWidgets.QMessageBox.critical(self, "Ошибка", message)
-        logger.critical(f"Ошибка: {message}")
+        logger.critical(f"{message}")
 
     def on_success_signal(self):
         QtWidgets.QMessageBox.information(self, "Успех", "Рендер успешно завершен")
@@ -282,7 +293,7 @@ class ResolveGUI(QtWidgets.QWidget):
         def copy_filtered_clips_to_ocf_folder(current_source_folder):
             """
             Ищет .mov, .mp4, .jpg клипы в current_source_folder и перемещает их в
-            001_OCF/mov_mp4_jpg/{current_source_folder}.
+            001_OCF/Excepted clips/{current_source_folder}.
             """
 
             valid_extensions = ['.mov', '.mp4', '.jpg', '.MOV', '.MP4', '.JPG']
@@ -295,11 +306,11 @@ class ResolveGUI(QtWidgets.QWidget):
                 return None
 
             # --- Найти или создать папку mov_mp4_jpg ---
-            base_folder = next((f for f in ocf_folder.GetSubFolderList() if f.GetName() == "mov_mp4_jpg"), None)
+            base_folder = next((f for f in ocf_folder.GetSubFolderList() if f.GetName() == "Excepted clips"), None)
             if not base_folder:
-                base_folder = self.media_pool.AddSubFolder(ocf_folder, "mov_mp4_jpg")
+                base_folder = self.media_pool.AddSubFolder(ocf_folder, "Excepted clips")
                 if not base_folder:
-                    self.thread.error_signal.emit("Не удалось создать папку 'mov_mp4_jpg'.")
+                    self.thread.error_signal.emit("Не удалось создать папку 'Excepted clips'.")
                     return None
 
             # --- Сбор клипов с подходящими расширениями ---
@@ -345,15 +356,15 @@ class ResolveGUI(QtWidgets.QWidget):
             logger.debug(f"Установлен FPS {self.project_fps_value.text()} на клип {clip.GetName()}")
 
         def get_bin_items():
-
-            "Функция получения списка медиапул итемов в текущем фолдере"
             cur_bin_items_list = []
             curr_source_folder = self.media_pool.GetCurrentFolder()
             for clip in curr_source_folder.GetClipList():
-                if "." in clip.GetName() and not clip.GetName().lower().endswith(('.mov', '.mp4', '.jpg')):
-                    if self.set_fps_checkbox.isChecked() and float(clip.GetClipProperty("FPS")) != float(self.project_fps_value.text()):
-                        set_project_fps(clip)
-                    cur_bin_items_list.append(clip)
+                name = clip.GetName().lower()
+                if "." in name:
+                    if self.add_mov_mp4.isChecked() or not name.endswith(('.mov', '.mp4', '.jpg')):
+                        if self.set_fps_checkbox.isChecked() and float(clip.GetClipProperty("FPS")) != float(self.project_fps_value.text()):
+                            set_project_fps(clip)
+                        cur_bin_items_list.append(clip)
 
             logger.debug(f"Получен список таймлайн объектов в фолдере {curr_source_folder.GetName()}")
             return cur_bin_items_list, curr_source_folder
@@ -386,6 +397,11 @@ class ResolveGUI(QtWidgets.QWidget):
         def get_sep_resolution_list(cur_bin_items_list, extentions=None):
 
             "Функция создает словать с парами ключ(разрешение): значение(список соответствующих клипов)"
+
+            if extentions is None:
+                extentions = (".mxf", ".braw", ".arri", ".r3d", ".dng")
+
+            logger.debug(f"Используются расширения {extentions}")
             clips_dict = {}
             for clip in cur_bin_items_list:
                     if clip.GetName() != '' and clip.GetName().lower().endswith(extentions):
@@ -512,39 +528,40 @@ class ResolveGUI(QtWidgets.QWidget):
         # Цикл по выбранным в GUI фолдерам selected_folders
         for folder in selected_folders:
 
-            logger.debug(f"Начало работы с фолдером {folder.GetName()}")
-
-            if folder is None: # Если выбран Current Folder
+            if folder is None: # None = Current Folder в интерфейсе
                 ...
             else:
+                logger.debug(f"Начало работы с фолдером {folder.GetName()}")
                 current_source_folder = self.media_pool.SetCurrentFolder(folder)
-
-            # Получаем список с целевыми клипами( не включая расширения mov, mp4, jpg), основной фолдер с целевыми клипами
-            # Устанавливаем пресет для burn in и проекта
             cur_bin_items_list, current_source_folder = get_bin_items()
+
+            if self.add_mov_mp4.isChecked():
+                # Если флаг активен — обрабатываем ВСЕ расширения в одном потоке
+                all_exts = (".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine")
+                clips_dict = get_sep_resolution_list(cur_bin_items_list, extentions=all_exts)
+                new_timelines = get_timelines(clips_dict)
+                render_queue = get_render_list(new_timelines)
+                start_render(render_queue)
+                continue  # Пропускаем остальной блок
+
+            # Если флаг НЕ активен — отдельно обрабатываем .mov, .mp4, .jpg
             filterd_clips = copy_filtered_clips_to_ocf_folder(current_source_folder)
 
             if filterd_clips is None:
                 return
 
-            # Формирование таймлайнов для фильтрованных клипов(mov, mp4, jpg)
             if filterd_clips:
                 filtred_clips_dict = get_sep_resolution_list(filterd_clips, extentions=('.mov', '.mp4', '.jpg'))
                 get_timelines(filtred_clips_dict)
-                # Возвращаемся в основной фолдер с рабочими клипами
                 self.media_pool.SetCurrentFolder(current_source_folder)
 
-            # Получаем данные по целевым клипам
-            # 2 сценария:
-            # 1 - рендер прокси в DNxHD и вписывание любых разрешений в 1920x1080
+            # Основные целевые клипы
             if self.render_preset.currentText() == "MXF_AVID_HD_Render":
                 clips_dict = {"1920x1080": cur_bin_items_list}
-            # 2 - рендер прокси в DNxHR и пересчет аспекта каждого разрешения под ширину 1920
             else:
-                clips_dict = get_sep_resolution_list(cur_bin_items_list, extentions=(".mxf", ".braw", ".arri", ".r3d", ".dng"))
+                clips_dict = get_sep_resolution_list(cur_bin_items_list)
 
-            # Формирование таймлайнов для целевых клипов и запуск рендера
-            new_timelines = get_timelines(clips_dict)       
+            new_timelines = get_timelines(clips_dict)
             render_queue = get_render_list(new_timelines)
             start_render(render_queue)
 
