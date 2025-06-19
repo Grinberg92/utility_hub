@@ -153,12 +153,14 @@ class DvrRenderApp(QWidget):
                 self.clip_end = self.clip_start_tmln + (self.clip_dur - 1)
                 self.source_start = source_start
                 self.source_end = source_end
-        try:
-            resolve = dvr.scriptapp("Resolve")
-            project_manager = resolve.GetProjectManager()
-        except Exception as e:
-            self.resolve_connect_error.emit()
+        
+        resolve = dvr.scriptapp("Resolve")
 
+        if resolve is None:
+            self.resolve_connect_error.emit()
+            return
+        
+        project_manager = resolve.GetProjectManager()
         project = project_manager.GetCurrentProject()
         media_pool = project.GetMediaPool()
         timeline = project.GetCurrentTimeline()
