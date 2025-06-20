@@ -4,6 +4,7 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QGroupBox, QLabel, QFrame, QHBoxLayout, QSizePolicy
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
+from ui.css_style import apply_style
 
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "src")
 ICON_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ui", "icon.png")
@@ -14,9 +15,9 @@ class HubApp(QWidget):
         self.setWindowTitle("Utility Hub")
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
         if os.name != "posix":
-            self.setGeometry(200, 200, 900, 350)
+            self.resize(1200, 350)
         else:
-            self.setGeometry(200, 200, 1450, 520)
+            self.resize(1450, 520)
         self.setWindowIcon(QIcon(ICON_PATH))
 
         #Главный горизонтальный слой
@@ -158,6 +159,7 @@ class HubApp(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    apply_style(app)
     hub = HubApp()
     hub.show()
     sys.exit(app.exec_())
