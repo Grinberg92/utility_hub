@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import Qt
 from threading import Thread
 import sys
+from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
@@ -462,6 +463,7 @@ class GUI(QtWidgets.QWidget):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
+    apply_style(app)
     window = GUI()
     window.show()
     sys.exit(app.exec_())
