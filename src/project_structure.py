@@ -4,11 +4,12 @@ import sys
 import DaVinciResolveScript as dvr
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel,
-    QComboBox, QLineEdit, QPushButton, QSpinBox, QGroupBox, QFormLayout,
-    QMessageBox, QFileDialog 
+    QComboBox, QLineEdit, QPushButton, QSpinBox, QGroupBox,
+    QMessageBox, QFileDialog
 )
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
+
 
 logger = get_logger(__file__)
 
@@ -112,7 +113,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Project Structure Creator")
-        self.resize(300, 200)
+        self.resize(460, 280)
         self.setup_ui()
 
     def setup_ui(self):
@@ -131,39 +132,74 @@ class MainWindow(QWidget):
 
         # Explorer group
         self.explorer_group = QGroupBox("Explorer Options")
-        explorer_form = QFormLayout()
+        explorer_layout = QVBoxLayout()
+        disk_row = QHBoxLayout()
+        disk_row.addWidget(QLabel("Disk:"))
+        disk_row.addSpacing(14)
         self.disk_selector = QComboBox()
         self.disk_selector.addItems(["J", "R"])
+        self.disk_selector.setMinimumWidth(100)
+        disk_row.addWidget(self.disk_selector)
+        disk_row.addStretch()
+        explorer_layout.addLayout(disk_row)
+
+        name_row = QHBoxLayout()
+        name_row.addWidget(QLabel("Project:"))
         self.explorer_project_name = QLineEdit()
         self.explorer_project_name.setPlaceholderText("Project name")
-        explorer_form.addRow(QLabel("Disk:"), self.disk_selector)
-        explorer_form.addRow(QLabel("Project:"), self.explorer_project_name)
-        self.explorer_group.setLayout(explorer_form)
+        self.explorer_project_name.setMinimumWidth(200)
+        name_row.addWidget(self.explorer_project_name)
+        explorer_layout.addLayout(name_row)
+        self.explorer_group.setLayout(explorer_layout)
         layout.addWidget(self.explorer_group)
 
         # Resolve group
         self.resolve_group = QGroupBox("Resolve Options")
-        resolve_form = QFormLayout()
+        resolve_layout = QVBoxLayout()
+
+        type_row = QHBoxLayout()
+        type_row.addWidget(QLabel("Type:"))
+        type_row.addSpacing(12)
         self.type_selector = QComboBox()
         self.type_selector.addItems(["OCF", "REEL"])
+        self.type_selector.setMinimumWidth(120)
+        type_row.addWidget(self.type_selector)
+        resolve_layout.addLayout(type_row)
+
+        reels_row = QHBoxLayout()
+        reels_row.addWidget(QLabel("Reels:"))
+        reels_row.addSpacing(10)
         self.reels_input = QSpinBox()
         self.reels_input.setRange(1, 20)
+        reels_row.addWidget(self.reels_input)
+        resolve_layout.addLayout(reels_row)
+
+        project_row = QHBoxLayout()
+        project_row.addWidget(QLabel("Project:"))
         self.resolve_project_name = QLineEdit()
         self.resolve_project_name.setPlaceholderText("Project name")
-        resolve_form.addRow(QLabel("Type:"), self.type_selector)
-        resolve_form.addRow(QLabel("Reels:"), self.reels_input)
-        resolve_form.addRow(QLabel("Project:"), self.resolve_project_name)
-        self.resolve_group.setLayout(resolve_form)
+        self.resolve_project_name.setMinimumWidth(200)
+        project_row.addWidget(self.resolve_project_name)
+        resolve_layout.addLayout(project_row)
+        type_row.addStretch()
+        reels_row.addStretch()
+
+        self.resolve_group.setLayout(resolve_layout)
         layout.addWidget(self.resolve_group)
 
-        # Avid group 
+        # Avid group
         self.avid_group = QGroupBox("Avid Options")
-        avid_form = QFormLayout()
-        self.avid_path_label = QLabel()
+        avid_layout = QHBoxLayout()
+        self.avid_path_label = QLineEdit()
+        self.avid_path_label.setMinimumWidth(200)
+
         self.avid_path_button = QPushButton("Choose")
-        avid_form.addRow(QLabel("Path:"), self.avid_path_button)
-        avid_form.addRow(QLabel("Chosen Path:"), self.avid_path_label)
-        self.avid_group.setLayout(avid_form)
+        avid_layout.addWidget(QLabel("Path:"))
+        avid_layout.addSpacing(15)
+        avid_layout.addWidget(self.avid_path_label)
+        avid_layout.addWidget(self.avid_path_button)
+
+        self.avid_group.setLayout(avid_layout)
         layout.addWidget(self.avid_group)
 
         # Create button
@@ -173,6 +209,7 @@ class MainWindow(QWidget):
         self.setLayout(layout)
         self.setup_connections()
         self.update_ui()
+
 
     def select_avid_path(self):
         path = QFileDialog.getExistingDirectory(self, "Выберите папку для Avid проекта")
