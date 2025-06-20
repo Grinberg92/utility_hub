@@ -386,12 +386,12 @@ class ResolveGUI(QtWidgets.QWidget):
                 logger.debug("Применен пресет burn in: python_no_burn_in")    
             else:
                 if aspect == "anam":
-                    self.project.LoadBurnInPreset("python_proxy_preset_anam")
-                    logger.debug("Применен пресет burn in: python_proxy_preset_anam") 
+                    self.project.LoadBurnInPreset("python_proxy_preset_anam_cross_property_no_TC")
+                    logger.debug("Применен пресет burn in: python_proxy_preset_anam_cross_property_no_TC") 
 
                 elif aspect == "square":
-                    self.project.LoadBurnInPreset("python_proxy_preset_square") 
-                    logger.debug("Применен пресет burn in: python_proxy_preset_square")
+                    self.project.LoadBurnInPreset("python_proxy_preset_square_cross_property_no_TC") 
+                    logger.debug("Применен пресет burn in: python_proxy_preset_square_cross_property_no_TC")
 
         def set_project_preset():
 
@@ -468,7 +468,7 @@ class ResolveGUI(QtWidgets.QWidget):
 
         def get_render_list(new_timelines, folder_name):
             "Функция создает рендер джобы из всех собранных таймлайнов"
-            logger.debug(f"Финальный путь: {folder_name}")
+
             if folder_name != "Current Folder":
                 folder = Path(output_folder) / folder_name
             else:
