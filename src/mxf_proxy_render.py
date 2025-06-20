@@ -7,6 +7,7 @@ import time
 import DaVinciResolveScript as dvr
 from PyQt5 import QtWidgets, QtCore
 from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
@@ -94,7 +95,7 @@ class ResolveGUI(QtWidgets.QWidget):
         res_layout.addStretch()
         res_layout.addWidget(QtWidgets.QLabel("Resolution:"))
         res_layout.addWidget(self.glob_width)
-        res_layout.addWidget(QtWidgets.QLabel("x:"))
+        res_layout.addWidget(QtWidgets.QLabel("x"))
         res_layout.addWidget(self.glob_height)
         res_layout.addStretch()
         layout.addLayout(res_layout)
@@ -573,6 +574,7 @@ class ResolveGUI(QtWidgets.QWidget):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
+    apply_style(app)
     gui = ResolveGUI()
     gui.show()
     sys.exit(app.exec_())
