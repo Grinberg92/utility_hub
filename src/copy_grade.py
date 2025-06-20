@@ -5,47 +5,49 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal, QObject, QThread, Qt
 import DaVinciResolveScript
 import sys
+import os
+from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
 
+logger = get_logger(__file__)
 
-class WorkerSignals(QObject):
+class TransferWorker(QThread):
+
     finished = pyqtSignal()
     error = pyqtSignal(str)
     success = pyqtSignal(str)
 
-
-class TransferWorker(QThread):
-    def __init__(self, parent, track_1, track_2, lut_name):
+    def __init__(self, parent, source_track, target_track, lut_name):
         super().__init__()
         self.parent = parent
-        self.track_1 = track_1
-        self.track_2 = track_2
+        self.source_track = source_track
+        self.target_track = target_track
         self.lut_name = lut_name
-        self.signals = WorkerSignals()
 
     def run(self):
         try:
             project = self.parent.project_manager.GetCurrentProject()
             if not project:
-                self.signals.error.emit("Проект не найден.")
+                self.error.emit("Проект не найден.")
                 return
 
             timeline = project.GetCurrentTimeline()
             if not timeline:
-                self.signals.error.emit("Таймлайн не найден.")
+                self.error.emit("Таймлайн не найден.")
                 return
 
-            source_clips = timeline.GetItemListInTrack("video", self.track_1)
-            target_clips = timeline.GetItemListInTrack("video", self.track_2)
+            source_clips = timeline.GetItemListInTrack("video", self.source_track)
+            target_clips = timeline.GetItemListInTrack("video", self.target_track)
 
             if not target_clips:
-                self.signals.error.emit("На целевой дорожке нет клипов.")
+                self.error.emit("На целевой дорожке нет клипов.")
                 return
             
             # Проверка на отсутствие ЦК в target_clips
             if (any(map(lambda x: x > 1, [clip.GetNumNodes() for clip in target_clips])) or 
                 any(filter(lambda x: x is not None,  [clip.GetNodeGraph(1).GetToolsInNode(1) for clip in target_clips]))):
 
-                self.signals.error.emit("На выбранной дорожке присутствует ЦК.")
+                self.error.emit("На выбранной дорожке присутствует ЦК.")
                 return
 
             def find_clip_on_track(track_clips, start_timecode):
@@ -71,10 +73,13 @@ class TransferWorker(QThread):
                     if lut_path is not None:
                         project.RefreshLUTList()
                         matching_clip.SetLUT(1, lut_path)
+                        logger.debug(f"Применен LUT: {os.path.basename(lut_path)}")
+                else:
+                    logger.debug(f"Не перенесена ЦК с клипа {source_clip.GetName()}")
 
-            self.signals.success.emit("Цветокоррекция успешно перенесена.")
+            self.success.emit("Цветокоррекция успешно перенесена.")
         except Exception as e:
-            self.signals.error.emit(str(e))
+            self.error.emit(str(e))
 
 
 class ColorGradeApplyApp(QMainWindow):
@@ -107,14 +112,14 @@ class ColorGradeApplyApp(QMainWindow):
         track_layout = QHBoxLayout()
         track_layout.addStretch()
         track_layout.addWidget(QLabel("Source Track:"))
-        self.track_1_input = QLineEdit()
-        self.track_1_input.setFixedWidth(40)
-        track_layout.addWidget(self.track_1_input)
+        self.source_track_input = QLineEdit()
+        self.source_track_input.setFixedWidth(40)
+        track_layout.addWidget(self.source_track_input)
 
         track_layout.addWidget(QLabel("Target Track:"))
-        self.track_2_input = QLineEdit()
-        self.track_2_input.setFixedWidth(40)
-        track_layout.addWidget(self.track_2_input)
+        self.target_track_input = QLineEdit()
+        self.target_track_input.setFixedWidth(40)
+        track_layout.addWidget(self.target_track_input)
         track_layout.addStretch()
         layout.addLayout(track_layout)
 
@@ -153,28 +158,33 @@ class ColorGradeApplyApp(QMainWindow):
 
     def start_transfer(self):
         try:
-            track_1 = int(self.track_1_input.text())
-            track_2 = int(self.track_2_input.text())
+            source_track = int(self.source_track_input.text())
+            target_track = int(self.target_track_input.text())
         except ValueError:
             self.show_error("Ошибка", "Введите корректные номера дорожек.")
             return
 
         selected_lut = self.lut_combobox.currentText()
 
-        self.worker = TransferWorker(self, track_1, track_2, selected_lut)
-        self.worker.signals.error.connect(lambda msg: self.show_error("Ошибка", msg))
-        self.worker.signals.success.connect(lambda msg: self.show_info("Успех", msg))
+        logger.debug("\n".join(("SetUp:", f"Source Track: {source_track}", f"Target Track: {target_track}", f"Select LUT: {selected_lut}")))
+        self.worker = TransferWorker(self, source_track, target_track, selected_lut)
+        self.worker.error.connect(lambda msg: self.show_error("Ошибка", msg))
+        self.worker.success.connect(lambda msg: self.show_info("Успех", msg))
         self.worker.start()
 
     def show_error(self, title, message):
         QMessageBox.critical(self, title, message)
+        logger.exception(message)
+        
 
     def show_info(self, title, message):
         QMessageBox.information(self, title, message)
+        logger.debug(message)
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    apply_style(app)
     window = ColorGradeApplyApp()
     window.show()
     sys.exit(app.exec_())
