@@ -4,6 +4,7 @@ import random
 import re
 import math
 import time
+from pathlib import Path
 import DaVinciResolveScript as dvr
 from PyQt5 import QtWidgets, QtCore
 from dvr_tools.logger_config import get_logger
@@ -214,7 +215,9 @@ class ResolveGUI(QtWidgets.QWidget):
             return
         
         self.ocf_folders_list.clear()
-        self.ocf_folders_list.addItem("Current Folder")
+        current_folder = QtWidgets.QListWidgetItem("Current Folder")
+        current_folder.setData(QtCore.Qt.UserRole, None)
+        self.ocf_folders_list.addItem(current_folder)
         for subfolder in ocf_folder.GetSubFolderList():
             item = QtWidgets.QListWidgetItem(subfolder.GetName())
             item.setData(QtCore.Qt.UserRole, subfolder)  # Привязываем MediaPoolFolder
@@ -463,9 +466,16 @@ class ResolveGUI(QtWidgets.QWidget):
                         tmln_item.SetLUT(1, lut_path)
             logger.debug(f"LUT установлен на все клипы на таймлайне {current_timeline.GetName()}")
 
-        def get_render_list(new_timelines):
-
+        def get_render_list(new_timelines, folder_name):
             "Функция создает рендер джобы из всех собранных таймлайнов"
+            logger.debug(f"Финальный путь: {folder_name}")
+            if folder_name != "Current Folder":
+                folder = Path(output_folder) / folder_name
+            else:
+                folder = output_folder
+            
+            logger.debug(f"Финальный путь: {Path(output_folder) / folder_name}")
+
             render_list = []
             for timeline in new_timelines:
                 self.project.SetCurrentTimeline(timeline)  # Переключаемся на текущий таймлайн
@@ -482,8 +492,9 @@ class ResolveGUI(QtWidgets.QWidget):
                     logger.critical(f"Ошибка: Не удалось загрузить пресет рендера {render_preset}")
                 
                 # Устанавливаем настройки рендера
+
                 render_settings = {
-                    "TargetDir": output_folder,
+                    "TargetDir": str(folder),
                     "FormatWidth": int(width), 
                     "FormatHeight": int(height)
                 }
@@ -525,19 +536,19 @@ class ResolveGUI(QtWidgets.QWidget):
 
         # Основной блок
         
-        selected_folders = [item.data(QtCore.Qt.UserRole) for item in self.ocf_folders_list.selectedItems()]
+        selected_folders = [(item.data(QtCore.Qt.UserRole), item.text()) for item in self.ocf_folders_list.selectedItems()]
 
         # Установка пресета проекта
         set_project_preset()
 
         # Цикл по выбранным в GUI фолдерам selected_folders
-        for folder in selected_folders:
-
-            if folder is None: # None = Current Folder в интерфейсе
+        for folder_obj, folder_name in selected_folders:
+            
+            if folder_obj is None: # None = Current Folder в интерфейсе
                 ...
             else:
-                logger.debug(f"Начало работы с фолдером {folder.GetName()}")
-                current_source_folder = self.media_pool.SetCurrentFolder(folder)
+                logger.debug(f"Начало работы с фолдером {folder_obj.GetName()}")
+                current_source_folder = self.media_pool.SetCurrentFolder(folder_obj)
             cur_bin_items_list, current_source_folder = get_bin_items()
 
             if self.add_mov_mp4.isChecked():
@@ -567,7 +578,7 @@ class ResolveGUI(QtWidgets.QWidget):
                 clips_dict = get_sep_resolution_list(cur_bin_items_list)
 
             new_timelines = get_timelines(clips_dict)
-            render_queue = get_render_list(new_timelines)
+            render_queue = get_render_list(new_timelines, folder_name)
             start_render(render_queue)
 
         self.thread.success_signal.emit()
