@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QMessageBox, QFileDialog 
 )
 from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
@@ -318,6 +319,7 @@ class MainWindow(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    apply_style(app)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
