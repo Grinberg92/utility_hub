@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
@@ -261,10 +262,11 @@ class GetShotDvr(QWidget):
             logger.exception(f'Ошибка копирования файлов')
 
         return target_list
-
+    
 
 if __name__ == "__main__":
     app = QApplication([])
+    apply_style(app)
     window = GetShotDvr()
     window.show()
     app.exec_()
