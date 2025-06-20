@@ -40,6 +40,13 @@ class TransferWorker(QThread):
             if not target_clips:
                 self.signals.error.emit("На целевой дорожке нет клипов.")
                 return
+            
+            # Проверка на отсутствие ЦК в target_clips
+            if (any(map(lambda x: x > 1, [clip.GetNumNodes() for clip in target_clips])) or 
+                any(filter(lambda x: x is not None,  [clip.GetNodeGraph(1).GetToolsInNode(1) for clip in target_clips]))):
+
+                self.signals.error.emit("На выбранной дорожке присутствует ЦК.")
+                return
 
             def find_clip_on_track(track_clips, start_timecode):
                 for clip in track_clips:
@@ -52,7 +59,7 @@ class TransferWorker(QThread):
                 color_group = source_clip.GetColorGroup()
                 matching_clip = find_clip_on_track(target_clips, start_time)
 
-                if matching_clip and matching_clip.GetNumNodes() <= 1:
+                if matching_clip:
                     matching_clip.AssignToColorGroup(color_group)
                     source_clip.CopyGrades(matching_clip)
 
