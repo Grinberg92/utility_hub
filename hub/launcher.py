@@ -17,7 +17,7 @@ class HubApp(QWidget):
         if os.name != "posix":
             self.resize(1200, 350)
         else:
-            self.resize(1450, 520)
+            self.resize(1450, 420)
         self.setWindowIcon(QIcon(ICON_PATH))
 
         #Главный горизонтальный слой
