@@ -121,13 +121,21 @@ class MainWindow(QWidget):
 
         # Mode selection
         mode_layout = QHBoxLayout()
+        mode_layout.addStretch()  # ← добавляем пустое пространство слева
+
         self.explorer_radio = QRadioButton("Explorer")
         self.resolve_radio = QRadioButton("Resolve")
         self.avid_radio = QRadioButton("Avid")
         self.explorer_radio.setChecked(True)
+
         mode_layout.addWidget(self.explorer_radio)
+        mode_layout.addSpacing(60)  # ← расстояние между кнопками
         mode_layout.addWidget(self.resolve_radio)
+        mode_layout.addSpacing(60)  # ← расстояние между кнопками
         mode_layout.addWidget(self.avid_radio)
+
+        mode_layout.addStretch()  # ← добавляем пустое пространство справа
+
         layout.addLayout(mode_layout)
 
         # Explorer group
@@ -135,7 +143,7 @@ class MainWindow(QWidget):
         explorer_layout = QVBoxLayout()
         disk_row = QHBoxLayout()
         disk_row.addWidget(QLabel("Disk:"))
-        disk_row.addSpacing(14)
+        disk_row.addSpacing(15)
         self.disk_selector = QComboBox()
         self.disk_selector.addItems(["J", "R"])
         self.disk_selector.setMinimumWidth(100)
@@ -158,11 +166,12 @@ class MainWindow(QWidget):
         resolve_layout = QVBoxLayout()
 
         type_row = QHBoxLayout()
-        type_row.addWidget(QLabel("Type:"))
+        self.type_combo = QLabel("Type:")
+        type_row.addWidget(self.type_combo)
         type_row.addSpacing(12)
         self.type_selector = QComboBox()
         self.type_selector.addItems(["OCF", "REEL"])
-        self.type_selector.setMinimumWidth(120)
+        self.type_selector.setMinimumWidth(100)
         type_row.addWidget(self.type_selector)
         resolve_layout.addLayout(type_row)
 
