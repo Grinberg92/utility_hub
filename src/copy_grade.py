@@ -86,8 +86,7 @@ class ColorGradeApplyApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Copy Grade")
-        self.resize(390, 150)
-        self.setMinimumSize(320, 150)
+        self.resize(390, 200)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
         self.resolve = DaVinciResolveScript.scriptapp("Resolve")

@@ -4,6 +4,7 @@ import re
 from timecode import Timecode as tc
 import DaVinciResolveScript as dvr
 import sys
+from dvr_tools.css_style import apply_style
 
 
 class EDLProcessorGUI(QtWidgets.QWidget):
@@ -278,6 +279,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
+    apply_style(app)
     window = EDLProcessorGUI()
     window.show()
     sys.exit(app.exec_())

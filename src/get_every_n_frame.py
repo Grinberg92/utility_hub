@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
@@ -95,19 +96,27 @@ class CopyApp(QWidget):
         self.target_btn.clicked.connect(self.choose_target)
 
         target_layout = QHBoxLayout()
-        target_layout.addWidget(QLabel("Target Path:"))
+        self.target_path_label = (QLabel("Target Path:"))
+        target_layout.addWidget(self.target_path_label)
+        target_layout.addSpacing(6)
         target_layout.addWidget(self.target_input)
         target_layout.addWidget(self.target_btn)
 
         self.step_input = QLineEdit()
+        self.step_input.setMaximumWidth(50)
         self.step_input.setText("100")
 
         step_layout = QHBoxLayout()
-        step_layout.addWidget(QLabel("Step:"))
+        step_layout.addStretch()
+        self.step_editline = QLabel("Step:")
+        step_layout.addWidget(self.step_editline)
         step_layout.addWidget(self.step_input)
+        step_layout.addStretch()
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setAlignment(Qt.AlignCenter)
+        self.progress_bar.setFormat("%p%")
+
 
         self.start_btn = QPushButton("Start")
         self.start_btn.clicked.connect(self.start_copying)
@@ -166,6 +175,7 @@ class CopyApp(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    apply_style(app)
     window = CopyApp()
     window.show()
     sys.exit(app.exec_())

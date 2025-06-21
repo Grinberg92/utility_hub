@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
@@ -34,7 +35,7 @@ class DvrRenderApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EXR Delivery")
-        self.setMinimumWidth(450)
+        self.resize(550, 200)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.init_ui()
         self.render_preset_error.connect(self.on_render_preset_error)
@@ -82,6 +83,7 @@ class DvrRenderApp(QWidget):
         browse_btn = QPushButton("Choose")
         browse_btn.clicked.connect(self.select_folder)
         path_layout.addWidget(QLabel("Render path:"))
+        path_layout.addSpacing(10)
         path_layout.addWidget(self.path_input)
         path_layout.addWidget(browse_btn)
         layout.addLayout(path_layout)
@@ -405,6 +407,7 @@ class DvrRenderApp(QWidget):
         
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    apply_style(app)
     window = DvrRenderApp()
     window.show()
     sys.exit(app.exec_())

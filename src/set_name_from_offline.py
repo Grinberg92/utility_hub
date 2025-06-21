@@ -2,6 +2,7 @@ import DaVinciResolveScript as dvrs
 from PyQt5 import QtWidgets, QtCore
 import sys
 from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
@@ -30,7 +31,8 @@ class GUI(QtWidgets.QWidget):
 
         # Горизонтальный layout для ввода номера трека
         input_layout = QtWidgets.QHBoxLayout()
-        label = QtWidgets.QLabel('Offline Track Number:')
+        input_layout.addStretch()
+        label = QtWidgets.QLabel('Track Number:')
         self.track_entry = QtWidgets.QLineEdit()
         self.track_entry.setFixedWidth(50)
 
@@ -106,6 +108,7 @@ class GUI(QtWidgets.QWidget):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
+    apply_style(app)
     window = GUI()
     window.show()
     sys.exit(app.exec_())
