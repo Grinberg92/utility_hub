@@ -159,8 +159,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             self.save_path_btn.setEnabled(True)
 
     def run_script(self):
-        
+
         logger.debug("Запуск скрипта")
+        
         edl_path = self.input_entry.text()
         output_path = self.output_entry.text()
         export_loc = self.export_loc_checkbox.isChecked()

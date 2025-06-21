@@ -119,6 +119,8 @@ class GetShotDvr(QWidget):
         return result_path
 
     def run(self):
+
+        logger.debug("Запуск скрипта")
         
         # Проверка открытого Resolve
         try:

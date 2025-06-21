@@ -156,6 +156,9 @@ class ColorGradeApplyApp(QMainWindow):
             return
 
     def start_transfer(self):
+
+        logger.debug("Запуск скрипта")
+        
         try:
             source_track = int(self.source_track_input.text())
             target_track = int(self.target_track_input.text())

@@ -298,6 +298,8 @@ class ResolveGUI(QtWidgets.QWidget):
 
     def process_render(self, glob_width, glob_height, output_folder, project_preset, render_preset):
 
+        logger.debug("Запуск скрипта")
+
         def copy_filtered_clips_to_ocf_folder(current_source_folder):
             """
             Ищет .mov, .mp4, .jpg клипы в current_source_folder и перемещает их в

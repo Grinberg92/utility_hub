@@ -253,6 +253,9 @@ class MainWindow(QWidget):
         self.reels_input.setEnabled(is_reel)
 
     def run_logic(self):
+
+        logger.debug("Запуск скрипта")
+        
         if self.explorer_radio.isChecked():
             disk = self.disk_selector.currentText()
             project_name = self.explorer_project_name.text().strip()

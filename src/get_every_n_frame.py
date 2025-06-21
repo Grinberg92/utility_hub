@@ -141,6 +141,9 @@ class CopyApp(QWidget):
             self.target_input.setText(path)
 
     def start_copying(self):
+
+        logger.debug("Запуск скрипта")
+
         current = self.current_input.text()
         target = self.target_input.text()
         step = self.step_input.text()

@@ -57,6 +57,9 @@ class GUI(QtWidgets.QWidget):
         self.setLayout(main_layout)
 
     def func(self):
+
+        logger.debug("Запуск скрипта")
+        
         try:
             resolve = dvrs.scriptapp('Resolve')
             projectManager = resolve.GetProjectManager()

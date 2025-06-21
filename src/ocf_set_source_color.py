@@ -157,6 +157,9 @@ class GUI(QtWidgets.QWidget):
             self.browse_btn.setEnabled(True)
 
     def on_run_clicked(self):
+
+        logger.debug("Запуск скрипта")
+        
         self.run_button.setEnabled(False)
 
         # Получаем флаги с чекбоксов

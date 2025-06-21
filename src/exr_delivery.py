@@ -119,6 +119,9 @@ class DvrRenderApp(QWidget):
             self.path_input.setText(folder)
 
     def run_render(self):
+
+        logger.debug("Запуск скрипта")
+        
         self.output_folder = self.path_input.text()
         if not self.output_folder:
             QMessageBox.warning(self, "Ошибка", "Укажите путь для рендера")
