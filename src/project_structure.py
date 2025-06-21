@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QLineEdit, QPushButton, QSpinBox, QGroupBox,
     QMessageBox, QFileDialog
 )
+from PyQt5.QtCore import Qt
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 
@@ -113,6 +114,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Project Structure Creator")
+        self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.resize(460, 280)
         self.setup_ui()
 

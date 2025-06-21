@@ -76,6 +76,7 @@ class CopyApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Copy Files n-step")
+        self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.resize(600, 200)
         self.init_ui()
 
