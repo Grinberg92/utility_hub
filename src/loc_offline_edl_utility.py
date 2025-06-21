@@ -5,7 +5,9 @@ from timecode import Timecode as tc
 import DaVinciResolveScript as dvr
 import sys
 from dvr_tools.css_style import apply_style
+from dvr_tools.logger_config import get_logger
 
+logger = get_logger(__file__)
 
 class EDLProcessorGUI(QtWidgets.QWidget):
     def __init__(self):
@@ -55,10 +57,10 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         options_layout.addWidget(self.set_markers_checkbox)
         options_layout.addSpacing(20)
 
-        track_label = QtWidgets.QLabel("from track:")
+        self.track_label = QtWidgets.QLabel("from track:")
         self.track_entry = QtWidgets.QLineEdit("1")
         self.track_entry.setFixedWidth(40)
-        options_layout.addWidget(track_label)
+        options_layout.addWidget(self.track_label)
         options_layout.addWidget(self.track_entry)
         options_layout.addSpacing(20)
 
@@ -72,10 +74,12 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         save_path_label = QtWidgets.QLabel("Save created locators:")
         save_path_layout = QtWidgets.QHBoxLayout()
         self.save_locators_path_entry = QtWidgets.QLineEdit()
-        save_path_btn = QtWidgets.QPushButton("Choose")
-        save_path_btn.clicked.connect(self.select_save_markers_file)
+        self.save_path_btn = QtWidgets.QPushButton("Choose")
+        self.save_path_btn.clicked.connect(self.select_save_markers_file)
         save_path_layout.addWidget(self.save_locators_path_entry)
-        save_path_layout.addWidget(save_path_btn)
+        save_path_layout.addWidget(self.save_path_btn)
+        self.save_locators_path_entry.setEnabled(False)
+        self.save_path_btn.setEnabled(False)
 
         block1_group_layout.addWidget(save_path_label)
         block1_group_layout.addLayout(save_path_layout)
@@ -147,13 +151,16 @@ class EDLProcessorGUI(QtWidgets.QWidget):
     def update_fields_state(self):
         self.track_entry.setEnabled(self.set_markers_checkbox.isChecked())
 
-        if self.set_markers_checkbox.isChecked():
+        if not self.export_loc_checkbox.isChecked():
             self.save_locators_path_entry.setEnabled(False)
+            self.save_path_btn.setEnabled(False)
         else:
             self.save_locators_path_entry.setEnabled(True)
-
+            self.save_path_btn.setEnabled(True)
 
     def run_script(self):
+        
+        logger.debug("Запуск скрипта")
         edl_path = self.input_entry.text()
         output_path = self.output_entry.text()
         export_loc = self.export_loc_checkbox.isChecked()
@@ -161,25 +168,33 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         fps = self.fps_entry.text()
         process_edl = self.edl_for_dailies_checkbox.isChecked() or self.offline_clips_checkbox.isChecked()
         locators_output_path = self.save_locators_path_entry.text()
+        locator_from = self.locator_from_combo.currentText()
+        track_entry = self.track_entry.text()
+        offline_checkbox = self.offline_clips_checkbox.isChecked()
+        dailies_checkbox = self.edl_for_dailies_checkbox.isChecked()
 
         if process_edl and (not edl_path or not output_path):
-            QMessageBox.critical(self,"Ошибка", "Выберите файлы EDL!")
+            QMessageBox.warning(self,"Ошибка", "Выберите файлы EDL!")
+            logger.warning("Выберите файлы EDL!")
             return
         if not locators_output_path and export_loc:
-            QMessageBox.critical(self, "Ошибка", "Введите путь для сохранения локаторов")
+            QMessageBox.warning(self, "Ошибка", "Введите путь для сохранения локаторов")
+            logger.warning("Введите путь для сохранения локаторов")
             return
 
         try:
             fps = int(fps)
         except ValueError:
-            QMessageBox.critical(self,"Ошибка", "FPS должен быть числом!")
+            QMessageBox.warning(self,"Ошибка", "FPS должен быть числом!")
+            logger.warning("FPS должен быть числом!")
             return
 
         track_number = self.track_entry.text()
         try:
             track_number = int(track_number)
         except ValueError:
-            QMessageBox.critical(self,"Ошибка", "Номер дорожки должен быть числом!")
+            QMessageBox.warning(self,"Ошибка", "Номер дорожки должен быть числом!")
+            logger.warning("Номер дорожки должен быть числом!")
             return
 
         try:
@@ -187,6 +202,12 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             self.project = self.resolve.GetProjectManager().GetCurrentProject()
             self.timeline = self.project.GetCurrentTimeline()
             self.timeline_start_tc = self.timeline.GetStartFrame()
+
+            logger.debug("\n".join(("SetUp:", f"Project FPS: {fps}", f"Marker name from: {locator_from}", f"Set markers: {set_markers}",
+                                    f"From track: {track_entry}", f"Export locators to AVID: {export_loc}",
+                                    f"Save created locators: {locators_output_path or None}", f"Offline EDL: {offline_checkbox}", 
+                                    f"Dailies EDL: {dailies_checkbox}", f"Choose EDL-file: {edl_path or None}", 
+                                    f"Save created EDL: {output_path or None}")))
 
             if process_edl:
                 self.process_edl(self.timeline, edl_path, output_path, fps)
@@ -198,44 +219,63 @@ class EDLProcessorGUI(QtWidgets.QWidget):
                 self.export_locators_to_avid(locators_output_path)
 
             QMessageBox.information(self, "Готово", "Обработка завершена!")
+            logger.debug("Обработка завершена!")
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Произошла ошибка: {e}")
+            QMessageBox.critical(self, "Ошибка", f"Ошибка подключения Resolve: {e}")
+            logger.exception(f"Ошибка подключения Resolve: {e}")
+            return
 
     def get_markers(self, timeline_start_timecode): 
         '''
         Получение маркеров для работы других функций
         '''
-        marker_from = self.locator_from_combo.currentText()
-        markers_list = []
-        for timecode, name in self.timeline.GetMarkers().items():
-            name = name[marker_from].strip()
-            if name and re.search(self.pattern_short, name):
-                timecode_marker = tc(self.fps_entry.text(), frames=timecode + timeline_start_timecode) + 1  
-                markers_list.append((name, timecode_marker))
-        return markers_list
+        try:
+            marker_from = self.locator_from_combo.currentText()
+            markers_list = []
+            for timecode, name in self.timeline.GetMarkers().items():
+                name = name[marker_from].strip()
+                if name and re.search(self.pattern_short, name):
+                    timecode_marker = tc(self.fps_entry.text(), frames=timecode + timeline_start_timecode) + 1  
+                    markers_list.append((name, timecode_marker))
+            return markers_list
+        except Exception as e:
+            QMessageBox.critical(f"Ошибка получения данных об объектах маркеров: {e}")
+            logger.exception(f"Ошибка получения данных об объектах маркеров: {e}")
+            return
 
     def set_markers(self, timeline, track_number):
         '''
         Установка маркеров с номерами полученными из оффлайн клипов на текущем таймлайне 
         '''
-        clips = timeline.GetItemListInTrack('video', track_number)
-        for clip in clips:
-            if re.search(self.pattern_short, clip.GetName()):
-                clip_name = clip.GetName()
-                clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - timeline.GetStartFrame()
-                timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
-
+        try:
+            clips = timeline.GetItemListInTrack('video', track_number)
+            for clip in clips:
+                if re.search(self.pattern_short, clip.GetName()):
+                    clip_name = clip.GetName()
+                    clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - timeline.GetStartFrame()
+                    timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+            logger.debug("Маркеры успешно созданы")
+        except Exception as e:
+            QMessageBox.critical(f"Ошибка создания маркеров: {e}")
+            logger.exception(f"Ошибка создания маркеров: {e}")
+            return
 
     def export_locators_to_avid(self, output_path):
         '''
         Формирование строк и экспорт локаторов для AVID в .txt
         '''
-        markers_list = self.get_markers(self.timeline_start_tc)
-        with open(output_path, "a", encoding='utf8') as output:
-            for name, timecode in markers_list:
-                # Используется спец табуляция для корректного импорта в AVID
-                output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
-                output.write(output_string + "\n")
+        try:
+            markers_list = self.get_markers(self.timeline_start_tc)
+            with open(output_path, "a", encoding='utf8') as output:
+                for name, timecode in markers_list:
+                    # Используется спец табуляция для корректного импорта в AVID
+                    output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
+                    output.write(output_string + "\n")
+            logger.debug(f"Локаторы успешно экспортированы. Путь: {output_path}")
+        except Exception as e:
+            QMessageBox.critical(f"Ошибка формирования локаторов: {e}")
+            logger.exception(f"Ошибка формирования локаторов: {e}")
+            return
 
     def process_edl(self, timeline, edl_path, output_path, fps):
         """
@@ -245,35 +285,41 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         edl_for_dailies = self.edl_for_dailies_checkbox.isChecked()
 
         def parse_edl():
-            markers_list = self.get_markers(self.timeline_start_tc)
-            with open(edl_path, "r", encoding='utf8') as edl_file:
-                title = [next(edl_file) for _ in range(2)]
-                lines = edl_file.readlines()
+            try:
+                markers_list = self.get_markers(self.timeline_start_tc)
+                with open(edl_path, "r", encoding='utf8') as edl_file:
+                    title = [next(edl_file) for _ in range(2)]
+                    lines = edl_file.readlines()
 
-            with open(output_path, "w", encoding='utf8') as output:
-                output.write("".join(title) + "\n")
-                for line in lines:
-                    if re.search(r'^\d+\s', line.strip()):  
-                        parts = line.split()
-                        edl_timeline_start_tc = parts[6]
-                        edl_timeline_end_tc = parts[7]
+                with open(output_path, "w", encoding='utf8') as output:
+                    output.write("".join(title) + "\n")
+                    for line in lines:
+                        if re.search(r'^\d+\s', line.strip()):  
+                            parts = line.split()
+                            edl_timeline_start_tc = parts[6]
+                            edl_timeline_end_tc = parts[7]
 
-                        # Логика для offline_clips
-                        if offline_clips:
-                            marker_name = None
-                            for name, timecode in markers_list:
-                                if tc(fps, edl_timeline_start_tc).frames <= tc(fps, timecode).frames <= tc(fps, edl_timeline_end_tc).frames:
-                                    marker_name = name
-                            if marker_name is not None:
+                            # Логика для offline_clips
+                            if offline_clips:
+                                marker_name = None
+                                for name, timecode in markers_list:
+                                    if tc(fps, edl_timeline_start_tc).frames <= tc(fps, timecode).frames <= tc(fps, edl_timeline_end_tc).frames:
+                                        marker_name = name
+                                if marker_name is not None:
+                                    output.write(" ".join(parts) + '\n')
+                                    output.write(f'* FROM CLIP NAME: {marker_name}\n\n')
+
+                            # Логика для edl_for_dailies
+                            elif edl_for_dailies:
+                                for name, timecode in markers_list:
+                                    if tc(fps, edl_timeline_start_tc).frames <= tc(fps, timecode).frames <= tc(fps, edl_timeline_end_tc).frames:
+                                        parts[1] = name
                                 output.write(" ".join(parts) + '\n')
-                                output.write(f'* FROM CLIP NAME: {marker_name}\n\n')
-
-                        # Логика для edl_for_dailies
-                        elif edl_for_dailies:
-                            for name, timecode in markers_list:
-                                if tc(fps, edl_timeline_start_tc).frames <= tc(fps, timecode).frames <= tc(fps, edl_timeline_end_tc).frames:
-                                    parts[1] = name
-                            output.write(" ".join(parts) + '\n')
+                    logger.debug(f"EDL для дейлизов успешно сформировано. Путь: {output_path}")
+            except Exception as e:
+                QMessageBox.critical(f"Ошибка формирования EDL: {e}")
+                logger.exception(f"Ошибка формирования EDL: {e}")
+                return
 
         parse_edl()
 
