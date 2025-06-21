@@ -38,7 +38,7 @@ def get_logger(name: str) -> logging.Logger:
     logger.addHandler(stream_handler)
 
     script_name = os.path.basename(sys.argv[0])
-    header = f"\n{'=' * 80}\n START SCRIPT: {script_name}\n{'=' * 80}"
+    header = f"\n\n{'=' * 100}\n START: {script_name}\n{'=' * 100}\n"
     logger.info(header)
 
     return logger
