@@ -12,6 +12,54 @@ from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
+from PyQt5.QtWidgets import QComboBox, QListView
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from PyQt5.QtCore import Qt
+
+from PyQt5.QtWidgets import QComboBox, QListView
+from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
+
+class CheckableComboBox(QComboBox):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setModel(QStandardItemModel(self))
+        self.setView(QListView())
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.lineEdit().setPlaceholderText("Select items")
+        self.model().dataChanged.connect(self._update_display_text)
+        self.lineEdit().installEventFilter(self)
+
+    def eventFilter(self, source, event):
+        if source == self.lineEdit() and event.type() == event.MouseButtonPress:
+            self.showPopup()
+            return True
+        return super().eventFilter(source, event)
+
+    def clear_items(self):
+        self.model().clear()
+
+    def add_checkable_item(self, text, data=None, checked=False):
+        item = QStandardItem(text)
+        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+        item.setData(Qt.Checked if checked else Qt.Unchecked, Qt.CheckStateRole)
+        item.setData(data, Qt.UserRole)
+        self.model().appendRow(item)
+
+    def checked_items(self):
+        """ Возвращает список кортежей: (userData, текст) """
+        result = []
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            if item.checkState() == Qt.Checked:
+                result.append((item.data(Qt.UserRole), item.text()))
+        return result
+
+    def _update_display_text(self):
+        selected = [text for _, text in self.checked_items()]
+        self.lineEdit().setText(", ".join(selected) if selected else "Select items")
+
 class RenderThread(QtCore.QThread):
 
     error_signal = QtCore.pyqtSignal(str)
@@ -63,16 +111,9 @@ class ResolveGUI(QtWidgets.QWidget):
         self.set_burn_in_checkbox = QtWidgets.QCheckBox("Set Burn-in")
         self.add_mov_mp4 = QtWidgets.QCheckBox("Add .mov, .mp4, .jpg")
 
-        self.burn_in_list = QtWidgets.QListWidget()
-        self.burn_in_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
-        self.burn_in_list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.burn_in_list.setFixedHeight(100)
-        self.burn_in_list.setFixedWidth(500) 
+        self.burn_in_list = CheckableComboBox()
 
-        self.ocf_folders_list = QtWidgets.QListWidget()
-        self.ocf_folders_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
-        self.ocf_folders_list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.ocf_folders_list.setFixedHeight(100) 
+        self.ocf_folders_list = CheckableComboBox()
 
         self.lut_path_nx = r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY'
         self.lut_path_posix = '/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/'
@@ -225,34 +266,28 @@ class ResolveGUI(QtWidgets.QWidget):
         preset_list_sorted = sorted(
                                     preset_list,
                                     key=lambda name: os.path.getmtime(os.path.join(base_path, name)))
+        
+        preset_list_sorted = [i.split(".")[0] for i in preset_list_sorted]
+        for preset in preset_list_sorted:
+            self.burn_in_list.add_checkable_item(preset)
 
-        self.burn_in_list.addItems(preset_list_sorted)
+        self.burn_in_list._update_display_text()
 
 
     def load_ocf_subfolders(self):
-
-        "Метод получает данные сабфолдеров из фолдера 001_OCF"
-
+        """ Загружает сабфолдеры из папки '001_OCF' в CheckableComboBox """
         root_folder = self.media_pool.GetRootFolder()
         ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == "001_OCF"), None)
-        
+
         if not ocf_folder:
-            self.thread.error_signal.emit("Папка '001_OCF' не найдена")
+            QtWidgets.QMessageBox.critical(self, "Ошибка", "Папка '001_OCF' не найдена")
             return
-        
-        self.ocf_folders_list.clear()
-        current_folder = QtWidgets.QListWidgetItem("Current Folder")
-        current_folder.setData(QtCore.Qt.UserRole, None)
-        self.ocf_folders_list.addItem(current_folder)
+
+        self.ocf_folders_list.clear_items()
+        self.ocf_folders_list.add_checkable_item("Current Folder", data=None, checked=True)
+
         for subfolder in ocf_folder.GetSubFolderList():
-            item = QtWidgets.QListWidgetItem(subfolder.GetName())
-            item.setData(QtCore.Qt.UserRole, subfolder)  # Привязываем MediaPoolFolder
-            self.ocf_folders_list.addItem(item)
-
-        # Установка Current Folder по умолчанию
-        self.ocf_folders_list.setCurrentRow(0)
-        self.ocf_folders_list.item(0).setSelected(True)
-
+            self.ocf_folders_list.add_checkable_item(subfolder.GetName(), data=subfolder)
 
     def start_render(self):
         glob_width = self.glob_width.text()
@@ -276,18 +311,24 @@ class ResolveGUI(QtWidgets.QWidget):
             logger.warning("Укажите путь для рендера")
             return    
 
-        if not self.ocf_folders_list.selectedItems():
+        if not self.burn_in_list.checked_items():
+            QtWidgets.QMessageBox.warning(self, "Предупреждение", "Укажите хотя бы один пресет burn-in")
+            logger.warning("Укажите хотя бы один пресет burn-in")
+            return 
+
+
+        if not self.ocf_folders_list.checked_items():
             QtWidgets.QMessageBox.warning(self, "Предупреждение", "Укажите хотя бы один фолдер")
             logger.warning("Укажите хотя бы один фолдер")
             return 
 
-        logger.debug("\n".join(("SetUp:", f"Рендер с параметрами: {glob_width}x{glob_height}",
+        logger.debug("\n".join(("SetUp:", f"Рендер с параметрами: {glob_width}x{glob_height}", f"Burn-in preset: {self.burn_in_list.checked_items()}",
                       f"Папка: {output_folder}",f"Проектный пресет: {project_preset}", 
                       f"Рендер-пресет: {render_preset}", f"LUT Project: {self.lut_project.currentText()}", 
                       f"LUT file: {self.lut_file.currentText()}", f"ArriCDLandLUT: {self.apply_arricdl_lut.isChecked()}", 
                       f"Set FPS: {self.set_fps_checkbox.isChecked()}", f"FPS: {self.project_fps_value.text()}", 
                       f"Set Burn in: {self.set_burn_in_checkbox.isChecked()}", f"Add .mov, .mp4, .jpg: {self.add_mov_mp4.isChecked()}",
-                      f"Folder: {[item.data(QtCore.Qt.UserRole) for item in self.ocf_folders_list.selectedItems()]}")))
+                      f"Folder: {self.ocf_folders_list.checked_items()}")))
         
         # Вызываем основной процесс рендера
         self.thread = RenderThread(
@@ -410,7 +451,7 @@ class ResolveGUI(QtWidgets.QWidget):
             "Функция устанавливает пресет burn in"
 
             try:
-                preset_list = [preset.text() for preset in self.burn_in_list.selectedItems()]
+                preset_list = [preset[1] for preset in self.burn_in_list.checked_items()]
 
                 if not self.set_burn_in_checkbox.isChecked():
                     self.project.LoadBurnInPreset("python_no_burn_in")
@@ -566,7 +607,7 @@ class ResolveGUI(QtWidgets.QWidget):
 
         # Основной блок
         
-        selected_folders = [(item.data(QtCore.Qt.UserRole), item.text()) for item in self.ocf_folders_list.selectedItems()]
+        selected_folders = self.ocf_folders_list.checked_items()
 
         # Установка пресета проекта
         set_project_preset()
