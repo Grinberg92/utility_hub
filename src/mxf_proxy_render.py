@@ -7,18 +7,15 @@ import time
 from pathlib import Path
 import DaVinciResolveScript as dvr
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtWidgets import QComboBox, QListView
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from PyQt5.QtCore import Qt
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
-from PyQt5.QtWidgets import QComboBox, QListView
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtCore import Qt
 
-from PyQt5.QtWidgets import QComboBox, QListView
-from PyQt5.QtCore import Qt, QPoint
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 class CheckableComboBox(QComboBox):
     def __init__(self, parent=None):
@@ -114,6 +111,7 @@ class ResolveGUI(QtWidgets.QWidget):
         self.burn_in_list = CheckableComboBox()
 
         self.ocf_folders_list = CheckableComboBox()
+        self.ocf_folders_list.setFixedWidth(180)
 
         self.lut_path_nx = r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY'
         self.lut_path_posix = '/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/'
