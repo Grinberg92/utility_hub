@@ -24,15 +24,16 @@ class CopyWorker(QThread):
 
     def run(self):
         all_tasks = []
+        exctentions = ('.dng', '.exr', '.jpg')
         try:
             for tmp_path in os.listdir(self.current_path):
                 path = os.path.join(self.current_path, tmp_path)
                 if len([i[0] for i in os.walk(self.current_path)]) > 1:
                     if os.path.isdir(path):
-                        files = [file for file in os.listdir(path) if file.lower().endswith(('.dng', '.exr', '.jpg'))]
+                        files = [file for file in os.listdir(path) if file.lower().endswith(exctentions)]
                         all_tasks.append((path, os.path.basename(path), files, True))
                 else:
-                    files = [file for file in os.listdir(self.current_path) if file.lower().endswith(('.dng', '.exr', '.jpg'))]
+                    files = [file for file in os.listdir(self.current_path) if file.lower().endswith(exctentions)]
                     all_tasks.append((self.current_path, os.path.basename(self.current_path), files, False))
                     break
 
