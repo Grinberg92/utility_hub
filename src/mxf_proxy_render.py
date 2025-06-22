@@ -39,7 +39,7 @@ class ResolveGUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Proxy Render")
-        self.resize(470, 500)
+        self.resize(500, 500)
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
         # === Глобальные переменные ===
@@ -60,11 +60,19 @@ class ResolveGUI(QtWidgets.QWidget):
         self.project_fps_value = QtWidgets.QLineEdit("24")
         self.project_fps_value.setFixedWidth(50)
 
-        self.set_burn_in_checkbox = QtWidgets.QCheckBox("Set Burn in")
+        self.set_burn_in_checkbox = QtWidgets.QCheckBox("Set Burn-in")
         self.add_mov_mp4 = QtWidgets.QCheckBox("Add .mov, .mp4, .jpg")
+
+        self.burn_in_list = QtWidgets.QListWidget()
+        self.burn_in_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        self.burn_in_list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.burn_in_list.setFixedHeight(100)
+        self.burn_in_list.setFixedWidth(500) 
 
         self.ocf_folders_list = QtWidgets.QListWidget()
         self.ocf_folders_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        self.ocf_folders_list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.ocf_folders_list.setFixedHeight(100) 
 
         self.lut_path_nx = r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY'
         self.lut_path_posix = '/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/'
@@ -108,6 +116,8 @@ class ResolveGUI(QtWidgets.QWidget):
         presets_layout.addWidget(self.project_preset)
         presets_layout.addWidget(QtWidgets.QLabel("Render Preset:"))
         presets_layout.addWidget(self.render_preset)
+        presets_layout.addWidget(QtWidgets.QLabel("Burn-in Preset:"))
+        presets_layout.addWidget(self.burn_in_list)
         presets_group.setLayout(presets_layout)
         layout.addWidget(presets_group)
 
@@ -142,10 +152,6 @@ class ResolveGUI(QtWidgets.QWidget):
         self.set_burn_in_checkbox.setChecked(True)
         adv_layout.addSpacing(20)
         adv_layout.addWidget(self.add_mov_mp4)
-        self.ocf_folders_list = QtWidgets.QListWidget()
-        self.ocf_folders_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
-        self.ocf_folders_list.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.ocf_folders_list.setFixedHeight(100) 
         adv_layout.addSpacing(20)
         adv_layout.addWidget(self.ocf_folders_list)
         adv_group.setLayout(adv_layout)
@@ -168,6 +174,7 @@ class ResolveGUI(QtWidgets.QWidget):
         layout.addWidget(self.start_button)
 
         self.load_ocf_subfolders()
+        self.load_burn_in()
 
     # === Функции LUT ===
     def update_lut_projects(self):
@@ -206,7 +213,26 @@ class ResolveGUI(QtWidgets.QWidget):
         if folder:
             self.output_folder.setText(folder)
 
+    def load_burn_in(self):
+
+        "Метод получает данные о пресетах burn-in"
+
+        win_path = r"J:\003_transcode_to_vfx\projects\Others\burn_in_presets"
+        mac_path = "/Volumes/share2/003_transcode_to_vfx/projects/Others/burn_in_presets"
+        base_path = mac_path if os.name == "posix" else win_path
+
+        preset_list = os.listdir(base_path)
+        preset_list_sorted = sorted(
+                                    preset_list,
+                                    key=lambda name: os.path.getmtime(os.path.join(base_path, name)))
+
+        self.burn_in_list.addItems(preset_list_sorted)
+
+
     def load_ocf_subfolders(self):
+
+        "Метод получает данные сабфолдеров из фолдера 001_OCF"
+
         root_folder = self.media_pool.GetRootFolder()
         ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == "001_OCF"), None)
         
@@ -282,7 +308,7 @@ class ResolveGUI(QtWidgets.QWidget):
     
     def on_error_signal(self, message):
         QtWidgets.QMessageBox.critical(self, "Ошибка", message)
-        logger.critical(f"{message}")
+        logger.exception(f"{message}")
 
     def on_success_signal(self):
         QtWidgets.QMessageBox.information(self, "Успех", "Рендер успешно завершен")
@@ -383,17 +409,19 @@ class ResolveGUI(QtWidgets.QWidget):
 
             "Функция устанавливает пресет burn in"
 
-            if not self.set_burn_in_checkbox.isChecked():
-                self.project.LoadBurnInPreset("python_no_burn_in")
-                logger.debug("Применен пресет burn in: python_no_burn_in")    
-            else:
-                if aspect == "anam":
-                    self.project.LoadBurnInPreset("python_proxy_preset_anam_cross_property_no_TC")
-                    logger.debug("Применен пресет burn in: python_proxy_preset_anam_cross_property_no_TC") 
+            try:
+                preset_list = [preset.text() for preset in self.burn_in_list.selectedItems()]
 
-                elif aspect == "square":
-                    self.project.LoadBurnInPreset("python_proxy_preset_square_cross_property_no_TC") 
-                    logger.debug("Применен пресет burn in: python_proxy_preset_square_cross_property_no_TC")
+                if not self.set_burn_in_checkbox.isChecked():
+                    self.project.LoadBurnInPreset("python_no_burn_in")
+                    logger.debug("Применен пресет burn in: python_no_burn_in")    
+                else:
+                    for preset in preset_list:
+                        if re.search(aspect, preset):
+                            self.project.LoadBurnInPreset(preset)
+                            logger.debug(f"Применен пресет burn in: {preset}") 
+            except Exception as e:
+                self.thread.error_signal.emit("Ошибка применения пресета burn-in")
 
         def set_project_preset():
 
@@ -476,7 +504,7 @@ class ResolveGUI(QtWidgets.QWidget):
             else:
                 folder = output_folder
             
-            logger.debug(f"Финальный путь: {Path(output_folder) / folder_name}")
+            logger.debug(f"Финальный путь: Path{folder}")
 
             render_list = []
             for timeline in new_timelines:
