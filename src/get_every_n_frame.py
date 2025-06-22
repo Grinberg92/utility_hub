@@ -115,6 +115,7 @@ class CopyApp(QWidget):
         step_layout.addStretch()
 
         self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
         self.progress_bar.setAlignment(Qt.AlignCenter)
         self.progress_bar.setFormat("%p%")
 
