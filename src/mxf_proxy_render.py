@@ -12,6 +12,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtCore import Qt
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
+from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
 
 logger = get_logger(__file__)
 
@@ -116,6 +117,10 @@ class ResolveGUI(QtWidgets.QWidget):
         self.lut_path_nx = r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY'
         self.lut_path_posix = '/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/'
         self.lut_base_path = self.lut_path_posix if os.name == "posix" else self.lut_path_nx
+
+        self.timeline_preset_path_nx = r"J:\003_transcode_to_vfx\projects\Others\timeline_presets\logc4_to_rec709.drt"
+        self.timeline_preset_path_posix = "/Volumes/share2/003_transcode_to_vfx/projects/Others/timeline_presets/logc4_to_rec709.drt"
+        self.timeline_preset_path = self.timeline_preset_path_posix if os.name == "posix" else self.lut_path_nx
 
         # Подключение к Resolve
         try:
@@ -497,27 +502,76 @@ class ResolveGUI(QtWidgets.QWidget):
                             clips_dict.setdefault(resolution, []).append(clip)
             return clips_dict
         
-        def get_timelines(clips_dict):
-
-            "Функция создает таймлайны"
-            new_timelines = []
-            for res, items in clips_dict.items():
-                random_number = random.randint(10000, 999999)  # Генерируем случайное число
-                timeline_name = f"tmln_{res}_{random_number}"  # Пример: tmln_1920x660_212066
-                timeline = self.media_pool.CreateEmptyTimeline(timeline_name)
-                self.project.SetCurrentTimeline(timeline)
-                self.media_pool.AppendToTimeline(items)
-                
-                if timeline:
-                    logger.debug(f"Создан таймлайн: {timeline_name}")
-                    new_timelines.append(timeline)
+        def split_by_arri(clip_list):
+            """Разделяет клипы на ARRI и не-ARRI"""
+            arri_clips = []
+            non_arri_clips = []
+            for clip in clip_list:
+                video_codec = clip.GetClipProperty("Video Codec").lower()
+                ics = clip.GetClipProperty("Input Color Space").lower()
+                if "arri" in video_codec or "arri" in ics:
+                    arri_clips.append(clip)
                 else:
-                    logger.critical(f"Ошибка при создании таймлайна: {timeline_name}")
+                    non_arri_clips.append(clip)
+            return arri_clips, non_arri_clips
+
+
+        def get_timelines(clips_dict):
+            """Функция создает таймлайны"""
+            new_timelines = []
+
+            
+
+            for res, items in clips_dict.items():
+                arri_clips, non_arri_clips = split_by_arri(items)
+
+                def make_timeline(clips, is_arri):
+                    random_number = random.randint(10000, 999999)
+                    suffix = "arri" if is_arri else "mixed"
+                    timeline_name = f"tmln_{res}_{suffix}_{random_number}"
+
+                    if is_arri and self.apply_arricdl_lut.isChecked():
+                        # Импорт шаблона таймлайна с loc4 to rec709 трансформом
+                        timeline = self.media_pool.ImportTimelineFromFile(self.timeline_preset_path)
+                            
+                        if not timeline:
+                            logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {self.timeline_preset_path_posix}")
+                            return None
+                        
+                        # Установка разрешения на таймлайн (таймлайн импортируется без привязки к проектному разрешению)
+                        resolution = get_resolution(timeline_name)
+                        width, height = resolution.split("x")
+                        timeline.SetSetting("timelineResolutionHeight", height)
+                        timeline.SetSetting("timelineResolutionWidth", width)
+
+                        timeline.SetName(timeline_name)
+                        self.media_pool.AppendToTimeline(clips)
+
+                        # Удаляем заглушку присутсвующую при импорте шаблона(видео + аудио)
+                        mp_obj = ResolveTimelineItemExtractor(timeline)
+                        timeline.DeleteClips([mp_obj.get_timeline_items(1, 1)[0],mp_obj.get_timeline_items(1, 1, track_type='audio')[0]], True)
+                    else:
+                        timeline = self.media_pool.CreateEmptyTimeline(timeline_name)
+                        self.project.SetCurrentTimeline(timeline)
+                        self.media_pool.AppendToTimeline(clips)
+
+                    if timeline:
+                        logger.debug(f"Создан таймлайн: {timeline_name}")
+                        new_timelines.append(timeline)
+                    else:
+                        logger.critical(f"Ошибка при создании таймлайна: {timeline_name}")
+
+                # Один общий ARRI таймлайн
+                if arri_clips:
+                    make_timeline(arri_clips, is_arri=True)
+                # Один таймлайн для прочих клипов
+                if non_arri_clips:
+                    make_timeline(non_arri_clips, is_arri=False)
 
             if not new_timelines:
                 logger.debug("Не удалось создать ни одного таймлайна.")
             return new_timelines
-        
+
         def set_lut():
 
             "Функция устанавливает заданный LUT(распаковывает AriiCDLLut) на все клипы на таймлайне"
@@ -543,7 +597,7 @@ class ResolveGUI(QtWidgets.QWidget):
             else:
                 folder = output_folder
             
-            logger.debug(f"Финальный путь: Path{folder}")
+            logger.debug(f"Финальный путь: {folder}")
 
             render_list = []
             for timeline in new_timelines:
@@ -579,12 +633,16 @@ class ResolveGUI(QtWidgets.QWidget):
             "Функция проверяеет есть ли активный рендер"
             return self.project.IsRenderingInProgress()
         
+        def get_resolution(timeline_name)-> str:
+
+            return re.search(r'\d{3,4}x\d{3,4}', timeline_name).group(0)
+        
         def start_render(render_queue):
 
             "Функция запуска рендера"
             logger.debug("Запускаю рендер...")
             for render, timeline_name in render_queue:
-                resolution = re.search(r'\d{3,4}x\d{3,4}', timeline_name).group(0)
+                resolution = get_resolution(timeline_name)
                 width, height = resolution.split("x")
                 # Проверяем закончился ли предыдущий рендер
                 while rendering_in_progress():
@@ -625,7 +683,7 @@ class ResolveGUI(QtWidgets.QWidget):
                 all_exts = (".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine")
                 clips_dict = get_sep_resolution_list(cur_bin_items_list, extentions=all_exts)
                 new_timelines = get_timelines(clips_dict)
-                render_queue = get_render_list(new_timelines)
+                render_queue = get_render_list(new_timelines, folder_name)
                 start_render(render_queue)
                 continue  # Пропускаем остальной блок
 
