@@ -101,6 +101,10 @@ class ResolveGUI(QtWidgets.QWidget):
         self.glob_width.setFixedWidth(50)
         self.glob_height = QtWidgets.QLineEdit("1080")
         self.glob_height.setFixedWidth(50)
+
+        self.logic_mode_1080 = QtWidgets.QRadioButton()
+        self.logic_mode_frame = QtWidgets.QRadioButton()
+
         self.output_folder = QtWidgets.QLineEdit("J:/003_transcode_to_vfx/kraken/tst")
 
         self.project_preset = QtWidgets.QComboBox()
@@ -161,6 +165,35 @@ class ResolveGUI(QtWidgets.QWidget):
         res_layout.addWidget(self.glob_height)
         res_layout.addStretch()
         layout.addLayout(res_layout)
+
+        # Logic group
+        logic_group = QtWidgets.QGroupBox("Logic")
+        logic_group.setFixedHeight(70)
+        logic_layout = QtWidgets.QHBoxLayout()
+
+        vbox1 = QtWidgets.QVBoxLayout()
+        label_1080 = QtWidgets.QLabel("All into FullHD")
+        label_1080.setAlignment(QtCore.Qt.AlignHCenter)
+        vbox1.addWidget(self.logic_mode_1080, alignment=QtCore.Qt.AlignHCenter)
+        vbox1.addWidget(label_1080)
+
+        vbox2 = QtWidgets.QVBoxLayout()
+        label_frame = QtWidgets.QLabel("Frame to horizontal")
+        label_frame.setAlignment(QtCore.Qt.AlignHCenter)
+        vbox2.addWidget(self.logic_mode_frame, alignment=QtCore.Qt.AlignHCenter)
+        vbox2.addWidget(label_frame)
+
+        self.logic_mode_frame.setChecked(True)
+
+        logic_layout.addStretch()
+        logic_layout.addLayout(vbox1)
+        logic_layout.addSpacing(60)
+        logic_layout.addLayout(vbox2)
+        logic_layout.addStretch()
+
+        logic_group.setLayout(logic_layout)
+        layout.addWidget(logic_group)
+
 
         # Presets group 
         presets_group = QtWidgets.QGroupBox("Presets")
@@ -364,9 +397,11 @@ class ResolveGUI(QtWidgets.QWidget):
             logger.warning("Укажите хотя бы один фолдер")
             return 
 
-        logger.debug("\n".join(("SetUp:", f"Рендер с параметрами: {glob_width}x{glob_height}", f"Burn-in preset: {self.burn_in_list.checked_items()}",
-                      f"Папка: {output_folder}",f"Проектный пресет: {project_preset}", 
-                      f"Рендер-пресет: {render_preset}", f"LUT Project: {self.lut_project.currentText()}", 
+        logger.debug("\n".join(("SetUp:", f"Resolution: {glob_width}x{glob_height}", f"Logic fullhd: {self.logic_mode_1080.isChecked()}", 
+                      f"Logic frame: {self.logic_mode_frame.isChecked()}",
+                      f"Burn-in preset: {self.burn_in_list.checked_items()}",
+                      f"Render path: {output_folder}",f"Project preset: {project_preset}", 
+                      f"Render preset: {render_preset}", f"LUT Project: {self.lut_project.currentText()}", 
                       f"LUT file: {self.lut_file.currentText()}", f"ArriCDLandLUT: {self.apply_arricdl_lut.isChecked()}", 
                       f"Set FPS: {self.set_fps_checkbox.isChecked()}", f"FPS: {self.project_fps_value.text()}", 
                       f"Set Burn in: {self.set_burn_in_checkbox.isChecked()}", f"Add .mov, .mp4, .jpg: {self.add_mov_mp4.isChecked()}",
@@ -782,7 +817,7 @@ class ResolveGUI(QtWidgets.QWidget):
                 self.media_pool.SetCurrentFolder(current_source_folder)
 
             # Логика для доработки
-            if self.render_preset.currentText() == "MXF_AVID_HD_Render":
+            if self.logic_mode_1080.isChecked():
                 clips_dict = {"1920x1080": cur_bin_items_list}
             else:
                 clips_dict = get_sep_resolution_list(cur_bin_items_list)
