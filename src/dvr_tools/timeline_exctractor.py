@@ -7,13 +7,13 @@ class ResolveTimelineItemExtractor():
     def __init__(self, timeline):
         self.timeline = timeline
 
-    def get_timeline_items(self, start_track: int, end_track: int, exceptions: tuple=None, mpitems: bool=False) -> list:
+    def get_timeline_items(self, start_track: int, end_track: int, exceptions: tuple=None, mpitems: bool=False, track_type: str="video") -> list:
         '''
         Метод получает resolve timelineitems и mediapoolitems
         '''
         all_items = []
         for track in range(start_track, end_track + 1):
-            clips = self.timeline.GetItemListInTrack('video', int(track))
+            clips = self.timeline.GetItemListInTrack(track_type, int(track))
             if exceptions is None:
                 for clip in clips:
                     if mpitems:
