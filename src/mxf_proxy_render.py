@@ -16,9 +16,10 @@ from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
 
 logger = get_logger(__file__)
 
-
-
 class CheckableComboBox(QComboBox):
+
+    """Кастомный класс для создания выпадающего списка с чекбоксами"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setModel(QStandardItemModel(self))
@@ -46,7 +47,9 @@ class CheckableComboBox(QComboBox):
         self.model().appendRow(item)
 
     def checked_items(self):
-        """ Возвращает список кортежей: (userData, текст) """
+
+        """Возвращает список кортежей: (userData, текст)"""
+
         result = []
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
@@ -60,6 +63,8 @@ class CheckableComboBox(QComboBox):
 
 class RenderThread(QtCore.QThread):
 
+    """Класс пускает исполнение process_render через отдельный поток"""
+    
     error_signal = QtCore.pyqtSignal(str)
     success_signal = QtCore.pyqtSignal()
     warning_signal = QtCore.pyqtSignal(str)
@@ -82,13 +87,16 @@ class RenderThread(QtCore.QThread):
             self.error_signal.emit(f"Критическая ошибка: {e}")
 
 class ResolveGUI(QtWidgets.QWidget):
+
+    """Класс GUI"""
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Proxy Render")
         self.resize(500, 500)
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
-        # === Глобальные переменные ===
+        # Глобальные переменные
         self.glob_width = QtWidgets.QLineEdit("1920")
         self.glob_width.setFixedWidth(50)
         self.glob_height = QtWidgets.QLineEdit("1080")
@@ -100,7 +108,7 @@ class ResolveGUI(QtWidgets.QWidget):
 
         self.lut_project = QtWidgets.QComboBox()
         self.lut_file = QtWidgets.QComboBox()
-        self.apply_arricdl_lut = QtWidgets.QCheckBox("Apply ARRI CDL LUT")
+        self.apply_arricdl_lut = QtWidgets.QCheckBox("Apply ARRI Camera LUT")
 
         self.set_fps_checkbox = QtWidgets.QCheckBox("Set Project FPS")
         self.project_fps_value = QtWidgets.QLineEdit("24")
@@ -108,6 +116,7 @@ class ResolveGUI(QtWidgets.QWidget):
 
         self.set_burn_in_checkbox = QtWidgets.QCheckBox("Set Burn-in")
         self.add_mov_mp4 = QtWidgets.QCheckBox("Add .mov, .mp4, .jpg")
+        self.auto_sync_checkbox = QtWidgets.QCheckBox("Sync Audio")
 
         self.burn_in_list = CheckableComboBox()
 
@@ -120,7 +129,7 @@ class ResolveGUI(QtWidgets.QWidget):
 
         self.timeline_preset_path_nx = r"J:\003_transcode_to_vfx\projects\Others\timeline_presets\logc4_to_rec709.drt"
         self.timeline_preset_path_posix = "/Volumes/share2/003_transcode_to_vfx/projects/Others/timeline_presets/logc4_to_rec709.drt"
-        self.timeline_preset_path = self.timeline_preset_path_posix if os.name == "posix" else self.lut_path_nx
+        self.timeline_preset_path = self.timeline_preset_path_posix if os.name == "posix" else self.timeline_preset_path_nx
 
         # Подключение к Resolve
         try:
@@ -153,7 +162,7 @@ class ResolveGUI(QtWidgets.QWidget):
         res_layout.addStretch()
         layout.addLayout(res_layout)
 
-        # === Presets group ===
+        # Presets group 
         presets_group = QtWidgets.QGroupBox("Presets")
         presets_layout = QtWidgets.QVBoxLayout()
         presets_layout.addWidget(QtWidgets.QLabel("Project Preset:"))
@@ -165,7 +174,7 @@ class ResolveGUI(QtWidgets.QWidget):
         presets_group.setLayout(presets_layout)
         layout.addWidget(presets_group)
 
-        # === Color group ===
+        # Color group 
         color_group = QtWidgets.QGroupBox("Color")
         color_layout = QtWidgets.QVBoxLayout()
         color_layout.addWidget(QtWidgets.QLabel("LUT Project:"))
@@ -177,7 +186,7 @@ class ResolveGUI(QtWidgets.QWidget):
         color_group.setLayout(color_layout)
         layout.addWidget(color_group)
 
-        # === FPS group ===
+        # FPS group 
         fps_group = QtWidgets.QGroupBox("FPS")
         fps_layout = QtWidgets.QHBoxLayout()
         fps_layout.addWidget(self.set_fps_checkbox)
@@ -188,21 +197,33 @@ class ResolveGUI(QtWidgets.QWidget):
         fps_group.setLayout(fps_layout)
         layout.addWidget(fps_group)
 
-        # === Advanced Group ===
-
+        # Advanced
         adv_group = QtWidgets.QGroupBox("Advanced Group")
-        adv_layout = QtWidgets.QHBoxLayout()
-        adv_layout.addWidget(self.set_burn_in_checkbox)
-        self.set_burn_in_checkbox.setChecked(True)
-        adv_layout.addSpacing(20)
-        adv_layout.addWidget(self.add_mov_mp4)
-        adv_layout.addSpacing(20)
-        adv_layout.addWidget(self.ocf_folders_list)
-        adv_group.setLayout(adv_layout)
-        layout.addWidget(adv_group)
-        adv_layout.addStretch()
+        adv_main_layout = QtWidgets.QVBoxLayout()
 
-        # === Render path ===
+        # Первая строка 
+        row1_layout = QtWidgets.QHBoxLayout()
+        self.set_burn_in_checkbox.setChecked(True)
+        row1_layout.addWidget(self.set_burn_in_checkbox)
+        row1_layout.addSpacing(20)
+        row1_layout.addWidget(self.add_mov_mp4)
+        row1_layout.addSpacing(20)
+        row1_layout.addWidget(self.ocf_folders_list)
+        row1_layout.addStretch()
+
+        # Вторая строка
+        row2_layout = QtWidgets.QHBoxLayout()
+        self.auto_sync_checkbox.setChecked(False)
+        row2_layout.addWidget(self.auto_sync_checkbox)
+        row2_layout.addStretch()
+
+
+        adv_main_layout.addLayout(row1_layout)
+        adv_main_layout.addLayout(row2_layout)
+        adv_group.setLayout(adv_main_layout)
+        layout.addWidget(adv_group)
+
+        # Render path
         path_layout = QtWidgets.QHBoxLayout()
         path_layout.addWidget(QtWidgets.QLabel("Render Path:"))
         path_layout.addWidget(self.output_folder)
@@ -211,7 +232,7 @@ class ResolveGUI(QtWidgets.QWidget):
         path_layout.addWidget(path_btn)
         layout.addLayout(path_layout)
 
-        # === Start button ===
+        # Start button
         self.start_button = QtWidgets.QPushButton("Start")
         self.start_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.start_button.clicked.connect(self.start_render)
@@ -220,9 +241,10 @@ class ResolveGUI(QtWidgets.QWidget):
         self.load_ocf_subfolders()
         self.load_burn_in()
 
-    # === Функции LUT ===
     def update_lut_projects(self):
-        """ Сканирует подпапки в LUT-папке """
+
+        """Метод сканирует подпапки в LUT-папке"""
+
         if os.path.isdir(self.lut_base_path):
             subfolders = [name for name in os.listdir(self.lut_base_path)
                         if os.path.isdir(os.path.join(self.lut_base_path, name))]
@@ -233,7 +255,9 @@ class ResolveGUI(QtWidgets.QWidget):
                 self.update_lut_files()
 
     def update_lut_files(self):
-        """ Сканирует .cube файлы в выбранной папке LUT """
+
+        """Метод сканирует .cube файлы в выбранной папке LUT"""
+
         selected_project = self.lut_project.currentText()
         selected_path = os.path.join(self.lut_base_path, selected_project)
         if os.path.isdir(selected_path):
@@ -244,14 +268,19 @@ class ResolveGUI(QtWidgets.QWidget):
             self.lut_file.addItems(cube_files)
 
     def get_project_preset_list(self):
+
+        """Метод получения пресета проекта"""
+
         project_preset_list = [preset["Name"] for preset in self.project.GetPresetList()]
         self.project_preset.addItems(project_preset_list)
 
     def get_render_preset_list(self):
+
+        """Метод получения пресета рендера"""
+
         render_presets_list = [preset for preset in self.project.GetRenderPresetList()]
         self.render_preset.addItems(render_presets_list)
 
-    # === Выбор папки ===
     def select_folder(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Выбор папки")
         if folder:
@@ -278,7 +307,9 @@ class ResolveGUI(QtWidgets.QWidget):
 
 
     def load_ocf_subfolders(self):
-        """ Загружает сабфолдеры из папки '001_OCF' в CheckableComboBox """
+
+        """Метод загружает сабфолдеры из папки '001_OCF' в CheckableComboBox"""
+
         root_folder = self.media_pool.GetRootFolder()
         ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == "001_OCF"), None)
 
@@ -293,6 +324,9 @@ class ResolveGUI(QtWidgets.QWidget):
             self.ocf_folders_list.add_checkable_item(subfolder.GetName(), data=subfolder)
 
     def start_render(self):
+
+        """Метод запускает исполняемый скрипт через отдельный поток"""
+
         glob_width = self.glob_width.text()
         glob_height = self.glob_height.text()
         output_folder = self.output_folder.text()
@@ -325,13 +359,18 @@ class ResolveGUI(QtWidgets.QWidget):
             logger.warning("Укажите хотя бы один фолдер")
             return 
 
+        if not os.path.exists(self.timeline_preset_path) and self.apply_arricdl_lut.isChecked():
+            QtWidgets.QMessageBox.warning(self, "Предупреждение", f"Отсутстует програмный файл - {self.timeline_preset_path}")
+            logger.warning("Укажите хотя бы один фолдер")
+            return 
+
         logger.debug("\n".join(("SetUp:", f"Рендер с параметрами: {glob_width}x{glob_height}", f"Burn-in preset: {self.burn_in_list.checked_items()}",
                       f"Папка: {output_folder}",f"Проектный пресет: {project_preset}", 
                       f"Рендер-пресет: {render_preset}", f"LUT Project: {self.lut_project.currentText()}", 
                       f"LUT file: {self.lut_file.currentText()}", f"ArriCDLandLUT: {self.apply_arricdl_lut.isChecked()}", 
                       f"Set FPS: {self.set_fps_checkbox.isChecked()}", f"FPS: {self.project_fps_value.text()}", 
                       f"Set Burn in: {self.set_burn_in_checkbox.isChecked()}", f"Add .mov, .mp4, .jpg: {self.add_mov_mp4.isChecked()}",
-                      f"Folder: {self.ocf_folders_list.checked_items()}")))
+                      f"Folder: {self.ocf_folders_list.checked_items()}", f"Sync Audio: {self.auto_sync_checkbox.isChecked()}")))
         
         # Вызываем основной процесс рендера
         self.thread = RenderThread(
@@ -368,9 +407,12 @@ class ResolveGUI(QtWidgets.QWidget):
 
     def process_render(self, glob_width, glob_height, output_folder, project_preset, render_preset):
 
+        """Метод основной исполняемой логики"""
+
         logger.debug("Запуск скрипта")
 
         def copy_filtered_clips_to_ocf_folder(current_source_folder):
+
             """
             Ищет .mov, .mp4, .jpg клипы в current_source_folder и перемещает их в
             001_OCF/Excepted clips/{current_source_folder}.
@@ -397,6 +439,7 @@ class ResolveGUI(QtWidgets.QWidget):
             def collect_valid_clips(folder):
 
                 "Функция формирует список 'отбракованных mov, mp4, jpg'"
+
                 collected = []
                 for clip in folder.GetClipList():
                     name = clip.GetName().lower()
@@ -421,7 +464,7 @@ class ResolveGUI(QtWidgets.QWidget):
                 if not target_folder:
                     target_folder = self.media_pool.AddSubFolder(base_folder, source_folder_name)
                     if not target_folder:
-                        self.thread.error_signal.emit(f"Не удалось создать папку '{source_folder_name}' внутри 'mov_mp4_jpg'.")
+                        self.thread.error_signal.emit(f"Не удалось создать папку '{source_folder_name}' внутри 'Excepted clips'.")
                         return None
                     
             # Переключаемся в нужный подбин
@@ -429,16 +472,34 @@ class ResolveGUI(QtWidgets.QWidget):
             
             return clips_to_move
         
-        def set_project_fps(clip):
+        def set_project_fps(clip)-> None:
 
             "Функция устанавливает проектный FPS"
+
             clip.SetClipProperty("FPS", self.project_fps_value.text())
             logger.debug(f"Установлен FPS {self.project_fps_value.text()} на клип {clip.GetName()}")
 
-        def get_bin_items():
+        def auto_sync_audio(curr_source_folder_clips_list):
+
+            """Функция делает автосинхронизацию видео и звука по таймкоду в текущем фолдере"""
+
+            result_sync = self.media_pool.AutoSyncAudio(curr_source_folder_clips_list, {self.resolve.AUDIO_SYNC_MODE: self.resolve.AUDIO_SYNC_TIMECODE})
+
+            if result_sync:
+                logger.debug("Синхронизация звука произведена успешно")
+            else:
+                self.thread.error_signal.emit("Синхронизация звука не произведена")
+
+        def get_bin_items()-> list:
+
+            """Функция получает mediapoolitems из текущего фолдера"""
+
             cur_bin_items_list = []
             curr_source_folder = self.media_pool.GetCurrentFolder()
-            for clip in curr_source_folder.GetClipList():
+            curr_source_folder_clips_list = curr_source_folder.GetClipList()
+            if self.auto_sync_checkbox.isChecked():
+                auto_sync_audio(curr_source_folder_clips_list)
+            for clip in curr_source_folder_clips_list:
                 name = clip.GetName().lower()
                 if "." in name:
                     if self.add_mov_mp4.isChecked() or not name.endswith(('.mov', '.mp4', '.jpg')):
@@ -446,10 +507,10 @@ class ResolveGUI(QtWidgets.QWidget):
                             set_project_fps(clip)
                         cur_bin_items_list.append(clip)
 
-            logger.debug(f"Получен список таймлайн объектов в фолдере {curr_source_folder.GetName()}")
+            logger.debug(f"Получен список mediapool объектов в фолдере {curr_source_folder.GetName()}")
             return cur_bin_items_list, curr_source_folder
         
-        def turn_on_burn_in(aspect):
+        def turn_on_burn_in(aspect)-> None:
 
             "Функция устанавливает пресет burn in"
 
@@ -457,17 +518,19 @@ class ResolveGUI(QtWidgets.QWidget):
                 preset_list = [preset[1] for preset in self.burn_in_list.checked_items()]
 
                 if not self.set_burn_in_checkbox.isChecked():
-                    self.project.LoadBurnInPreset("python_no_burn_in")
-                    logger.debug("Применен пресет burn in: python_no_burn_in")    
+                    if self.project.LoadBurnInPreset("python_no_burn_in"):
+                        logger.debug("Применен пресет burn-in: python_no_burn_in") 
+                    else:
+                        logger.warning("Пресет 'python_no_burn_in' отсутствует") 
                 else:
                     for preset in preset_list:
                         if re.search(aspect, preset):
                             self.project.LoadBurnInPreset(preset)
-                            logger.debug(f"Применен пресет burn in: {preset}") 
+                            logger.debug(f"Применен пресет burn-in: {preset}") 
             except Exception as e:
                 self.thread.error_signal.emit("Ошибка применения пресета burn-in")
 
-        def set_project_preset():
+        def set_project_preset()-> None:
 
             "Функция устанавливает пресет проекта"
 
@@ -476,7 +539,7 @@ class ResolveGUI(QtWidgets.QWidget):
             else:
                 logger.debug(f"Ошибка: Не удалось применить пресет проекта {project_preset}")
 
-        def get_sep_resolution_list(cur_bin_items_list, extentions=None):
+        def get_sep_resolution_list(cur_bin_items_list, extentions=None)-> dict:
 
             "Функция создает словать с парами ключ(разрешение): значение(список соответствующих клипов)"
 
@@ -502,8 +565,10 @@ class ResolveGUI(QtWidgets.QWidget):
                             clips_dict.setdefault(resolution, []).append(clip)
             return clips_dict
         
-        def split_by_arri(clip_list):
+        def split_by_arri(clip_list)-> list:
+
             """Разделяет клипы на ARRI и не-ARRI"""
+
             arri_clips = []
             non_arri_clips = []
             for clip in clip_list:
@@ -516,11 +581,11 @@ class ResolveGUI(QtWidgets.QWidget):
             return arri_clips, non_arri_clips
 
 
-        def get_timelines(clips_dict):
-            """Функция создает таймлайны"""
-            new_timelines = []
+        def get_timelines(clips_dict)-> list:
 
-            
+            """Функция создает таймлайны"""
+
+            new_timelines = [] 
 
             for res, items in clips_dict.items():
                 arri_clips, non_arri_clips = split_by_arri(items)
@@ -535,8 +600,7 @@ class ResolveGUI(QtWidgets.QWidget):
                         timeline = self.media_pool.ImportTimelineFromFile(self.timeline_preset_path)
                             
                         if not timeline:
-                            logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {self.timeline_preset_path_posix}")
-                            return None
+                            logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {self.timeline_preset_path}")
                         
                         # Установка разрешения на таймлайн (таймлайн импортируется без привязки к проектному разрешению)
                         resolution = get_resolution(timeline_name)
@@ -547,8 +611,9 @@ class ResolveGUI(QtWidgets.QWidget):
                         timeline.SetName(timeline_name)
                         self.media_pool.AppendToTimeline(clips)
 
-                        # Удаляем заглушку присутсвующую при импорте шаблона(видео + аудио)
+                        # Удаляем заглушку присутсвующую при импорте шаблона(видео + аудио) в медиапуле и таймлайне
                         mp_obj = ResolveTimelineItemExtractor(timeline)
+                        self.media_pool.DeleteClips([mp_obj.get_timeline_items(1, 1)[0].GetMediaPoolItem()])
                         timeline.DeleteClips([mp_obj.get_timeline_items(1, 1)[0],mp_obj.get_timeline_items(1, 1, track_type='audio')[0]], True)
                     else:
                         timeline = self.media_pool.CreateEmptyTimeline(timeline_name)
@@ -564,17 +629,20 @@ class ResolveGUI(QtWidgets.QWidget):
                 # Один общий ARRI таймлайн
                 if arri_clips:
                     make_timeline(arri_clips, is_arri=True)
+                    
                 # Один таймлайн для прочих клипов
                 if non_arri_clips:
                     make_timeline(non_arri_clips, is_arri=False)
 
             if not new_timelines:
-                logger.debug("Не удалось создать ни одного таймлайна.")
+                return None
+            
             return new_timelines
 
-        def set_lut():
+        def set_lut()-> None:
 
             "Функция устанавливает заданный LUT(распаковывает AriiCDLLut) на все клипы на таймлайне"
+
             self.project.RefreshLUTList()
             if not self.apply_arricdl_lut.isChecked() and self.lut_file == "No LUT":
                 logger.debug(f"LUT не применялся")
@@ -589,57 +657,66 @@ class ResolveGUI(QtWidgets.QWidget):
                         tmln_item.SetLUT(1, lut_path)
             logger.debug(f"LUT установлен на все клипы на таймлайне {current_timeline.GetName()}")
 
-        def get_render_list(new_timelines, folder_name):
-            "Функция создает рендер джобы из всех собранных таймлайнов"
-
-            if folder_name != "Current Folder":
-                folder = Path(output_folder) / folder_name
-            else:
-                folder = output_folder
+        def get_render_list(new_timelines, folder_name)-> list:
             
-            logger.debug(f"Финальный путь: {folder}")
+            "Функция создает render job из всех собранных таймлайнов"
 
-            render_list = []
-            for timeline in new_timelines:
-                self.project.SetCurrentTimeline(timeline)  # Переключаемся на текущий таймлайн
-                set_lut()
-                timeline_name = timeline.GetName()
-                resolution = re.search(r'\d{3,4}x\d{3,4}', timeline_name).group(0)
-                width, height = resolution.split("x")
-                logger.debug(f"Добавляю в очередь рендеринга: {timeline_name}")
-
-                # Применяем пресет рендера
-                if self.project.LoadRenderPreset(render_preset):
-                    logger.debug(f"Применен пресет рендера: {render_preset}")
+            try:
+                if folder_name != "Current Folder":
+                    folder = Path(output_folder) / folder_name
                 else:
-                    logger.critical(f"Ошибка: Не удалось загрузить пресет рендера {render_preset}")
+                    folder = output_folder
                 
-                # Устанавливаем настройки рендера
+                logger.debug(f"Финальный путь: {folder}")
 
-                render_settings = {
-                    "TargetDir": str(folder),
-                    "FormatWidth": int(width), 
-                    "FormatHeight": int(height)
-                }
-                self.project.SetRenderSettings(render_settings)        
+                render_list = []
+                for timeline in new_timelines:
+                    self.project.SetCurrentTimeline(timeline)  # Переключаемся на текущий таймлайн
+                    set_lut()
+                    timeline_name = timeline.GetName()
+                    resolution = re.search(r'\d{3,4}x\d{3,4}', timeline_name).group(0)
+                    width, height = resolution.split("x")
+                    logger.debug(f"Добавляю в очередь рендеринга: {timeline_name}")
 
-                # Добавляем в очередь рендера
-                render_item = self.project.AddRenderJob()  
-                render_list.append((render_item, timeline_name))
-            return render_list
-        
-        def rendering_in_progress():
+                    # Применяем пресет рендера
+                    if self.project.LoadRenderPreset(render_preset):
+                        logger.debug(f"Применен пресет рендера: {render_preset}")
+                    else:
+                        logger.critical(f"Ошибка: Не удалось загрузить пресет рендера {render_preset}")
+                    
+                    # Устанавливаем настройки рендера
+
+                    render_settings = {
+                        "TargetDir": str(folder),
+                        "FormatWidth": int(width), 
+                        "FormatHeight": int(height)
+                    }
+                    self.project.SetRenderSettings(render_settings)        
+
+                    # Добавляем в очередь рендера
+                    render_item = self.project.AddRenderJob()  
+                    render_list.append((render_item, timeline_name))
+                return render_list
+            except Exception as e:
+                self.thread.error_signal.emit(f"Ошибка создания списка с рендер задачами: {e}")
+                return None
+
+        def rendering_in_progress()-> bool:
 
             "Функция проверяеет есть ли активный рендер"
+
             return self.project.IsRenderingInProgress()
         
         def get_resolution(timeline_name)-> str:
 
+            """Функция извлечения разрешения из переданного таймлайна"""
+
             return re.search(r'\d{3,4}x\d{3,4}', timeline_name).group(0)
         
-        def start_render(render_queue):
+        def start_render(render_queue)-> bool:
 
             "Функция запуска рендера"
+
             logger.debug("Запускаю рендер...")
             for render, timeline_name in render_queue:
                 resolution = get_resolution(timeline_name)
@@ -654,15 +731,18 @@ class ResolveGUI(QtWidgets.QWidget):
                     turn_on_burn_in("anam")
                 else:
                     turn_on_burn_in("square")
-                self.project.StartRendering(render)
+                start_render_var = self.project.StartRendering(render)
+                if not start_render_var:
+                    return None      
 
             # Ожидаем завершения последнего активного рендера
             while rendering_in_progress():
                 time.sleep(1)
 
+            return True 
 
-        # Основной блок
-        
+                
+        # Основной блок 
         selected_folders = self.ocf_folders_list.checked_items()
 
         # Установка пресета проекта
@@ -683,13 +763,16 @@ class ResolveGUI(QtWidgets.QWidget):
                 all_exts = (".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine")
                 clips_dict = get_sep_resolution_list(cur_bin_items_list, extentions=all_exts)
                 new_timelines = get_timelines(clips_dict)
+                if new_timelines is None:
+                    self.thread.error_signal.emit("Не удалось создать ни одного таймлайна.")
+                    logger.debug("Не удалось создать ни одного таймлайна.")
+                    return
                 render_queue = get_render_list(new_timelines, folder_name)
                 start_render(render_queue)
                 continue  # Пропускаем остальной блок
 
             # Если флаг НЕ активен — отдельно обрабатываем .mov, .mp4, .jpg
             filterd_clips = copy_filtered_clips_to_ocf_folder(current_source_folder)
-
             if filterd_clips is None:
                 return
 
@@ -698,15 +781,26 @@ class ResolveGUI(QtWidgets.QWidget):
                 get_timelines(filtred_clips_dict)
                 self.media_pool.SetCurrentFolder(current_source_folder)
 
-            # Основные целевые клипы
+            # Логика для доработки
             if self.render_preset.currentText() == "MXF_AVID_HD_Render":
                 clips_dict = {"1920x1080": cur_bin_items_list}
             else:
                 clips_dict = get_sep_resolution_list(cur_bin_items_list)
 
             new_timelines = get_timelines(clips_dict)
+
+            if new_timelines is None:
+                self.thread.error_signal.emit("Не удалось создать ни одного таймлайна.")
+                return
+            
             render_queue = get_render_list(new_timelines, folder_name)
-            start_render(render_queue)
+            if render_queue is None:
+                return
+
+            start_render_var = start_render(render_queue)
+            if not start_render_var:
+                self.thread.error_signal.emit("Ошибка запуска рендера")
+                return
 
         self.thread.success_signal.emit()
 
