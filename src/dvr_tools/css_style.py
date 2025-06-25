@@ -3,6 +3,7 @@ import os
 def apply_style(app):
     font_family = "Segoe UI"  # Современный системный шрифт
     ICON_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "hub", "ui", "arrow_ico_white.png")
+    ICON_PATH = os.path.abspath(ICON_PATH).replace("\\", "/")
     app.setStyleSheet(f"""
         QWidget {{
             background-color: #2b2b2b;
