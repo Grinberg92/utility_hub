@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QGr
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from ui.css_style import apply_style
-from dvr_tools.logger_config import get_logger
+from logger_config import get_logger
 
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "src")
 ICON_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ui", "icon.png")
