@@ -1,6 +1,8 @@
+import os 
+
 def apply_style(app):
     font_family = "Segoe UI"  # Современный системный шрифт
-
+    ICON_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "hub", "ui", "arrow_ico_white.png")
     app.setStyleSheet(f"""
         QWidget {{
             background-color: #2b2b2b;
@@ -27,6 +29,14 @@ def apply_style(app):
         QComboBox::drop-down {{
             border: none;
             background-color: #3c3f41;
+        }}
+
+        QComboBox::down-arrow {{
+            image: url("{ICON_PATH}");
+            width: 12px;
+            height: 12px;
+            margin-right: 15px;
+            background: transparent;
         }}
 
         QGroupBox {{
@@ -155,7 +165,7 @@ def apply_style(app):
 
         QScrollBar::add-line:vertical,
         QScrollBar::sub-line:vertical {{
-            height: 0px;
+            height: 0px;a
         }}
 
         QProgressBar {{
