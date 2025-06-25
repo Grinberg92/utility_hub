@@ -302,14 +302,14 @@ class ResolveGUI(QtWidgets.QWidget):
 
         """Метод получения пресета проекта"""
 
-        project_preset_list = [preset["Name"] for preset in self.project.GetPresetList()]
+        project_preset_list = [preset["Name"] for preset in self.project.GetPresetList()][3:] # Отрезаем системные пресеты
         self.project_preset.addItems(project_preset_list)
 
     def get_render_preset_list(self):
 
         """Метод получения пресета рендера"""
 
-        render_presets_list = [preset for preset in self.project.GetRenderPresetList()]
+        render_presets_list = [preset for preset in self.project.GetRenderPresetList()][31:] # Отрезаем системные пресеты
         self.render_preset.addItems(render_presets_list)
 
     def select_folder(self):
