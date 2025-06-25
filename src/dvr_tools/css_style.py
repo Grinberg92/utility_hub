@@ -9,7 +9,7 @@ def apply_style(app):
             background-color: #2b2b2b;
             color: #dcdcdc;
             font-family: "{font_family}";
-            font-size: 10.5pt;
+            font-size: 9.5pt;
         }}
 
         QLineEdit, QComboBox, QTextEdit {{
