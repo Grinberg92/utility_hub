@@ -93,7 +93,7 @@ class ResolveGUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Proxy Render")
-        self.resize(500, 500)
+        self.resize(550, 500)
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint)
 
         # Глобальные переменные
@@ -169,6 +169,7 @@ class ResolveGUI(QtWidgets.QWidget):
         # Logic group
         logic_group = QtWidgets.QGroupBox("Logic")
         logic_group.setFixedHeight(70)
+        logic_group.setFixedWidth(300)
         logic_layout = QtWidgets.QHBoxLayout()
 
         vbox1 = QtWidgets.QVBoxLayout()
@@ -192,8 +193,7 @@ class ResolveGUI(QtWidgets.QWidget):
         logic_layout.addStretch()
 
         logic_group.setLayout(logic_layout)
-        layout.addWidget(logic_group)
-
+        layout.addWidget(logic_group, alignment=QtCore.Qt.AlignHCenter)
 
         # Presets group 
         presets_group = QtWidgets.QGroupBox("Presets")
@@ -232,9 +232,9 @@ class ResolveGUI(QtWidgets.QWidget):
 
         # Advanced
         adv_group = QtWidgets.QGroupBox("Advanced Group")
+        adv_group.setFixedHeight(100)
         adv_main_layout = QtWidgets.QVBoxLayout()
 
-        # Первая строка 
         row1_layout = QtWidgets.QHBoxLayout()
         self.set_burn_in_checkbox.setChecked(True)
         row1_layout.addWidget(self.set_burn_in_checkbox)
@@ -244,12 +244,10 @@ class ResolveGUI(QtWidgets.QWidget):
         row1_layout.addWidget(self.ocf_folders_list)
         row1_layout.addStretch()
 
-        # Вторая строка
         row2_layout = QtWidgets.QHBoxLayout()
         self.auto_sync_checkbox.setChecked(False)
         row2_layout.addWidget(self.auto_sync_checkbox)
         row2_layout.addStretch()
-
 
         adv_main_layout.addLayout(row1_layout)
         adv_main_layout.addLayout(row2_layout)
