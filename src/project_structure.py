@@ -229,7 +229,6 @@ class MainWindow(QWidget):
             self.avid_path_label.setText(path)
         else:
             self.avid_selected_path = None
-            self.avid_path_label.setText("Не выбран")
 
     def setup_connections(self):
         self.explorer_radio.toggled.connect(self.update_ui)
