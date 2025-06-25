@@ -7,7 +7,7 @@ import DaVinciResolveScript as dvr
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox
+    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
@@ -49,24 +49,27 @@ class DvrRenderApp(QWidget):
         layout = QVBoxLayout()
 
         # --- Разрешение ---
+        res_group = QGroupBox("Resolution")
+        res_group.setFixedHeight(70)
         res_layout = QHBoxLayout()
         res_layout.addStretch()
         self.width_input = QLineEdit("1998")
         self.width_input.setFixedWidth(60)
         self.height_input = QLineEdit("1080")
         self.height_input.setFixedWidth(60)
-        res_layout.addWidget(QLabel("Resolution:"))
         res_layout.addWidget(self.width_input)
         res_layout.addWidget(QLabel("x"))
         res_layout.addWidget(self.height_input)
         res_layout.addStretch()
-        layout.addLayout(res_layout)
+        res_group.setLayout(res_layout)
+        layout.addWidget(res_group, alignment=Qt.AlignHCenter)
 
         # --- Пресет + захлест ---
         preset_layout = QHBoxLayout()
         self.preset_combo = QComboBox()
         self.preset_combo.addItems(["GRN_EXR_1998x1054", "PRESET_A", "PRESET_B"])
         self.preset_combo.setCurrentText("GRN_EXR_1998x1054")
+        self.preset_combo.setFixedWidth(170)
         self.handle_input = QLineEdit("3")
         self.handle_input.setFixedWidth(40)
         preset_layout.addWidget(QLabel("Project preset:"))

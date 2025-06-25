@@ -157,14 +157,17 @@ class ResolveGUI(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(self)
 
         # Resolution
+        res_group = QtWidgets.QGroupBox("Resolution")
+        res_group.setFixedWidth(150)
+        res_group.setFixedHeight(70)
         res_layout = QtWidgets.QHBoxLayout()
         res_layout.addStretch()
-        res_layout.addWidget(QtWidgets.QLabel("Resolution:"))
         res_layout.addWidget(self.glob_width)
         res_layout.addWidget(QtWidgets.QLabel("x"))
         res_layout.addWidget(self.glob_height)
         res_layout.addStretch()
-        layout.addLayout(res_layout)
+        res_group.setLayout(res_layout)
+        layout.addWidget(res_group, alignment=QtCore.Qt.AlignHCenter)
 
         # Logic group
         logic_group = QtWidgets.QGroupBox("Logic")
@@ -238,9 +241,9 @@ class ResolveGUI(QtWidgets.QWidget):
         row1_layout = QtWidgets.QHBoxLayout()
         self.set_burn_in_checkbox.setChecked(True)
         row1_layout.addWidget(self.set_burn_in_checkbox)
-        row1_layout.addSpacing(20)
+        row1_layout.addSpacing(40)
         row1_layout.addWidget(self.add_mov_mp4)
-        row1_layout.addSpacing(20)
+        row1_layout.addSpacing(40)
         row1_layout.addWidget(self.ocf_folders_list)
         row1_layout.addStretch()
 

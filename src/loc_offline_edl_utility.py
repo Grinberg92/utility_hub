@@ -34,6 +34,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         locator_label = QtWidgets.QLabel("Marker name from:")
         self.locator_from_combo = QtWidgets.QComboBox()
+        self.locator_from_combo.setFixedWidth(70)
         self.locator_from_combo.addItems(["name", "note"])
 
         fps_layout.addWidget(fps_label)

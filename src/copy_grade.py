@@ -114,6 +114,7 @@ class ColorGradeApplyApp(QMainWindow):
         self.source_track_input = QLineEdit()
         self.source_track_input.setFixedWidth(40)
         track_layout.addWidget(self.source_track_input)
+        track_layout.addSpacing(20)
 
         track_layout.addWidget(QLabel("Target Track:"))
         self.target_track_input = QLineEdit()
