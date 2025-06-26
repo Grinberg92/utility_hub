@@ -121,6 +121,7 @@ class ResolveGUI(QtWidgets.QWidget):
         self.set_burn_in_checkbox = QtWidgets.QCheckBox("Set Burn-in")
         self.add_mov_mp4 = QtWidgets.QCheckBox("Add .mov, .mp4, .jpg")
         self.auto_sync_checkbox = QtWidgets.QCheckBox("Sync Audio")
+        self.create_sound_folder = QtWidgets.QCheckBox("Create 'SOUND' folder")
 
         self.burn_in_list = CheckableComboBox()
 
@@ -250,6 +251,8 @@ class ResolveGUI(QtWidgets.QWidget):
         row2_layout = QtWidgets.QHBoxLayout()
         self.auto_sync_checkbox.setChecked(False)
         row2_layout.addWidget(self.auto_sync_checkbox)
+        row2_layout.addSpacing(40)
+        row2_layout.addWidget(self.create_sound_folder)
         row2_layout.addStretch()
 
         adv_main_layout.addLayout(row1_layout)
@@ -406,7 +409,8 @@ class ResolveGUI(QtWidgets.QWidget):
                       f"LUT file: {self.lut_file.currentText()}", f"ArriCDLandLUT: {self.apply_arricdl_lut.isChecked()}", 
                       f"Set FPS: {self.set_fps_checkbox.isChecked()}", f"FPS: {self.project_fps_value.text()}", 
                       f"Set Burn in: {self.set_burn_in_checkbox.isChecked()}", f"Add .mov, .mp4, .jpg: {self.add_mov_mp4.isChecked()}",
-                      f"Folder: {self.ocf_folders_list.checked_items()}", f"Sync Audio: {self.auto_sync_checkbox.isChecked()}")))
+                      f"Folder: {self.ocf_folders_list.checked_items()}", f"Sync Audio: {self.auto_sync_checkbox.isChecked()}",
+                      f"Create 'SOUND' folder: {self.create_sound_folder.isChecked()}")))
         
         # Вызываем основной процесс рендера
         self.thread = RenderThread(
@@ -508,6 +512,22 @@ class ResolveGUI(QtWidgets.QWidget):
             
             return clips_to_move
         
+        def set_sound_folder(current_folder_list, current_folder)-> None:
+
+            """Функция создает фолдер SOUND и переносит в него звук из текущего фолдера"""
+
+            sound_list = [i for i in current_folder_list if i.GetClipProperty("Type") == "Audio"]
+
+            base_folder = next((f for f in current_folder.GetSubFolderList() if f.GetName() == "SOUND"), None)
+            if not base_folder:
+                base_folder = self.media_pool.AddSubFolder(current_folder, "SOUND")
+                if not base_folder:
+                    self.thread.error_signal.emit("Не удалось создать папку 'SOUND'.")
+                    return None
+
+            self.media_pool.MoveClips(sound_list, base_folder)
+            self.media_pool.SetCurrentFolder(current_folder) 
+        
         def set_project_fps(clip)-> None:
 
             "Функция устанавливает проектный FPS"
@@ -529,12 +549,15 @@ class ResolveGUI(QtWidgets.QWidget):
         def get_bin_items()-> list:
 
             """Функция получает mediapoolitems из текущего фолдера"""
+            """Опционально синхрит звук в текущем фолдере"""
 
             cur_bin_items_list = []
             curr_source_folder = self.media_pool.GetCurrentFolder()
             curr_source_folder_clips_list = curr_source_folder.GetClipList()
+
             if self.auto_sync_checkbox.isChecked():
                 auto_sync_audio(curr_source_folder_clips_list)
+
             for clip in curr_source_folder_clips_list:
                 name = clip.GetName().lower()
                 if "." in name:
@@ -793,6 +816,9 @@ class ResolveGUI(QtWidgets.QWidget):
                 logger.debug(f"Начало работы с фолдером {folder_obj.GetName()}")
                 current_source_folder = self.media_pool.SetCurrentFolder(folder_obj)
             cur_bin_items_list, current_source_folder = get_bin_items()
+
+            if self.create_sound_folder.isChecked():
+                set_sound_folder(cur_bin_items_list, current_source_folder)
 
             if self.add_mov_mp4.isChecked():
                 # Если флаг активен — обрабатываем ВСЕ расширения в одном потоке
