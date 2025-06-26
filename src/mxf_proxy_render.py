@@ -525,6 +525,7 @@ class ResolveGUI(QtWidgets.QWidget):
                     self.thread.error_signal.emit("Не удалось создать папку 'SOUND'.")
                     return None
 
+            logger.debug("Звук перенесен в папку 'SOUND'")
             self.media_pool.MoveClips(sound_list, base_folder)
             self.media_pool.SetCurrentFolder(current_folder) 
         
