@@ -831,7 +831,12 @@ class ResolveGUI(QtWidgets.QWidget):
                     logger.debug("Не удалось создать ни одного таймлайна.")
                     return
                 render_queue = get_render_list(new_timelines, folder_name)
-                start_render(render_queue)
+                if render_queue is None:
+                    return
+                start_render_var = start_render(render_queue)
+                if not start_render_var:
+                    self.thread.error_signal.emit("Ошибка запуска рендера")
+                    return
                 continue  # Пропускаем остальной блок
 
             # Если флаг НЕ активен — отдельно обрабатываем .mov, .mp4, .jpg
