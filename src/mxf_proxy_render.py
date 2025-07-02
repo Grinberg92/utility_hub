@@ -661,6 +661,7 @@ class ResolveGUI(QtWidgets.QWidget):
                             
                         if not timeline:
                             logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {self.timeline_preset_path}")
+                            return None
                         
                         # Установка разрешения на таймлайн (таймлайн импортируется без привязки к проектному разрешению)
                         resolution = get_resolution(timeline_name)
