@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import DaVinciResolveScript as dvr
+from datetime import date
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel,
     QComboBox, QLineEdit, QPushButton, QSpinBox, QGroupBox,
@@ -356,7 +357,7 @@ class MainWindow(QWidget):
                 project.OpenFolder(reels_folder)
 
                 for i in range(1, reels_number + 1):
-                    new_project = project.CreateProject(f"{project_name.upper()}_CC_REEL_0{i}")
+                    new_project = project.CreateProject(f"{project_name.upper()}_CC_REEL_0{i}_{date.today().strftime('%Y%m%d')}")
                     current_project = resolve.GetProjectManager().GetCurrentProject()
                     media_pool = current_project.GetMediaPool()
                     root_folder = media_pool.GetRootFolder()
