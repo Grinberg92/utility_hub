@@ -31,24 +31,23 @@ class Constant:
     log_path = r"003_transcode_to_vfx/projects/log_file.log"
     
 
-@dataclass
-class EDLEntry:
-    """
-    Класс контейнер данных EDL
-    """
-    edl_record_id: str
-    edl_shot_name: str
-    edl_track_type: str
-    edl_transition: str
-    edl_source_in: str
-    edl_source_out: str
-    edl_record_in: str
-    edl_record_out: str 
-
 class EDLParser:
     """
     Класс обработчик EDL
     """
+    @dataclass
+    class EDLEntry:
+        """
+        Класс контейнер данных EDL
+        """
+        edl_record_id: str
+        edl_shot_name: str
+        edl_track_type: str
+        edl_transition: str
+        edl_source_in: str
+        edl_source_out: str
+        edl_record_in: str
+        edl_record_out: str 
 
     def __init__(self, edl_path):
         self.edl_path = edl_path
@@ -157,9 +156,9 @@ class OTIOCreator:
         sequence_frames_numbers_list = [int(re.search(self.frame_pattern, i).group(0).split(".")[0]) for i in frames_list]  
         if not all(sequence_frames_numbers_list[i] + 1 == sequence_frames_numbers_list[i + 1] 
                    for i in range(len(sequence_frames_numbers_list) - 1)):
-            massage = f"Секвенция {sequence_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
-            self.send_warning(massage)
-            logger.warning(massage)
+            message = f"Секвенция {sequence_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
+            self.send_warning(message)
+            logger.warning(message)
             return False
         return True
     
@@ -731,7 +730,9 @@ class SequenceFrames:
 
 class OTIOWorker(QThread):
     """
-    Поток запускающий основную логику
+    Класс работы с логикой в отдельном потоке
+
+    :param timeline_objects: Количество объектов на OTIO таймлайне
     """
     error_signal = pyqtSignal(str)
     success_signal = pyqtSignal(str)
@@ -751,7 +752,7 @@ class OTIOWorker(QThread):
             logic.send_warning = lambda msg: self.warnings.emit(msg)
             otio_timeline, timeline_objects = logic.run()
             if not timeline_objects:
-                self.warning_signal.emit('Отсутствуют клипы для данной таймлинии')
+                self.warning_signal.emit('Отсутствуют шоты для данной таймлинии')
                 return
 
             otio.adapters.write_to_file(otio_timeline, self.otio_path)
@@ -766,7 +767,7 @@ class ConformCheckerMixin:
     """
     def count_otio_clips(self, otio_path)-> int:
         """
-        Читает OTIO и получает количество видео-объектов на таймлайне(не учитывая версии шотов)
+        Читает OTIO и получает количество видео-объектов(шотов) на таймлайне(не учитывая версии шотов)
         """
         try:
             timeline = otio.adapters.read_from_file(otio_path)
@@ -782,20 +783,23 @@ class ConformCheckerMixin:
             logger.warning(f"Ошибка при чтении OTIO: {e}")
             return 0
 
-    def count_clips_on_disk(self, shots_folder, extension):
+    def count_clips_on_storage(self, shots_folder, extension)-> int:
         """
-        Сканирует папку на хранилище с секвенциями, учавтсвующими в сборке OTIO, и получает их количество
+        Сканирует папку на хранилище с шотами (секвенциями или видео клипами), 
+        участвующими в сборке OTIO, и получает их количество
         """
         count = 0 
         for dirpath, _, files in os.walk(shots_folder):
-            # Проверяем, есть ли хотя бы один .exr файл в текущей папке
-            if any(file.lower().endswith(f'.{extension.lower()}') for file in files):
-                if extension.lower() not in ("mov", "mp4"):
-                    logger.debug()
+            logger.debug(files)
+            # Проверяем секвенцию. Если есть хотя бы 1 фрейм - плюсуем счетчик
+            if extension.lower() not in ("mov", "mp4") and any(file.lower().endswith(f'.{extension.lower()}') for file in files):
                     count += 1  
-                    continue  
-                else:
-                    count += 1
+                    continue
+            # Проверяем видео клипы
+            else:  
+                for file in files:
+                    if file.lower().endswith(f'.{extension.lower()}'):
+                        count += 1  
 
         return count
 
@@ -803,26 +807,26 @@ class ConfigValidator:
     """
     Класс собирает и валидирует пользовательские данные
     """
-    def __init__(self, view):
-        self.view = view
+    def __init__(self, gui):
+        self.gui = gui
         self.errors = []
 
     def collect_config(self) -> dict:
         """
         Собирает пользовательские данные из GUI
         """
-        selected_radio = self.view.logic_mode_group.checkedButton()
+        selected_radio = self.gui.logic_mode_group.checkedButton()
         handles_logic = selected_radio.property("mode")
         return {
-            "edl_path": self.view.edl_input.text().strip(),
-            "shots_folder": self.view.exr_input.text().strip(),
-            "otio_path": self.view.otio_input.text().strip(),
-            "track_in": self.view.track_in_input.text().strip(),
-            "track_out": self.view.track_out_input.text().strip(),
-            "extension": self.view.format_menu.currentText().lower(),
-            "project": self.view.project_menu.currentText(),
-            "ignore_dublicates": self.view.no_dublicates.isChecked(),
-            "frame_rate": self.view.frame_rate,
+            "edl_path": self.gui.edl_input.text().strip(),
+            "shots_folder": self.gui.shots_input.text().strip(),
+            "otio_path": self.gui.otio_input.text().strip(),
+            "track_in": self.gui.track_in_input.text().strip(),
+            "track_out": self.gui.track_out_input.text().strip(),
+            "extension": self.gui.format_menu.currentText().lower(),
+            "project": self.gui.project_menu.currentText(),
+            "ignore_dublicates": self.gui.no_dublicates.isChecked(),
+            "frame_rate": self.gui.frame_rate,
             "handles_logic": handles_logic
         }
 
@@ -835,7 +839,7 @@ class ConfigValidator:
         if not user_config["edl_path"]:
             self.errors.append("Укажите путь к файлу EDL")
         if not user_config["shots_folder"]:
-            self.errors.append("Укажите путь к папке с EXR")
+            self.errors.append("Укажите путь к папке с шотами")
         if not user_config["otio_path"]:
             self.errors.append("Укажите путь к папке для сохранения OTIO")
 
@@ -844,7 +848,6 @@ class ConfigValidator:
             int(user_config["track_out"])
         except ValueError:
             self.errors.append("Значения должны быть целыми числами")
-
         return not self.errors
 
     def get_errors(self) -> list:
@@ -996,8 +999,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
         shots_path_layout = QHBoxLayout()
         shots_path_layout.addWidget(QLabel("Shots folder:"))
         shots_path_layout.addSpacing(10)
-        self.exr_input = QLineEdit()
-        shots_path_layout.addWidget(self.exr_input)
+        self.shots_input = QLineEdit()
+        shots_path_layout.addWidget(self.shots_input)
         exr_button = QPushButton("Choose")
         exr_button.clicked.connect(self.select_exr_folder)
         shots_path_layout.addWidget(exr_button)
@@ -1033,7 +1036,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def is_OS(self, path):
         '''
-        Функция составления корректного пути в зависимости от платформы
+        Метод конвертирует путь под платформу
+
+        :return result_path: Конвертированный под платформу путь
         '''
         platform = {"windows": "J:/", 
                     "darwin": "/Volumes/share2/"}[sys.platform]
@@ -1078,7 +1083,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
             self.otio_path = path
 
     def start(self):
-        
+        """
+        Запуск основной логики
+        """
         self.validator = ConfigValidator(self)
         self.user_config = self.validator.collect_config()
         self.resolve_shots_list = get_resolve_shot_list(
@@ -1101,48 +1108,61 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.main_process.warnings.connect(self.appent_warning_field)
         self.main_process.start()
 
-    def appent_warning_field(self, massage):
+    def appent_warning_field(self, message):
+        """
+        Добавляет уведомления и ошибки в warning_field через сигналы
+        """
         if self.warning_field.toPlainText().strip().startswith("Здесь будут показаны предупреждения программы."):
             self.warning_field.clear()
-        self.warning_field.append(massage)
+        self.warning_field.append(message)
 
     def on_error_signal(self, message):
         QMessageBox.critical(self, "Error", message)
+        logger.exception(message)
         return
 
-    def on_success_signal(self, massage):
-        QMessageBox.information(self, "Success", massage)
-        logger.info(massage)
+    def on_success_signal(self, message):
+        QMessageBox.information(self, "Success", message)
+        logger.info(message)
         self.update_result_label()
 
-    def on_warning_signal(self, massage):
-        QMessageBox.warning(self, "Warning", massage)
-        logger.warning(massage)
+    def on_warning_signal(self, message):
+        QMessageBox.warning(self, "Warning", message)
+        logger.warning(message)
 
-    def on_info_signal(self, massage):
-        QMessageBox.information(self, "Info", massage)
-        logger.info(massage)
+    def on_info_signal(self, message):
+        QMessageBox.information(self, "Info", message)
+        logger.info(message)
 
     def open_logs(self):
-            log_file_path = self.is_OS(Constant.log_path)
+        """
+        Метод открывает лог-файл
+        """
+        log_file_path = self.is_OS(Constant.log_path)
 
-            try:
-                if sys.platform == 'Windows': 
-                    os.startfile(log_file_path)
-                else:  # Linux и другие Unix-подобные системы
-                    subprocess.Popen(['open', log_file_path])
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Ошибка при открытии файла логов: {e}")
+        try:
+            if sys.platform == 'Windows': 
+                os.startfile(log_file_path)
+            else: 
+                subprocess.Popen(['open', log_file_path])
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Ошибка при открытии файла логов: {e}")
 
     def update_result_label(self):
+        """
+        Метод создает и обновляет данные результата сборки
+
+        :param self.otio_counter: Количетсво шотов на таймлайне OTIO
+        :param self.folder_counter: Общее количество шотов в целевой папке folder_path
+        """
         otio_path = self.otio_input.text().strip()
-        folder_path = self.exr_input.text().strip()
+        shots_path = self.shots_input.text().strip()
         extension = self.format_menu.currentText()
 
         self.otio_counter += self.count_otio_clips(otio_path)
-        self.folder_counter = self.count_clips_on_disk(folder_path, extension)
+        self.in_folder_counter = self.count_clips_on_storage(shots_path, extension)
 
-        self.result_label.setText(f'Обработано {self.otio_counter} из {self.folder_counter} шотов')
+        self.result_label.setText(f'Обработано {self.otio_counter} из {self.in_folder_counter} шотов')
 
 
 if __name__ == "__main__":
