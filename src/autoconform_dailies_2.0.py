@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QTextEdit, QComboBox, QScrollBar, QFileDialog, QCheckBox, QFrame, QSizePolicy, QMessageBox
+    QLineEdit, QTextEdit, QComboBox, QScrollBar, QFileDialog, QCheckBox, QFrame, QSizePolicy, QMessageBox,
+    QGroupBox, QRadioButton, QButtonGroup
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import os
@@ -14,9 +15,11 @@ from dataclasses import dataclass
 import opentimelineio as otio
 import DaVinciResolveScript as dvr
 from collections import Counter
+from pymediainfo import MediaInfo
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_timeline_shots_names import get_resolve_shot_list
 from dvr_tools.css_style import apply_style
+
 
 logger = get_logger(__file__)
 
@@ -74,7 +77,7 @@ class EDLParser:
 
 class OTIOCreator:
     """
-    Основная логика
+    Класс создания OTIO таймлайна
     """
     def __init__(self, user_config, resolve_shot_list):
         self.user_config = user_config
@@ -84,13 +87,20 @@ class OTIOCreator:
         self.frame_pattern = r'(\d+)(?:\.|_)\w+$' # Паттерн на номера секвении [1001-...]
         self.main_shot_pattern = r'(\.|_)\d+\.\w+$'
 
-    def get_exr_sequence_list(self, path):
+    def get_shots_sequence_list(self, path):
         """
-        Получем список путей к подпапкам
+        Получем список путей к подпапкам секвенций EXR, JPG (они же имена шотов)
         :param path: Входящий путь из GUI 
         """
         return  [os.path.join(root, folder) for root, folders, _ in os.walk(path) for folder in folders]
-
+    
+    def get_shots_movie_list(self, path):
+        """
+        Получем список путей к видео клипам MOV, MP4
+        :param path: Входящий путь из GUI 
+        """
+        return [os.path.join(root, file) for root, _, files in os.walk(path) for file in files]
+    
     def is_drop_frames(self, exr_files, target_folder):
         """
         Функция проверки EXR-секвенции на битые кадры.
@@ -165,12 +175,13 @@ class OTIOCreator:
         """
         return tc(self.frame_rate, frames=frames)
     
-    def get_frame_handles(self, src_duration, timeline_duration, start_frame):
+    def get_fixed_frame_handles(self, src_duration, timeline_duration, start_frame)-> int:
         """Функция определяет есть ли захлесты у шота.
         Если длина исходника больше длины продолжительности шота на таймлайне и равна 6(3 + 3 захлеста), 8 и 10,
         то прибавляем к стартовому фрейму захлест.
+
+        :param edl_src_start_frame: None по дефолту на случай если пересечения таймкодов нет
         """  
-        # Задаем None по дефолту на случай если искомый захлест не обнаружен
         otio_clip_start_frame = None
         if src_duration - timeline_duration == 6:
             otio_clip_start_frame = float(start_frame + 3)
@@ -179,18 +190,43 @@ class OTIOCreator:
         elif src_duration - timeline_duration == 10:
             otio_clip_start_frame = float(start_frame + 5)
         return otio_clip_start_frame
-        
-    def get_filtred_sequences_folder_by_shot_name(self, shot_name):
+    
+    def get_frame_handles_from_edl_in(self, edl_source_in, edl_source_out, source_in, source_out)-> int:
+        """Функция определяет вхождение сорс диапазона шота в таймлайн диапазон из EDL.
+        Если условие удовлетворяется - получаем стартовый таймкод из EDL и передаем в create_otio_timeline_object
+        для выставления этого значения в качестве начального таймкода клипа.
+
+        :param edl_src_start_frame: None по дефолту на случай если пересечения таймкодов нет
+        """  
+
+        edl_src_start_frame = None
+        edl_src_start_tc_in_frames = self.get_frame_from_timecode(edl_source_in)
+        edl_src_end_tc_in_frames = self.get_frame_from_timecode(edl_source_out)
+        if edl_src_start_tc_in_frames >= source_in and edl_src_end_tc_in_frames <= source_out:  
+            edl_src_start_frame = float(edl_src_start_tc_in_frames - 1)
+
+        return edl_src_start_frame
+    
+    def get_filtred_shots_list_by_mask(self, shot_name):
             """
-            Метод обходит папку с EXR секвенциями и отбирает только те, которые пересекаются с именем шота из EDL
-            :return: Список путей с фильтрованными по имени шота фолдерами(секвенциями)
+            Метод обходит папку с секвенциями или папку с видео клипами и отбирает только те, 
+            которые пересекаются с именем шота из EDL
+
+            :param shot_name: Имя шота из EDL
+
+            :return: Список путей с фильтрованными по имени шота фолдерами(секвенциями) или видео клипами
             """
             target_list = []
-            # Обход дерева каталогов
+
             for folder_path in self.shots_folders_list:
                 folder_name = os.path.basename(folder_path)
-                if folder_name.endswith(f".{self.clip_extension}") and re.search(shot_name.lower(), folder_name):  # Фильтр по названию
-                    target_list.append(folder_path)
+                if self.not_movie_extansion_bool:
+                    if re.search(shot_name.lower(), folder_name): 
+                        target_list.append(folder_path)
+                else:
+                    if folder_name.endswith(".mov") and re.search(shot_name.lower(), folder_name): 
+                        target_list.append(folder_path)
+
             return target_list
 
     def split_name(self, clip_name)-> tuple:
@@ -227,6 +263,48 @@ class OTIOCreator:
             video_track.append(gap)
 
             logger.info(f'GAP duration: {gap_duration}')
+
+    def create_otio_timeline_object_movie(self, sequence_settings, otio_clip_start_frame, track_index):
+        """
+        Функция добавления треков и gap объектов на таймлайн.
+        """
+        try:
+            video_track = self.otio_timeline.tracks[track_index]
+
+            # Распаковка метаданных шота и данных GAP
+            clip_duration = sequence_settings['source duration']
+            clip_path = sequence_settings['exr_path']
+            clip_name = sequence_settings['shot_name']
+            clip_start_frame = sequence_settings['source_in_tc']
+            timeline_duration = sequence_settings['timeline_duration']
+
+            # Логирование
+            debug_exr_info = f'Shot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}'
+            logger.debug(f'\n{debug_exr_info}')
+
+            # Создание ссылки на видеофайл
+            media_reference = otio.schema.ExternalReference(
+                target_url=clip_path,
+                available_range=otio.opentime.TimeRange(
+                    start_time=otio.opentime.RationalTime(clip_start_frame, self.frame_rate),
+                    duration=otio.opentime.RationalTime(clip_duration, self.frame_rate),
+                ),
+            )
+
+            # Создание клипа
+            clip = otio.schema.Clip(
+                name=clip_name,
+                media_reference=media_reference,
+                source_range=otio.opentime.TimeRange(
+                    start_time=otio.opentime.RationalTime(otio_clip_start_frame or 0, self.frame_rate),
+                    duration=otio.opentime.RationalTime(timeline_duration, self.frame_rate),
+                ),
+            )
+            # Добавление клипа на трек
+            video_track.append(clip)
+
+        except Exception as e:
+            logger.exception(f"Не удалось добавить на таймлайн секвенцию {clip_name}.") 
 
     def create_otio_timeline_object(self, sequence_settings, otio_clip_start_frame, track_index):
         """
@@ -335,7 +413,7 @@ class OTIOCreator:
         """
         Метод проверяет ошибки и проблемы в шоте
         """
-        if self.ignore_duplicates_bool:
+        if self.ignore_dublicates_bool:
             if self.is_duplicate(sequence.name, self.resolve_shot_list):
                 return False
 
@@ -355,21 +433,31 @@ class OTIOCreator:
         Проверяет секвенцию на ошибки
         """
         try:
-            filtred_sequences_paths = self.get_filtred_sequences_folder_by_shot_name(shot_name)
+            filtred_sequences_paths = self.get_filtred_shots_list_by_mask(shot_name)
             sequences_list = []
             for sequence_path in filtred_sequences_paths:
                 if not sequence_path:
                     return []
                 
-                sequence = SequenceFrames(sequence_path, self.clip_extension)
-                if not sequence:
-                    continue
+                if self.not_movie_extansion_bool:
+                    sequence = SequenceFrames(sequence_path, self.clip_extension)
 
-                validate_bool = self.validate_shot(sequence)
-                if not validate_bool:
-                    continue
+                    if not sequence:
+                        continue
 
-                sequences_list.append(sequence)
+                    validate_bool = self.validate_shot(sequence)
+                    if not validate_bool:
+                        continue
+
+                    sequences_list.append(sequence)
+                
+                else:
+                    sequence = MovieObject(sequence_path)
+
+                    if not sequence:
+                        continue
+
+                    sequences_list.append(sequence)
 
             return sequences_list
         
@@ -382,13 +470,19 @@ class OTIOCreator:
     def run(self):
         """
         Основной метод логики
-        :param: edl_record_out_list - промежуточные значения edl_record_out для вычисления GAP на каждом треке
+
+        :param edl_record_out_list: - промежуточные значения edl_record_out для вычисления GAP на каждом треке
         """
         self.edl_path = self.user_config["edl_path"]
         self.frame_rate = self.user_config["frame_rate"]
-        self.shots_folders_list = self.get_exr_sequence_list(self.user_config["shots_folder"])
-        self.ignore_duplicates_bool = self.user_config["ignore_duplicates"]
+        self.ignore_dublicates_bool = self.user_config["ignore_dublicates"]
         self.clip_extension = self.user_config["extension"]
+        self.handles_logic = self.user_config["handles_logic"]
+        self.not_movie_extansion_bool = self.clip_extension not in ("mov", "mp4")
+        if self.not_movie_extansion_bool: 
+            self.shots_folders_list = self.get_shots_sequence_list(self.user_config["shots_folder"])
+        else:
+            self.shots_folders_list = self.get_shots_movie_list(self.user_config["shots_folder"]) 
 
         edl_data = EDLParser(self.edl_path)
 
@@ -417,8 +511,11 @@ class OTIOCreator:
                     timeline_duration = self.get_frame_from_timecode(edl_record_out) - self.get_frame_from_timecode(edl_record_in)
 
                     # Нахождение страртового кадра для создания OTIO клипа и выставления захлеста
-                    otio_clip_start_frame = self.get_frame_handles(source_duration, timeline_duration, source_in_tc)
-
+                    if self.handles_logic == "fixed":
+                        otio_clip_start_frame = self.get_fixed_frame_handles(source_duration, timeline_duration, source_in_tc)
+                    elif self.handles_logic == "from_edl":
+                        otio_clip_start_frame = self.get_frame_handles_from_edl_in(edl_source_in, 
+                                                                                   edl_source_out, source_in_tc, source_out_tc)
                     # Вычисление GAP для клипов
                     gap_duration = self.get_gap_value(self.frame_rate, edl_record_in, timeline_in_tc, edl_record_out_list, track_ind)
 
@@ -439,8 +536,10 @@ class OTIOCreator:
                         'timeline_duration': timeline_duration,
                         'track_ind': track_ind
                                             }
-
-                    self.create_otio_timeline_object(sequence_settings, otio_clip_start_frame, track_ind)
+                    if self.not_movie_extansion_bool:
+                        self.create_otio_timeline_object(sequence_settings, otio_clip_start_frame, track_ind)
+                    else:
+                        self.create_otio_timeline_object_movie(sequence_settings, otio_clip_start_frame, track_ind)
 
                     edl_record_out_list[track_ind] = edl_record_out
 
@@ -450,13 +549,74 @@ class OTIOCreator:
         except Exception as e:
             logger.exception(f"Сбой в работе программы. Не удалось сформировать OTIO файл: {e}") 
 
+class MovieObject:
+    """
+    Класс-объект видео клипа .mov или .mp4
+    """
+    def __init__(self, path, frame_pattern=None):
+        self.path = path
+        self.frame_pattern = Constant.frame_pattern
+
+    @property
+    def name(self)-> str:
+        """
+        Получение имени клипа
+        """
+        return os.path.basename(self.path)
+    
+    def get_duration(self, frame_rate:int)-> int:
+        """
+        Получение длительности видео клипа
+        """
+        try:
+            media_info = MediaInfo.parse(self.path)
+
+            for track in media_info.tracks:
+                if track.track_type == "Video":
+                    # Длительность видео в секундах
+                    duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
+                    duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
+                    # Переводим в целое количество кадров
+                    duration = int(duration_frames) - 1 #-1 для корректного восприятия в ДВР
+                    return duration
+                
+        except Exception as e:
+            print(f"Ошибка при получении длительности видео: {e}")
+            return None
+        
+    def extract_timecode(self, frame_rate)-> tuple:
+        """
+        Получение стартового таймкода и длительности видео клипа
+        """
+        try:
+            media_info = MediaInfo.parse(self.path)
+            # Получаем длительность и начальный таймкод видео
+            for track in media_info.tracks:
+                if track.track_type == "Video":
+                    # Длительность видео в секундах
+                    duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
+                    duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
+                    duration = int(duration_frames) - 1 # -1 для корректного восприятия в ДВР
+
+                    # Извлекаем начальный таймкод
+                    if track.other_delay:
+                        in_timecode = tc(frame_rate, track.other_delay[4]).frames - 1 # -1 для корректного восприятия в ДВР
+                        in_timecode += 1 # +1 - отрезаем первый кадр слейта
+
+                    out_timecode = in_timecode + duration
+                    return (in_timecode, out_timecode, duration)
+            
+        except Exception as e:
+            print(f"Ошибка при получении длительности видео: {e}")
+            return (None, None, None)
+
 class SequenceFrames:
     """
     Класс-объект секвенции EXR или JPG
     """
-    def __init__(self, path_to_sequence, extention, frame_pattern=None):
+    def __init__(self, path_to_sequence, extension, frame_pattern=None):
         self.path = path_to_sequence
-        self.extension = extention
+        self.extension = extension
         self.frame_pattern = Constant.frame_pattern
 
     def __repr__(self):
@@ -630,8 +790,12 @@ class ConformCheckerMixin:
         for dirpath, _, files in os.walk(shots_folder):
             # Проверяем, есть ли хотя бы один .exr файл в текущей папке
             if any(file.lower().endswith(f'.{extension.lower()}') for file in files):
-                count += 1  
-                continue  
+                if extension.lower() not in ("mov", "mp4"):
+                    logger.debug()
+                    count += 1  
+                    continue  
+                else:
+                    count += 1
 
         return count
 
@@ -647,16 +811,19 @@ class ConfigValidator:
         """
         Собирает пользовательские данные из GUI
         """
+        selected_radio = self.view.logic_mode_group.checkedButton()
+        handles_logic = selected_radio.property("mode")
         return {
             "edl_path": self.view.edl_input.text().strip(),
             "shots_folder": self.view.exr_input.text().strip(),
             "otio_path": self.view.otio_input.text().strip(),
             "track_in": self.view.track_in_input.text().strip(),
             "track_out": self.view.track_out_input.text().strip(),
-            "extension": self.view.format_menu.currentText(),
+            "extension": self.view.format_menu.currentText().lower(),
             "project": self.view.project_menu.currentText(),
-            "ignore_duplicates": self.view.no_duplicates.isChecked(),
-            "frame_rate": self.view.frame_rate
+            "ignore_dublicates": self.view.no_dublicates.isChecked(),
+            "frame_rate": self.view.frame_rate,
+            "handles_logic": handles_logic
         }
 
     def validate(self, user_config: dict) -> bool:
@@ -690,6 +857,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         super().__init__()
         self.setWindowTitle("Autoconform Dailies")
         self.resize(640, 720)
+        self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
         self.frame_rate = 24
         self.edl_path = ""
@@ -706,6 +874,13 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.projects = self.get_project()
         self.selected_project = self.projects[0] if self.projects else ""
 
+        self.logic_mode_fixed = QRadioButton()
+        self.logic_mode_fixed.setChecked(True) 
+        self.logic_mode_fixed.setProperty("mode", "fixed")
+
+        self.logic_mode_from_edl_in = QRadioButton()
+        self.logic_mode_from_edl_in.setProperty("mode", "from_edl")
+
         self.init_ui()
 
     def init_ui(self):
@@ -717,45 +892,94 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.warning_field.setPlainText("Здесь будут показаны предупреждения программы.\n")
         main_layout.addWidget(self.warning_field)
 
-        # Проект
-        project_label = QLabel("Choose project:")
-        main_layout.addWidget(project_label)
+        # Логика
+        logic_group = QGroupBox("Handles logic")
+        logic_group.setFixedHeight(70)
+        logic_group.setFixedWidth(300)
+        logic_layout = QHBoxLayout()
 
+        self.logic_mode_group = QButtonGroup(self)
+        self.logic_mode_group.addButton(self.logic_mode_fixed)
+        self.logic_mode_group.addButton(self.logic_mode_from_edl_in)
+
+        vbox1 = QVBoxLayout()
+        fixed_label = QLabel("Fixed")
+        fixed_label.setAlignment(Qt.AlignHCenter)
+        vbox1.addWidget(self.logic_mode_fixed, alignment=Qt.AlignHCenter)
+        vbox1.addWidget(fixed_label)
+
+        vbox2 = QVBoxLayout()
+        edl_in_label = QLabel("From EDL in")
+        edl_in_label.setAlignment(Qt.AlignHCenter)
+        vbox2.addWidget(self.logic_mode_from_edl_in, alignment=Qt.AlignHCenter)
+        vbox2.addWidget(edl_in_label)
+
+        logic_layout.addStretch()
+        logic_layout.addLayout(vbox1)
+        logic_layout.addSpacing(60)
+        logic_layout.addLayout(vbox2)
+        logic_layout.addStretch()
+
+        logic_group.setLayout(logic_layout)
+        main_layout.addWidget(logic_group, alignment=Qt.AlignHCenter)
+
+        # 
+        settings_group = QGroupBox("Settings")
+        settings_layout = QVBoxLayout()
+
+        # --- Project + Extension (горизонтальный слой с двумя вертикальными)
+        top_row_layout = QHBoxLayout()
+
+        # Левая вертикаль: проект
+        project_vbox = QVBoxLayout()
+        project_label = QLabel("Choose project:")
         self.project_menu = QComboBox()
         self.project_menu.addItems(self.projects)
         self.project_menu.setCurrentText(self.selected_project)
-        main_layout.addWidget(self.project_menu)
+        project_vbox.addWidget(project_label)
+        project_vbox.addWidget(self.project_menu)
 
-        # Формат
-        format_layout = QHBoxLayout()
+        # Правая вертикаль: расширение
+        format_vbox = QVBoxLayout()
         format_label = QLabel("Extension:")
-        format_layout.addWidget(format_label)
-
         self.format_menu = QComboBox()
-        self.format_menu.addItems(["EXR", "JPG"])
+        self.format_menu.addItems(["EXR", "JPG", "MOV", "MP4"])
         self.format_menu.setCurrentText(self.selected_format)
-        format_layout.addWidget(self.format_menu)
-        main_layout.addLayout(format_layout)
+        format_vbox.addWidget(format_label)
+        format_vbox.addWidget(self.format_menu)
 
-        # Дубликаты и треки
-        options_layout = QHBoxLayout()
+        # Объединяем в горизонтальный слой
+        top_row_layout.addLayout(project_vbox)
+        top_row_layout.addSpacing(40)
+        top_row_layout.addLayout(format_vbox)
 
-        self.no_duplicates = QCheckBox("Ignore shots dublicates")
-        options_layout.addWidget(self.no_duplicates)
+        # --- Нижняя строка: чекбокс и диапазон треков
+        bottom_row_layout = QHBoxLayout()
+        self.no_dublicates = QCheckBox("Ignore dublicates")
+        bottom_row_layout.addWidget(self.no_dublicates)
+        bottom_row_layout.addSpacing(30)
 
-        options_layout.addWidget(QLabel("Tracks range:"))
+        bottom_row_layout.addWidget(QLabel("tracks range:"))
 
         self.track_in_input = QLineEdit(self.selected_track_in)
         self.track_in_input.setFixedWidth(30)
-        options_layout.addWidget(self.track_in_input)
+        bottom_row_layout.addWidget(self.track_in_input)
 
-        options_layout.addWidget(QLabel("-"))
+        bottom_row_layout.addWidget(QLabel("-"))
 
         self.track_out_input = QLineEdit(self.selected_track_out)
         self.track_out_input.setFixedWidth(30)
-        options_layout.addWidget(self.track_out_input)
+        bottom_row_layout.addWidget(self.track_out_input)
+        bottom_row_layout.addStretch()
 
-        main_layout.addLayout(options_layout)
+        # Финальная сборка
+        settings_layout.addLayout(top_row_layout)
+        settings_layout.addSpacing(10)
+        settings_layout.addLayout(bottom_row_layout)
+        settings_group.setLayout(settings_layout)
+
+        main_layout.addWidget(settings_group)
+
 
         # Выбор EDL
         edl_path_layout = QHBoxLayout()
