@@ -31,27 +31,27 @@ class Constant:
     log_path = r"003_transcode_to_vfx/projects/log_file.log"
     
 
+@dataclass
+class EDLEntry:
+    """
+    Класс-контейнер для данных из строки EDL
+    """
+    edl_record_id: str
+    edl_shot_name: str
+    edl_track_type: str
+    edl_transition: str
+    edl_source_in: str
+    edl_source_out: str
+    edl_record_in: str
+    edl_record_out: str 
+
 class EDLParser:
     """
-    Класс обработчик EDL
+    Класс-итератор.
+    Итерируется по EDL файлу
     """
-    @dataclass
-    class EDLEntry:
-        """
-        Класс контейнер данных EDL
-        """
-        edl_record_id: str
-        edl_shot_name: str
-        edl_track_type: str
-        edl_transition: str
-        edl_source_in: str
-        edl_source_out: str
-        edl_record_in: str
-        edl_record_out: str 
-
     def __init__(self, edl_path):
         self.edl_path = edl_path
-
     def __iter__(self):
 
         with open(self.edl_path, 'r') as edl_file:
@@ -62,7 +62,9 @@ class EDLParser:
                     yield self.parse_line(line)  # Паттерн ищет значения 001, 0001 и т.д. по началу строки
 
     def parse_line(self, line):
-
+        """
+        Метод парсит строку на значения через класс EDLEntry
+        """
         parts = line.split()
         return EDLEntry(
                     edl_record_id= parts[0],
@@ -95,15 +97,17 @@ class OTIOCreator:
     
     def get_shots_movie_list(self, path):
         """
-        Получем список путей к видео клипам MOV, MP4
+        Получем список путей к видеофайлам MOV, MP4
         :param path: Входящий путь из GUI 
         """
         return [os.path.join(root, file) for root, _, files in os.walk(path) for file in files]
     
     def is_drop_frames(self, exr_files, target_folder):
         """
-        Функция проверки EXR-секвенции на битые кадры.
-        Возвращает только уведомление.
+        Проверяет шот(секвенцию) на предмет битых кадров.
+        Работает только с секвенциями.
+
+        :return: Уведомление в GUI
         """
         # Проверяем файлы на наличие веса ниже 10% от максимального
         max_file_size = 0
@@ -125,50 +129,52 @@ class OTIOCreator:
                 logger.warning(f"\n{warning_messege}")
                 break
 
-    def is_duplicate(self, sequence_name, resolve_timeline_objects):
+    def is_duplicate(self, shot_name, resolve_timeline_objects)-> bool:
         '''
-        Функция находит шоты, версии которых уже стоят на таймлайне и пропускает их.
+        Находит шоты, версии которых уже стоят на таймлайне и пропускает их.
         '''
         try:
-            if sequence_name in resolve_timeline_objects:
+            if shot_name in resolve_timeline_objects:
                 return True
             return False
         except:
             return False
         
-    def get_gap_value(self, frame_rate, edl_timeline_start_tc, tmln_start_hour, end_tc_tracks, track_ind):
+    def get_gap_value(self, edl_record_in, timeline_in_tc, edl_start_timecodes, track_index):
         """
         Метод определения продолжительности для первого GAP объекта и для всех остальных GAP объектов.
+
+        :param timeline_in_tc: Таймкод начала таймлайна
         """
         gap_dur = 0
-        if end_tc_tracks[track_ind] is None:
+        if edl_start_timecodes[track_index] is None:
             # Для первого клипа на любом из треков используем разность стартового таймкода клипа из EDL и начала таймлайна
-            gap_dur = tc(frame_rate, edl_timeline_start_tc).frames - tmln_start_hour  
+            gap_dur = self.timecode_to_frame(edl_record_in) - timeline_in_tc  
         else:
-            gap_dur = tc(frame_rate, edl_timeline_start_tc).frames - tc(frame_rate, end_tc_tracks[track_ind]).frames
+            gap_dur = self.timecode_to_frame(edl_record_in) - self.timecode_to_frame(edl_start_timecodes[track_index])
         return gap_dur
     
-    def is_miss_frames(self, sequence_name, frames_list): 
+    def is_miss_frames(self, shot_name, frames_list)-> bool: 
         """
         Функция проверяет есть ли битые кадры в секвенции.
-        Если есть то пропускает текущий шот и переходит к следующему выводя предупреждение.
+        Работает только с секвенциями.
         """
-        sequence_frames_numbers_list = [int(re.search(self.frame_pattern, i).group(0).split(".")[0]) for i in frames_list]  
-        if not all(sequence_frames_numbers_list[i] + 1 == sequence_frames_numbers_list[i + 1] 
-                   for i in range(len(sequence_frames_numbers_list) - 1)):
-            message = f"Секвенция {sequence_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
+        frames_numbers_list = [int(re.search(self.frame_pattern, i).group(0).split(".")[0]) for i in frames_list]  
+        if not all(frames_numbers_list[i] + 1 == frames_numbers_list[i + 1] 
+                   for i in range(len(frames_numbers_list) - 1)):
+            message = f"Секвенция {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
             self.send_warning(message)
             logger.warning(message)
             return False
         return True
     
-    def get_frame_from_timecode(self, timecode)-> int:
+    def timecode_to_frame(self, timecode)-> int:
         """
         Метод получает таймкод во фреймах
         """
         return tc(self.frame_rate, timecode).frames
     
-    def get_timecod_from_frames(self, frames):
+    def frame_to_timecode(self, frames):
         """
         Метод получает таймкод из значений фреймов
         """
@@ -181,14 +187,14 @@ class OTIOCreator:
 
         :param edl_src_start_frame: None по дефолту на случай если пересечения таймкодов нет
         """  
-        otio_clip_start_frame = None
+        shot_start_frame = None
         if src_duration - timeline_duration == 6:
-            otio_clip_start_frame = float(start_frame + 3)
+            shot_start_frame = float(start_frame + 3)
         elif src_duration - timeline_duration == 8:
-            otio_clip_start_frame = float(start_frame + 4)
+            shot_start_frame = float(start_frame + 4)
         elif src_duration - timeline_duration == 10:
-            otio_clip_start_frame = float(start_frame + 5)
-        return otio_clip_start_frame
+            shot_start_frame = float(start_frame + 5)
+        return shot_start_frame
     
     def get_frame_handles_from_edl_in(self, edl_source_in, edl_source_out, source_in, source_out)-> int:
         """Функция определяет вхождение сорс диапазона шота в таймлайн диапазон из EDL.
@@ -199,8 +205,8 @@ class OTIOCreator:
         """  
 
         edl_src_start_frame = None
-        edl_src_start_tc_in_frames = self.get_frame_from_timecode(edl_source_in)
-        edl_src_end_tc_in_frames = self.get_frame_from_timecode(edl_source_out)
+        edl_src_start_tc_in_frames = self.timecode_to_frame(edl_source_in)
+        edl_src_end_tc_in_frames = self.timecode_to_frame(edl_source_out)
         if edl_src_start_tc_in_frames >= source_in and edl_src_end_tc_in_frames <= source_out:  
             edl_src_start_frame = float(edl_src_start_tc_in_frames - 1)
 
@@ -208,18 +214,19 @@ class OTIOCreator:
     
     def get_filtred_shots_list_by_mask(self, shot_name):
             """
-            Метод обходит папку с секвенциями или папку с видео клипами и отбирает только те, 
+            Метод обходит папку с секвенциями или видеофайлами и отбирает только те, 
             которые пересекаются с именем шота из EDL
 
             :param shot_name: Имя шота из EDL
 
-            :return: Список путей с фильтрованными по имени шота фолдерами(секвенциями) или видео клипами
+            :return: Список путей с фильтрованными по имени шота фолдерами(секвенциями) или видеофайлами.
+            Если присутствует несколько версий шота, в аутпут списке будут несколько версий
             """
             target_list = []
 
-            for folder_path in self.shots_folders_list:
+            for folder_path in self.shots_paths:
                 folder_name = os.path.basename(folder_path)
-                if self.not_movie_extansion_bool:
+                if self.not_movie_bool:
                     if re.search(shot_name.lower(), folder_name): 
                         target_list.append(folder_path)
                 else:
@@ -252,7 +259,7 @@ class OTIOCreator:
 
         # Проверка на наличине или отсутствие GAP между клипами
         if gap_duration > 0:
-            # Создание GAP объекта
+
             gap = otio.schema.Gap(
                 source_range=otio.opentime.TimeRange(
                     start_time=otio.opentime.RationalTime(0.0, self.frame_rate),
@@ -263,21 +270,19 @@ class OTIOCreator:
 
             logger.info(f'GAP duration: {gap_duration}')
 
-    def create_otio_timeline_object_movie(self, sequence_settings, otio_clip_start_frame, track_index):
+    def create_otio_timeline_object_movie(self, shot_data, shot_start_frame, track_index):
         """
-        Функция добавления треков и gap объектов на таймлайн.
+        Функция добавления треков и gap объектов на таймлайн для видеофайлов.
         """
         try:
             video_track = self.otio_timeline.tracks[track_index]
 
-            # Распаковка метаданных шота и данных GAP
-            clip_duration = sequence_settings['source duration']
-            clip_path = sequence_settings['exr_path']
-            clip_name = sequence_settings['shot_name']
-            clip_start_frame = sequence_settings['source_in_tc']
-            timeline_duration = sequence_settings['timeline_duration']
+            clip_duration = shot_data['source duration']
+            clip_path = shot_data['exr_path']
+            clip_name = shot_data['shot_name']
+            clip_start_frame = shot_data['source_in_tc']
+            timeline_duration = shot_data['timeline_duration']
 
-            # Логирование
             debug_exr_info = f'Shot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}'
             logger.debug(f'\n{debug_exr_info}')
 
@@ -295,29 +300,28 @@ class OTIOCreator:
                 name=clip_name,
                 media_reference=media_reference,
                 source_range=otio.opentime.TimeRange(
-                    start_time=otio.opentime.RationalTime(otio_clip_start_frame or 0, self.frame_rate),
+                    start_time=otio.opentime.RationalTime(shot_start_frame or 0, self.frame_rate),
                     duration=otio.opentime.RationalTime(timeline_duration, self.frame_rate),
                 ),
             )
-            # Добавление клипа на трек
+            # Добавление на трек
             video_track.append(clip)
 
         except Exception as e:
             logger.exception(f"Не удалось добавить на таймлайн секвенцию {clip_name}.") 
 
-    def create_otio_timeline_object(self, sequence_settings, otio_clip_start_frame, track_index):
+    def create_otio_timeline_object(self, shot_data, shot_start_frame, track_index):
         """
-        Функция добавления треков и gap объектов на таймлайн.
+        Функция добавления треков и gap объектов на таймлайн для секвенций.
         """
         try:
             video_track = self.otio_timeline.tracks[track_index]
 
-            # Распаковка метаданных шота и данных GAP
-            clip_duration = sequence_settings['source duration']
-            clip_path = sequence_settings['exr_path']
-            clip_name = sequence_settings['shot_name']
-            clip_start_frame = sequence_settings['source_in_tc']
-            timeline_duration = sequence_settings['timeline_duration']
+            clip_duration = shot_data['source duration']
+            clip_path = shot_data['exr_path']
+            clip_name = shot_data['shot_name']
+            clip_start_frame = shot_data['source_in_tc']
+            timeline_duration = shot_data['timeline_duration']
 
             pref, suff, start = self.split_name(clip_name)
 
@@ -344,12 +348,12 @@ class OTIOCreator:
                 name=clip_name,
                 media_reference=media_reference,
                 source_range=otio.opentime.TimeRange(
-                    start_time=otio.opentime.RationalTime(otio_clip_start_frame or 0, self.frame_rate),
+                    start_time=otio.opentime.RationalTime(shot_start_frame or 0, self.frame_rate),
                     duration=otio.opentime.RationalTime(timeline_duration, self.frame_rate),
                 ),
             )
 
-            # Добавление клипа на трек
+            # Добавление на трек
             video_track.append(clip)
 
         except Exception as e:
@@ -372,7 +376,7 @@ class OTIOCreator:
             self.video_tracks.append(otio.schema.Track(name=f'Video{num+1}', kind=otio.schema.TrackKind.Video))
             self.otio_timeline.tracks.append(self.video_tracks[num])
     
-    def get_lenght(self, source_duration, timeline_duration, shot_name):
+    def is_correct_lenght(self, source_duration, timeline_duration, shot_name):
         """
         Функция сравнивает фактическую длину шота по данным из сорса и из таймлайн диапазона.
         Метод ничего не возвращает.
@@ -383,20 +387,20 @@ class OTIOCreator:
             self.send_warning(warning_message)
             logger.warning(f'\n{warning_message}')
 
-    def is_correct_fps(self, sequence)->bool:
+    def is_correct_fps(self, shot)->bool:
         """
-        Сравниваем проектный fps и fps кадра
+        Сравнивает проектный fps и fps шота
         """
         try:
-            frame = OpenEXR.InputFile(sequence.first_frame_path)
+            frame = OpenEXR.InputFile(shot.first_frame_path)
             header = frame.header()
             frame_fps = header.get('nuke/input/frame_rate')
 
-            # Иногда информация о фрейм рейте хранится в байтовом представлении. Учитываем это.
             if frame_fps is not None:
+                # Иногда информация о фрейм рейте хранится в байтовом представлении. Учитываем это.
                 frame_fps = float(frame_fps.decode()) if isinstance(frame_fps, bytes) else float(frame_fps)
                 if int(self.frame_rate) != int(frame_fps):
-                    warning_message = f"FPS шота {sequence.name} расходится с проектным. FPS - {round(frame_fps, 2)}"
+                    warning_message = f"FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}"
                     self.send_warning(warning_message)
                     logger.warning(warning_message)
                     return False
@@ -404,91 +408,89 @@ class OTIOCreator:
             return True
                 
         except Exception as e:
-            message = f"Ошибка при обработке значения FPS {sequence.first_frame_path}: {e}"
+            message = f"Ошибка при обработке значения FPS {shot.first_frame_path}: {e}"
             logger.exception(message)
             return True
         
-    def validate_shot(self, sequence)-> bool:
+    def validate_shot(self, shot)-> bool:
         """
-        Метод проверяет ошибки и проблемы в шоте
+        Метод-агрегатор валидаторов шота
         """
         if self.ignore_dublicates_bool:
-            if self.is_duplicate(sequence.name, self.resolve_shot_list):
+            if self.is_duplicate(shot.name, self.resolve_shot_list):
                 return False
 
-        if not self.is_miss_frames(sequence.name, sequence.frames_list):
+        if not self.is_miss_frames(shot.name, shot.frames_list):
             return False
-        if not self.is_correct_fps(sequence):
+        if not self.is_correct_fps(shot):
             return False
 
-        self.is_drop_frames(sequence.frames_list, sequence.path)
+        self.is_drop_frames(shot.frames_list, shot.path)
 
         return True
 
 
-    def get_sequence(self, shot_name, sequence_path=None):
+    def get_shot(self, edl_shot_name, shot_path=None):
         """
-        Ищет папку с именем, соответствующим шаблону шота, в дереве каталогов и извлекает секвенцию.
-        Проверяет секвенцию на ошибки
+        Ищет шот в self.user_config["shots_folder"] и собирает данные о шоте
+        Проверяет секвенцию на ошибки. Если в текущей версии шота есть ошибки - шот пропускается
+
+        :return shots_versions: Список с версиями валидных шотов
         """
         try:
-            filtred_sequences_paths = self.get_filtred_shots_list_by_mask(shot_name)
-            sequences_list = []
-            for sequence_path in filtred_sequences_paths:
-                if not sequence_path:
+            filtred_shot_paths = self.get_filtred_shots_list_by_mask(edl_shot_name)
+            shots_versions = []
+            for shot_path in filtred_shot_paths:
+                if not shot_path:
                     return []
                 
-                if self.not_movie_extansion_bool:
-                    sequence = SequenceFrames(sequence_path, self.clip_extension)
-
-                    if not sequence:
+                if self.not_movie_bool:
+                    shot = SequenceFrames(shot_path, self.clip_extension)
+                    if not shot:
                         continue
 
-                    validate_bool = self.validate_shot(sequence)
+                    validate_bool = self.validate_shot(shot)
                     if not validate_bool:
                         continue
 
-                    sequences_list.append(sequence)
-                
+                    shots_versions.append(shot)         
                 else:
-                    sequence = MovieObject(sequence_path)
-
-                    if not sequence:
+                    shot = MovieObject(shot_path)
+                    if not shot:
                         continue
 
-                    sequences_list.append(sequence)
+                    shots_versions.append(shot)
 
-            return sequences_list
+            return shots_versions
         
         except Exception as e:
             error_message = f"Ошибка при обработке секвенции: {e}"
             logger.exception(error_message) 
-            self.send_warning(f'Ошибка при обработке шота {shot_name}. Необходимо добавить его вручную в Media Pool.')
+            self.send_warning(f'Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
             return []
 
     def run(self):
         """
         Основной метод логики
-
-        :param edl_record_out_list: - промежуточные значения edl_record_out для вычисления GAP на каждом треке
         """
         self.edl_path = self.user_config["edl_path"]
         self.frame_rate = self.user_config["frame_rate"]
         self.ignore_dublicates_bool = self.user_config["ignore_dublicates"]
         self.clip_extension = self.user_config["extension"]
         self.handles_logic = self.user_config["handles_logic"]
-        self.not_movie_extansion_bool = self.clip_extension not in ("mov", "mp4")
-        if self.not_movie_extansion_bool: 
-            self.shots_folders_list = self.get_shots_sequence_list(self.user_config["shots_folder"])
+        self.not_movie_bool = self.clip_extension not in ("mov", "mp4")
+        if self.not_movie_bool: 
+            self.shots_paths = self.get_shots_sequence_list(self.user_config["shots_folder"])
         else:
-            self.shots_folders_list = self.get_shots_movie_list(self.user_config["shots_folder"]) 
+            self.shots_paths = self.get_shots_movie_list(self.user_config["shots_folder"]) 
 
         edl_data = EDLParser(self.edl_path)
 
         try:
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
             self.create_video_tracks()
-            edl_record_out_list = [None] * self.track_count 
+            # edl_start_timecodes: - Список промежуточных значений edl_record_out для вычисления GAP на каждом треке
+            edl_start_timecodes = [None] * self.track_count 
 
             for data in edl_data:
                 edl_shot_name = data.edl_shot_name
@@ -496,51 +498,52 @@ class OTIOCreator:
                 edl_source_out = data.edl_source_out
                 edl_record_in = data.edl_record_in
                 edl_record_out = data.edl_record_out
-                timeline_in_tc = self.get_frame_from_timecode(edl_record_in.split(":")[0] + ":00:00:00")
+                timeline_in_tc = self.timecode_to_frame(edl_record_in.split(":")[0] + ":00:00:00")
                 
-                sequence_data_list = self.get_sequence(edl_shot_name)
+                shot_versions = self.get_shot(edl_shot_name)
 
-                if not sequence_data_list:
+                if not shot_versions:
                     continue    
-                for track_ind, sequence_data in enumerate(sequence_data_list):
+
+                for track_index, shot in enumerate(shot_versions):
                     
-                    source_in_tc, source_out_tc, source_duration = sequence_data.extract_timecode(self.frame_rate)
+                    source_in_tc, source_out_tc, source_duration = shot.extract_timecode(self.frame_rate)
 
                     # Вычисление таймлайн дюрэйшн
-                    timeline_duration = self.get_frame_from_timecode(edl_record_out) - self.get_frame_from_timecode(edl_record_in)
+                    timeline_duration = self.timecode_to_frame(edl_record_out) - self.timecode_to_frame(edl_record_in)
 
                     # Нахождение страртового кадра для создания OTIO клипа и выставления захлеста
                     if self.handles_logic == "fixed":
-                        otio_clip_start_frame = self.get_fixed_frame_handles(source_duration, timeline_duration, source_in_tc)
+                        shot_start_frame = self.get_fixed_frame_handles(source_duration, timeline_duration, source_in_tc)
                     elif self.handles_logic == "from_edl":
-                        otio_clip_start_frame = self.get_frame_handles_from_edl_in(edl_source_in, 
+                        shot_start_frame = self.get_frame_handles_from_edl_in(edl_source_in, 
                                                                                    edl_source_out, source_in_tc, source_out_tc)
                     # Вычисление GAP для клипов
-                    gap_duration = self.get_gap_value(self.frame_rate, edl_record_in, timeline_in_tc, edl_record_out_list, track_ind)
+                    gap_duration = self.get_gap_value(edl_record_in, timeline_in_tc, edl_start_timecodes, track_index)
 
                     logger.info(f"Source start tc: {source_in_tc}\nSource end tc: {source_out_tc}")
                     logger.info(f'\nTimeline start timecode: {edl_record_in}\nTimeline end timecode: {edl_record_out}')
                     logger.info(f'\nEDL source start timecode: {edl_source_in}\nEDL source end timecode: {edl_source_out}\nTimeline duration: {timeline_duration}')
 
-                    self.create_otio_gap_object(gap_duration, track_ind)
+                    self.create_otio_gap_object(gap_duration, track_index)
 
-                    self.get_lenght(source_duration, timeline_duration, sequence_data.name)
+                    self.is_correct_lenght(source_duration, timeline_duration, shot.name)
 
-                    sequence_settings = {
-                        'exr_path': sequence_data.path,
-                        'shot_name': sequence_data.name,
+                    shot_data = {
+                        'exr_path': shot.path,
+                        'shot_name': shot.name,
                         'gap_duration': gap_duration,
                         'source_in_tc': source_in_tc,
                         'source duration': source_duration,
                         'timeline_duration': timeline_duration,
-                        'track_ind': track_ind
+                        'track_index': track_index
                                             }
-                    if self.not_movie_extansion_bool:
-                        self.create_otio_timeline_object(sequence_settings, otio_clip_start_frame, track_ind)
+                    if self.not_movie_bool:
+                        self.create_otio_timeline_object(shot_data, shot_start_frame, track_index)
                     else:
-                        self.create_otio_timeline_object_movie(sequence_settings, otio_clip_start_frame, track_ind)
+                        self.create_otio_timeline_object_movie(shot_data, shot_start_frame, track_index)
 
-                    edl_record_out_list[track_ind] = edl_record_out
+                    edl_start_timecodes[track_index] = edl_record_out
 
             timeline_objects = self.count_timeline_objects()
             return self.otio_timeline, timeline_objects
@@ -550,7 +553,7 @@ class OTIOCreator:
 
 class MovieObject:
     """
-    Класс-объект видео клипа .mov или .mp4
+    Класс-объект видеофайла .mov или .mp4
     """
     def __init__(self, path, frame_pattern=None):
         self.path = path
@@ -565,18 +568,17 @@ class MovieObject:
     
     def get_duration(self, frame_rate:int)-> int:
         """
-        Получение длительности видео клипа
+        Получение длительности видеофайла
         """
         try:
             media_info = MediaInfo.parse(self.path)
 
             for track in media_info.tracks:
                 if track.track_type == "Video":
-                    # Длительность видео в секундах
                     duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
                     duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
                     # Переводим в целое количество кадров
-                    duration = int(duration_frames) - 1 #-1 для корректного восприятия в ДВР
+                    duration = int(duration_frames) - 1 #-1 для корректного восприятия в Davinci Resolve
                     return duration
                 
         except Exception as e:
@@ -585,7 +587,7 @@ class MovieObject:
         
     def extract_timecode(self, frame_rate)-> tuple:
         """
-        Получение стартового таймкода и длительности видео клипа
+        Получение стартового таймкода, конечного таймкода и длительности видеофайла
         """
         try:
             media_info = MediaInfo.parse(self.path)
@@ -595,15 +597,15 @@ class MovieObject:
                     # Длительность видео в секундах
                     duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
                     duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
-                    duration = int(duration_frames) - 1 # -1 для корректного восприятия в ДВР
+                    duration = int(duration_frames) - 1 # -1 для корректного восприятия в Davinci Resolve
 
                     # Извлекаем начальный таймкод
                     if track.other_delay:
-                        in_timecode = tc(frame_rate, track.other_delay[4]).frames - 1 # -1 для корректного восприятия в ДВР
-                        in_timecode += 1 # +1 - отрезаем первый кадр слейта
+                        start_timecode = tc(frame_rate, track.other_delay[4]).frames - 1 # -1 для корректного восприятия в Davinci Resolve
+                        start_timecode += 1 # +1 - отрезаем первый кадр слейта
 
-                    out_timecode = in_timecode + duration
-                    return (in_timecode, out_timecode, duration)
+                    end_timecode = start_timecode + duration
+                    return (start_timecode, end_timecode, duration)
             
         except Exception as e:
             print(f"Ошибка при получении длительности видео: {e}")
@@ -639,21 +641,21 @@ class SequenceFrames:
     @property
     def first_frame_path(self):
         """
-        Определяем путь к первому кадру в последовательности
+        Определяем путь к первому кадру секвенции
         """
         return os.path.join(self.path, self.frames_list[0])
     
     @property
     def last_frame_path(self)->str:
         """
-        Определяем путь к последнему кадру в последовательности
+        Определяем путь к последнему кадру секвенции
         """
         return os.path.join(self.path, self.frames_list[-1])
     
     @property
     def first_frame_number(self)->str:
         """
-        Извлекаем номер кадра из имени первого кадра
+        Извлекаем номер кадра из имени первого кадра секвенции
         """
         match = re.search(self.frame_pattern, self.first_frame_path)
         if not match:
@@ -663,7 +665,7 @@ class SequenceFrames:
     @property
     def last_frame_number(self)->str:
         """
-        Извлекаем номер кадра из имени последнего кадра
+        Извлекаем номер кадра из имени последнего кадра секвенции
         """
         match = re.search(self.frame_pattern, self.last_frame_path)
         if not match:
@@ -695,7 +697,6 @@ class SequenceFrames:
     def extract_timecode(self, project_fps:int)->tuple:
         """
         Извлекает таймкод из кадра секвенции и форматирует его.
-        Проверяет FPS шота на соответствие с FPS проекта.
         Настроен на композы из Nuke
         """
         try:
@@ -711,7 +712,6 @@ class SequenceFrames:
 
                 start_timecode = self.format_timecode(time_match)  # Приводим к двухзначному формату
                  
-            # Извлекаем таймкоды из первого и последнего файлов
             if start_timecode is None:
                 start_timecode = float(tc(project_fps, "00:00:00:00").frames - 1)  # -1 что бы корректно воспринимал Resolve
                 end_timecode = start_timecode + (len(self.frames_list))
@@ -731,8 +731,6 @@ class SequenceFrames:
 class OTIOWorker(QThread):
     """
     Класс работы с логикой в отдельном потоке
-
-    :param timeline_objects: Количество объектов на OTIO таймлайне
     """
     error_signal = pyqtSignal(str)
     success_signal = pyqtSignal(str)
@@ -750,7 +748,7 @@ class OTIOWorker(QThread):
         try:
             logic = OTIOCreator(self.user_config, self.resolve_shot_list)
             logic.send_warning = lambda msg: self.warnings.emit(msg)
-            otio_timeline, timeline_objects = logic.run()
+            otio_timeline, timeline_objects = logic.run() #timeline_objects: Количество объектов на OTIO таймлайне
             if not timeline_objects:
                 self.warning_signal.emit('Отсутствуют шоты для данной таймлинии')
                 return
@@ -785,17 +783,16 @@ class ConformCheckerMixin:
 
     def count_clips_on_storage(self, shots_folder, extension)-> int:
         """
-        Сканирует папку на хранилище с шотами (секвенциями или видео клипами), 
+        Сканирует папку на хранилище с шотами (секвенциями или видеофайлами), 
         участвующими в сборке OTIO, и получает их количество
         """
         count = 0 
         for dirpath, _, files in os.walk(shots_folder):
-            logger.debug(files)
             # Проверяем секвенцию. Если есть хотя бы 1 фрейм - плюсуем счетчик
             if extension.lower() not in ("mov", "mp4") and any(file.lower().endswith(f'.{extension.lower()}') for file in files):
                     count += 1  
                     continue
-            # Проверяем видео клипы
+            # Проверяем видеофайлы
             else:  
                 for file in files:
                     if file.lower().endswith(f'.{extension.lower()}'):
@@ -864,7 +861,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         self.frame_rate = 24
         self.edl_path = ""
-        self.exr_folder = ""
+        self.shots_folder = ""
         self.otio_path = ""
 
         self.selected_track_in = "8"
@@ -1001,9 +998,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
         shots_path_layout.addSpacing(10)
         self.shots_input = QLineEdit()
         shots_path_layout.addWidget(self.shots_input)
-        exr_button = QPushButton("Choose")
-        exr_button.clicked.connect(self.select_exr_folder)
-        shots_path_layout.addWidget(exr_button)
+        shots_button = QPushButton("Choose")
+        shots_button.clicked.connect(self.select_shots_folder)
+        shots_path_layout.addWidget(shots_button)
         main_layout.addLayout(shots_path_layout)
 
         # OTIO
@@ -1062,15 +1059,15 @@ class Autoconform(QWidget, ConformCheckerMixin):
             self.edl_input.setText(path)
             self.edl_path = path
 
-    def select_exr_folder(self):
+    def select_shots_folder(self):
         init_dir = {"windows": "R:/", 
                     "darwin": "/Volumes/RAID/"}[sys.platform]
         path = QFileDialog.getExistingDirectory(self, 
                                                 "Choose Shots Folder",
                                                 init_dir)
         if path:
-            self.exr_input.setText(path)
-            self.exr_folder = path
+            self.shots_input.setText(path)
+            self.shots_folder = path
 
     def save_otio(self):
         init_dir = str(self.is_OS(f'003_transcode_to_vfx/projects/{self.project_menu.currentText()}/'))
@@ -1151,16 +1148,13 @@ class Autoconform(QWidget, ConformCheckerMixin):
     def update_result_label(self):
         """
         Метод создает и обновляет данные результата сборки
-
-        :param self.otio_counter: Количетсво шотов на таймлайне OTIO
-        :param self.folder_counter: Общее количество шотов в целевой папке folder_path
         """
         otio_path = self.otio_input.text().strip()
         shots_path = self.shots_input.text().strip()
         extension = self.format_menu.currentText()
 
-        self.otio_counter += self.count_otio_clips(otio_path)
-        self.in_folder_counter = self.count_clips_on_storage(shots_path, extension)
+        self.otio_counter += self.count_otio_clips(otio_path) # self.otio_counter: Количетсво шотов на таймлайне OTIO
+        self.in_folder_counter = self.count_clips_on_storage(shots_path, extension) # self.folder_counter: Общее количество шотов в целевой папке shots_path
 
         self.result_label.setText(f'Обработано {self.otio_counter} из {self.in_folder_counter} шотов')
 
