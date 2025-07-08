@@ -16,6 +16,7 @@ import opentimelineio as otio
 import DaVinciResolveScript as dvr
 from collections import Counter
 from pymediainfo import MediaInfo
+from functools import cached_property
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_timeline_shots_names import get_resolve_shot_list
 from dvr_tools.css_style import apply_style
@@ -28,28 +29,44 @@ class Constant:
     frame_pattern = r'(\d+)(?:\.|_)\w+$' # Паттерн на номера секвении [1001-...]
     main_shot_pattern = r'(\.|_)\d+\.\w+$'
     project_path = r"003_transcode_to_vfx/projects/"
-    log_path = r"003_transcode_to_vfx/projects/log_file.log"
+    log_path = r"003_transcode_to_vfx/projects/log.log"
     
+PROJECT_SETTINGS = {
+    "paths": {
+        "project_path": "003_transcode_to_vfx/projects/",
+        "log_path": "003_transcode_to_vfx/projects/log.log",
+        "windows_share_root": "J:/",
+        "mac_share_root": "/Volumes/share2/",
+        "windows_shots_root": "R:/",
+        "mac_shots_root": "/Volumes/RAID/",
+    },
+    "patterns": {
+        "frame_number": r'(\d+)(?:\.|_)\w+$',               # для кадров [1001.exr] или [1001_exr]
+        "main_shot": r'(\.|_)\d+\.\w+$',                   # конец имени файла: .1001.exr / _1001.exr
+        "edl_line_start": r'^\d+\s',                       # строки типа "001  AX  V     C ..."
+        "shot_name_split": r'(.+?)([\._])\[(\d+)-\d+\]\.\w+$', # парсинг имени секвенции
+    }
+}
 
-@dataclass
-class EDLEntry:
-    """
-    Класс-контейнер для данных из строки EDL
-    """
-    edl_record_id: str
-    edl_shot_name: str
-    edl_track_type: str
-    edl_transition: str
-    edl_source_in: str
-    edl_source_out: str
-    edl_record_in: str
-    edl_record_out: str 
-
-class EDLParser:
+class EDLParser_v23:
     """
     Класс-итератор.
     Итерируется по EDL файлу
     """
+    @dataclass
+    class EDLEntry:
+        """
+        Класс-контейнер для данных из строки EDL
+        """
+        edl_record_id: str
+        edl_shot_name: str
+        edl_track_type: str
+        edl_transition: str
+        edl_source_in: str
+        edl_source_out: str
+        edl_record_in: str
+        edl_record_out: str 
+
     def __init__(self, edl_path):
         self.edl_path = edl_path
     def __iter__(self):
@@ -66,7 +83,7 @@ class EDLParser:
         Метод парсит строку на значения через класс EDLEntry
         """
         parts = line.split()
-        return EDLEntry(
+        return self.EDLEntry(
                     edl_record_id= parts[0],
                     edl_record_in= parts[6],
                     edl_record_out= parts[7],
@@ -74,7 +91,62 @@ class EDLParser:
                     edl_transition= parts[3],
                     edl_shot_name= parts[1],
                     edl_source_out= parts[5],
-                    edl_source_in= parts[4] )
+                    edl_source_in= parts[4] 
+                    )
+
+class EDLParser_v3:
+    """
+    Класс-итератор. Итерируется по EDL файлу, читая пары строк
+    """
+    @dataclass
+    class EDLEntry:
+        """
+        Класс-контейнер для данных из двух строк EDL
+        """
+        edl_record_id: str
+        edl_shot_name: str
+        edl_track_type: str
+        edl_transition: str
+        edl_source_in: str
+        edl_source_out: str
+        edl_record_in: str
+        edl_record_out: str
+
+    def __init__(self, edl_path):
+        self.edl_path = edl_path
+
+    def __iter__(self):
+        with open(self.edl_path, 'r') as edl_file:
+            lines = edl_file.readlines()
+
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
+                if re.match(r'^\d+\s', line):  # Строка начинается с 6 цифр — 000001, 000002 и т.п.
+                    # Основная строка
+                    parts = line.split()
+
+                    # Строка ниже — должна оканчиваться шот неймом
+                    next_line = lines[i+1].strip() if i + 1 < len(lines) else ""
+                    shot_name_match = re.search(r'(\S+)$', next_line)
+
+                    shot_name = shot_name_match.group(1) if shot_name_match else "UNKNOWN"
+                    parts[1] = shot_name
+
+                    yield self.EDLEntry(
+                        edl_record_id=parts[0],
+                        edl_shot_name=parts[1],
+                        edl_track_type=parts[2],
+                        edl_transition=parts[3],
+                        edl_source_in=parts[4],
+                        edl_source_out=parts[5],
+                        edl_record_in=parts[6],
+                        edl_record_out=parts[7],
+                    )
+                    i += 2
+                else:
+                    i += 1
+
 
 class OTIOCreator:
     """
@@ -484,7 +556,7 @@ class OTIOCreator:
         else:
             self.shots_paths = self.get_shots_movie_list(self.user_config["shots_folder"]) 
 
-        edl_data = EDLParser(self.edl_path)
+        edl_data = EDLParser_v23(self.edl_path)
 
         try:
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
@@ -631,14 +703,14 @@ class SequenceFrames:
             raise ValueError("Некорректное значение индекса")
         return self.frames_list[index]
 
-    @property
+    @cached_property
     def frames_list(self):
         """
         Получаем список кадров секвенции отсортированных по возрастанию
         """
         return sorted([f for f in os.listdir(self.path) if f.lower().endswith(f'.{self.extension.lower()}')])
     
-    @property
+    @cached_property
     def first_frame_path(self):
         """
         Определяем путь к первому кадру секвенции
@@ -680,11 +752,9 @@ class SequenceFrames:
         и частый ошибочный формат имени 015_3030_comp_v002_1004.exr
         """
         base_name = re.sub(r'(\.|_)\d+\.\w+$', '', os.path.basename(self.first_frame_path))
-        if '.' in os.path.splitext(self.first_frame_path)[0]:
-            sequence_name = f"{base_name}.[{self.first_frame_number}-{self.last_frame_number}].{self.extension.lower()}"
-        else:
-            sequense_name = f"{base_name}_[{self.first_frame_number}-{self.last_frame_number}].{self.extension.lower()}"
-        return sequence_name
+        frame_range = f"[{self.first_frame_number}-{self.last_frame_number}]"
+        sep = '.' if '.' in os.path.splitext(self.first_frame_path)[0] else '_'
+        return f"{base_name}{sep}{frame_range}.{self.extension.lower()}"
     
     @staticmethod
     def format_timecode(timecode_str:str)->str:
