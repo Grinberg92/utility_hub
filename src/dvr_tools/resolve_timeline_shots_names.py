@@ -20,13 +20,13 @@ def get_resolve_shot_list(track_in, track_out, extension, pattern=None):
         if pattern is None:
             pattern = r'(.+_)?\d{1,4}[a-zA-Z]?_\d{1,4}_.+'
 
-        all_cg_items = []
+        timeline_shots = []
         for track in range(track_in, track_out + 1):
-            all_cg_items += timeline.GetItemListInTrack('video', track)
+            timeline_shots += timeline.GetItemListInTrack('video', track)
 
         filtered = [
             item.GetName()
-            for item in all_cg_items
+            for item in timeline_shots
             if item.GetName().lower().endswith(f".{extension.lower()}") and re.search(pattern, item.GetName())
         ]
         return Counter(filtered)
