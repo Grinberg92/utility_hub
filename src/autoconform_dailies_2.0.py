@@ -95,12 +95,14 @@ class EDLParser_v23:
 
 class EDLParser_v3:
     """
-    Класс-итератор. Итерируется по EDL файлу, читая пары строк.
+    Класс-итератор. Итерирует EDL-файл, возвращая только те пары,
+    где есть строка данных (000xxx) и соответствующая *LOC строка.
     """
+
     @dataclass
     class EDLEntry:
         """
-        Класс-контейнер для данных из двух строк EDL.
+        Класс-контейнер для данных из двух строк EDL
         """
         edl_record_id: str
         edl_shot_name: str
@@ -118,23 +120,39 @@ class EDLParser_v3:
         with open(self.edl_path, 'r') as edl_file:
             lines = edl_file.readlines()
 
-            i = 0
-            while i < len(lines):
-                line = lines[i].strip()
-                if re.match(r'^\d+\s', line):  # Строка начинается с 6 цифр — 000001, 000002 и т.п.
-                    # Основная строка
-                    parts = line.split()
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
 
-                    # Строка ниже — должна оканчиваться шот неймом
-                    next_line = lines[i+1].strip() if i + 1 < len(lines) else ""
-                    shot_name_match = re.search(r'(\S+)$', next_line)
+            # Ищем строку начинающуюся с цифр и пробел
+            if re.match(r'^\d+\s', line):
+                parts = line.split()
+                if len(parts) < 8:
+                    i += 1
+                    continue  # Пропускаем неполные строки
 
-                    shot_name = shot_name_match.group(1) if shot_name_match else "UNKNOWN"
-                    parts[1] = shot_name
+                # Пытаемся найти LOC до следующей 000xxx строки
+                shot_name = None
+                j = i + 1
+                while j < len(lines):
+                    next_line = lines[j].strip()
 
+                    if re.match(r'^\d{6}\s', next_line):
+                        # Следующая запись — LOC не найден, игнорируем эту запись
+                        shot_name = None
+                        break
+
+                    loc_match = re.search(r'^\*LOC.*\s+(\S+)$', next_line)
+                    if loc_match:
+                        shot_name = loc_match.group(1)
+                        break
+
+                    j += 1
+
+                if shot_name:  # Только если LOC найден — создаём элемент
                     yield self.EDLEntry(
                         edl_record_id=parts[0],
-                        edl_shot_name=parts[1],
+                        edl_shot_name=shot_name,
                         edl_track_type=parts[2],
                         edl_transition=parts[3],
                         edl_source_in=parts[4],
@@ -142,9 +160,11 @@ class EDLParser_v3:
                         edl_record_in=parts[6],
                         edl_record_out=parts[7],
                     )
-                    i += 2
+                    i = j + 1  # Пропускаем LOC и двигаемся дальше
                 else:
-                    i += 1
+                    i += 1  # LOC не найден — пропускаем
+            else:
+                i += 1
 
 
 class OTIOCreator:
@@ -159,23 +179,23 @@ class OTIOCreator:
         self.frame_pattern = r'(\d+)(?:\.|_)\w+$' # Паттерн на номера секвении [1001-...]
         self.main_shot_pattern = r'(\.|_)\d+\.\w+$'
 
-    def get_shots_sequence_list(self, path):
+    def get_shots_paths(self, path):
         """
         Получем список путей к подпапкам секвенций EXR, JPG (они же имена шотов)
         или к видеофайлам MOV, MP4.
 
         :param path: Путь к шотам из GUI.
         """
-
-        return  [os.path.join(root, folder) for root, folders, _ in os.walk(path) for folder in folders]
-    
-    def get_shots_movie_list(self, path):
-        """
-        Получем список путей к видеофайлам MOV, MP4.
-
-        :param path: Путь к шотам из GUI.
-        """
-        return [os.path.join(root, file) for root, _, files in os.walk(path) for file in files]
+        paths = []
+        for root, folders, files in os.walk(path):
+            if self.not_movie_bool:
+                for folder in folders:
+                    paths.append(os.path.join(root, folder))
+            else:
+                for file in files:
+                    paths.append(os.path.join(root, file))
+        
+        return paths
     
     def is_drop_frames(self, exr_files, target_folder):
         """
@@ -283,7 +303,7 @@ class OTIOCreator:
 
         return edl_src_start_frame
     
-    def get_filtred_shots_list_by_mask(self, shot_name):
+    def get_filtred_shots(self, shot_name):
             """
             Метод обходит папку с секвенциями или видеофайлами и отбирает только те, 
             которые пересекаются с именем шота из EDL.
@@ -321,7 +341,7 @@ class OTIOCreator:
 
         return (pref, suff, start)
 
-    def create_otio_gap_object(self, gap_duration, track_index):
+    def create_otio_gap_obj(self, gap_duration, track_index):
         """
         Метод создает объект GAP в OTIO конструкторе.
         """
@@ -341,7 +361,7 @@ class OTIOCreator:
 
             logger.info(f'GAP duration: {gap_duration}')
 
-    def create_otio_timeline_object_movie(self, shot_data, shot_start_frame, track_index):
+    def create_otio_timeline_obj_mov(self, shot_data, shot_start_frame, track_index):
         """
         Функция добавления треков и gap объектов на таймлайн для видеофайлов.
         """
@@ -381,7 +401,7 @@ class OTIOCreator:
         except Exception as e:
             logger.exception(f"Не удалось добавить на таймлайн секвенцию {clip_name}.") 
 
-    def create_otio_timeline_object(self, shot_data, shot_start_frame, track_index):
+    def create_otio_timeline_obj(self, shot_data, shot_start_frame, track_index):
         """
         Функция добавления треков и gap объектов на таймлайн для секвенций.
         """
@@ -511,7 +531,7 @@ class OTIOCreator:
         :return shots_versions: Список с версиями валидных шотов.
         """
         try:
-            filtred_shot_paths = self.get_filtred_shots_list_by_mask(edl_shot_name)
+            filtred_shot_paths = self.get_filtred_shots(edl_shot_name)
             shots_versions = []
             for shot_path in filtred_shot_paths:
                 if not shot_path:
@@ -552,12 +572,10 @@ class OTIOCreator:
         self.clip_extension = self.user_config["extension"]
         self.handles_logic = self.user_config["handles_logic"]
         self.not_movie_bool = self.clip_extension not in ("mov", "mp4")
-        if self.not_movie_bool: 
-            self.shots_paths = self.get_shots_sequence_list(self.user_config["shots_folder"])
-        else:
-            self.shots_paths = self.get_shots_movie_list(self.user_config["shots_folder"]) 
+        self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
 
-        edl_data = EDLParser_v23(self.edl_path)
+
+        edl_data = EDLParser_v3(self.edl_path)
 
         try:
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
@@ -598,7 +616,7 @@ class OTIOCreator:
                     logger.info(f'\nTimeline start timecode: {edl_record_in}\nTimeline end timecode: {edl_record_out}')
                     logger.info(f'\nEDL source start timecode: {edl_source_in}\nEDL source end timecode: {edl_source_out}\nTimeline duration: {timeline_duration}')
 
-                    self.create_otio_gap_object(gap_duration, track_index)
+                    self.create_otio_gap_obj(gap_duration, track_index)
 
                     self.is_correct_lenght(source_duration, timeline_duration, shot.name)
 
@@ -612,9 +630,9 @@ class OTIOCreator:
                         'track_index': track_index
                                             }
                     if self.not_movie_bool:
-                        self.create_otio_timeline_object(shot_data, shot_start_frame, track_index)
+                        self.create_otio_timeline_obj(shot_data, shot_start_frame, track_index)
                     else:
-                        self.create_otio_timeline_object_movie(shot_data, shot_start_frame, track_index)
+                        self.create_otio_timeline_obj_mov(shot_data, shot_start_frame, track_index)
 
                     edl_start_timecodes[track_index] = edl_record_out
 
