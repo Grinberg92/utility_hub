@@ -50,13 +50,12 @@ PROJECT_SETTINGS = {
 
 class EDLParser_v23:
     """
-    Класс-итератор.
-    Итерируется по EDL файлу
+    Класс-итератор. Итерируется по EDL файлу.
     """
     @dataclass
     class EDLEntry:
         """
-        Класс-контейнер для данных из строки EDL
+        Класс-контейнер для данных из строки EDL.
         """
         edl_record_id: str
         edl_shot_name: str
@@ -80,7 +79,7 @@ class EDLParser_v23:
 
     def parse_line(self, line):
         """
-        Метод парсит строку на значения через класс EDLEntry
+        Метод парсит строку на значения через класс EDLEntry.
         """
         parts = line.split()
         return self.EDLEntry(
@@ -96,12 +95,12 @@ class EDLParser_v23:
 
 class EDLParser_v3:
     """
-    Класс-итератор. Итерируется по EDL файлу, читая пары строк
+    Класс-итератор. Итерируется по EDL файлу, читая пары строк.
     """
     @dataclass
     class EDLEntry:
         """
-        Класс-контейнер для данных из двух строк EDL
+        Класс-контейнер для данных из двух строк EDL.
         """
         edl_record_id: str
         edl_shot_name: str
@@ -150,7 +149,7 @@ class EDLParser_v3:
 
 class OTIOCreator:
     """
-    Класс создания OTIO таймлайна
+    Класс создания OTIO таймлайна.
     """
     def __init__(self, user_config, resolve_shot_list):
         self.user_config = user_config
@@ -163,14 +162,18 @@ class OTIOCreator:
     def get_shots_sequence_list(self, path):
         """
         Получем список путей к подпапкам секвенций EXR, JPG (они же имена шотов)
-        :param path: Входящий путь из GUI 
+        или к видеофайлам MOV, MP4.
+
+        :param path: Путь к шотам из GUI.
         """
+
         return  [os.path.join(root, folder) for root, folders, _ in os.walk(path) for folder in folders]
     
     def get_shots_movie_list(self, path):
         """
-        Получем список путей к видеофайлам MOV, MP4
-        :param path: Входящий путь из GUI 
+        Получем список путей к видеофайлам MOV, MP4.
+
+        :param path: Путь к шотам из GUI.
         """
         return [os.path.join(root, file) for root, _, files in os.walk(path) for file in files]
     
@@ -179,7 +182,7 @@ class OTIOCreator:
         Проверяет шот(секвенцию) на предмет битых кадров.
         Работает только с секвенциями.
 
-        :return: Уведомление в GUI
+        :return: Уведомление в GUI.
         """
         # Проверяем файлы на наличие веса ниже 10% от максимального
         max_file_size = 0
@@ -201,7 +204,7 @@ class OTIOCreator:
                 logger.warning(f"\n{warning_messege}")
                 break
 
-    def is_duplicate(self, shot_name, resolve_timeline_objects)-> bool:
+    def is_duplicate(self, shot_name, resolve_timeline_objects) -> bool:
         '''
         Находит шоты, версии которых уже стоят на таймлайне и пропускает их.
         '''
@@ -212,21 +215,21 @@ class OTIOCreator:
         except:
             return False
         
-    def get_gap_value(self, edl_record_in, timeline_in_tc, edl_start_timecodes, track_index):
+    def get_gap_value(self, edl_record_in, timeline_in_tc, edl_start_timecodes, track_index) -> int:
         """
         Метод определения продолжительности для первого GAP объекта и для всех остальных GAP объектов.
 
-        :param timeline_in_tc: Таймкод начала таймлайна
+        :param timeline_in_tc: Таймкод начала таймлайна.
+        :param edl_start_timecodes: Список конечных таймкодов предыдущего клипа для вычисления GAP на каждом треке.
         """
         gap_dur = 0
         if edl_start_timecodes[track_index] is None:
-            # Для первого клипа на любом из треков используем разность стартового таймкода клипа из EDL и начала таймлайна
-            gap_dur = self.timecode_to_frame(edl_record_in) - timeline_in_tc  
+            gap_dur = self.timecode_to_frame(edl_record_in) - timeline_in_tc  # Разность стартового таймкода клипа из EDL и начала таймлайна для первого вхождения
         else:
             gap_dur = self.timecode_to_frame(edl_record_in) - self.timecode_to_frame(edl_start_timecodes[track_index])
         return gap_dur
     
-    def is_miss_frames(self, shot_name, frames_list)-> bool: 
+    def is_miss_frames(self, shot_name, frames_list) -> bool: 
         """
         Функция проверяет есть ли битые кадры в секвенции.
         Работает только с секвенциями.
@@ -242,24 +245,22 @@ class OTIOCreator:
     
     def timecode_to_frame(self, timecode)-> int:
         """
-        Метод получает таймкод во фреймах
+        Метод получает таймкод во фреймах.
         """
         return tc(self.frame_rate, timecode).frames
     
     def frame_to_timecode(self, frames):
         """
-        Метод получает таймкод из значений фреймов
+        Метод получает таймкод из значений фреймов.
         """
         return tc(self.frame_rate, frames=frames)
     
-    def get_fixed_frame_handles(self, src_duration, timeline_duration, start_frame)-> int:
+    def get_fixed_frame_handles(self, src_duration, timeline_duration, start_frame) -> int:
         """Функция определяет есть ли захлесты у шота.
         Если длина исходника больше длины продолжительности шота на таймлайне и равна 6(3 + 3 захлеста), 8 и 10,
         то прибавляем к стартовому фрейму захлест.
-
-        :param edl_src_start_frame: None по дефолту на случай если пересечения таймкодов нет
         """  
-        shot_start_frame = None
+        shot_start_frame = None  # None по дефолту на случай, если пересечения таймкодов нет.
         if src_duration - timeline_duration == 6:
             shot_start_frame = float(start_frame + 3)
         elif src_duration - timeline_duration == 8:
@@ -268,15 +269,13 @@ class OTIOCreator:
             shot_start_frame = float(start_frame + 5)
         return shot_start_frame
     
-    def get_frame_handles_from_edl_in(self, edl_source_in, edl_source_out, source_in, source_out)-> int:
+    def get_frame_handles_from_edl_in(self, edl_source_in, edl_source_out, source_in, source_out) -> int:
         """Функция определяет вхождение сорс диапазона шота в таймлайн диапазон из EDL.
         Если условие удовлетворяется - получаем стартовый таймкод из EDL и передаем в create_otio_timeline_object
         для выставления этого значения в качестве начального таймкода клипа.
-
-        :param edl_src_start_frame: None по дефолту на случай если пересечения таймкодов нет
         """  
 
-        edl_src_start_frame = None
+        edl_src_start_frame = None  # None по дефолту на случай, если пересечения таймкодов нет.
         edl_src_start_tc_in_frames = self.timecode_to_frame(edl_source_in)
         edl_src_end_tc_in_frames = self.timecode_to_frame(edl_source_out)
         if edl_src_start_tc_in_frames >= source_in and edl_src_end_tc_in_frames <= source_out:  
@@ -287,12 +286,12 @@ class OTIOCreator:
     def get_filtred_shots_list_by_mask(self, shot_name):
             """
             Метод обходит папку с секвенциями или видеофайлами и отбирает только те, 
-            которые пересекаются с именем шота из EDL
+            которые пересекаются с именем шота из EDL.
 
-            :param shot_name: Имя шота из EDL
+            :param shot_name: Имя шота из EDL.
 
             :return: Список путей с фильтрованными по имени шота фолдерами(секвенциями) или видеофайлами.
-            Если присутствует несколько версий шота, в аутпут списке будут несколько версий
+            Если присутствует несколько версий шота, в аутпут списке будут несколько версий.
             """
             target_list = []
 
@@ -307,10 +306,10 @@ class OTIOCreator:
 
             return target_list
 
-    def split_name(self, clip_name)-> tuple:
+    def split_name(self, clip_name) -> tuple:
         """
-        Метод разбивает полное имя секвенции кадров на префикс, суффикс и стартовый фрэйм
-        Обрабатывает только такие имена: 015_3030_comp_v002.1004.exr и 015_3030_comp_v002_1004.exr
+        Метод разбивает полное имя секвенции кадров на префикс, суффикс и стартовый фрэйм.
+        Обрабатывает только такие имена: 015_3030_comp_v002.1004.exr и 015_3030_comp_v002_1004.exr.
         """
 
         match = re.search(fr'(.+?)([\._])\[(\d+)-\d+\]\.{self.clip_extension.lower()}$', clip_name)
@@ -324,7 +323,7 @@ class OTIOCreator:
 
     def create_otio_gap_object(self, gap_duration, track_index):
         """
-        Метод создает объект GAP в OTIO конструкторе
+        Метод создает объект GAP в OTIO конструкторе.
         """
         # Получаем существующий видеотрек
         video_track = self.otio_timeline.tracks[track_index]
@@ -433,14 +432,15 @@ class OTIOCreator:
 
     def count_timeline_objects(self):
         """
-        Получение количества объектов на таймлайне
+        Получение количества объектов на таймлайне.
         """
         return sum([len(track) for track in self.video_tracks]) 
 
     def create_video_tracks(self):
         """
-        Создание списка заданного количества объектов видео треков на OTIO таймлайне
-        Метод ничего не возвращает
+        Создание списка заданного количества объектов видео треков на OTIO таймлайне.
+
+        :return: Метод ничего не возвращает.
         """
         self.video_tracks = []
         self.track_count = 10
@@ -451,7 +451,8 @@ class OTIOCreator:
     def is_correct_lenght(self, source_duration, timeline_duration, shot_name):
         """
         Функция сравнивает фактическую длину шота по данным из сорса и из таймлайн диапазона.
-        Метод ничего не возвращает.
+
+        :return: Метод ничего не возвращает.
         """
         if source_duration < timeline_duration:
             result = timeline_duration - source_duration
@@ -459,9 +460,9 @@ class OTIOCreator:
             self.send_warning(warning_message)
             logger.warning(f'\n{warning_message}')
 
-    def is_correct_fps(self, shot)->bool:
+    def is_correct_fps(self, shot) -> bool:
         """
-        Сравнивает проектный fps и fps шота
+        Сравнивает проектный fps и fps шота.
         """
         try:
             frame = OpenEXR.InputFile(shot.first_frame_path)
@@ -484,9 +485,9 @@ class OTIOCreator:
             logger.exception(message)
             return True
         
-    def validate_shot(self, shot)-> bool:
+    def validate_shot(self, shot) -> bool:
         """
-        Метод-агрегатор валидаторов шота
+        Метод-агрегатор валидаторов шота.
         """
         if self.ignore_dublicates_bool:
             if self.is_duplicate(shot.name, self.resolve_shot_list):
@@ -504,10 +505,10 @@ class OTIOCreator:
 
     def get_shot(self, edl_shot_name, shot_path=None):
         """
-        Ищет шот в self.user_config["shots_folder"] и собирает данные о шоте
-        Проверяет секвенцию на ошибки. Если в текущей версии шота есть ошибки - шот пропускается
+        Ищет шот в self.user_config["shots_folder"] и собирает данные о шоте.
+        Проверяет секвенцию на ошибки. Если в текущей версии шота есть ошибки - шот пропускается.
 
-        :return shots_versions: Список с версиями валидных шотов
+        :return shots_versions: Список с версиями валидных шотов.
         """
         try:
             filtred_shot_paths = self.get_filtred_shots_list_by_mask(edl_shot_name)
@@ -543,7 +544,7 @@ class OTIOCreator:
 
     def run(self):
         """
-        Основной метод логики
+        Основной метод логики.
         """
         self.edl_path = self.user_config["edl_path"]
         self.frame_rate = self.user_config["frame_rate"]
@@ -625,7 +626,7 @@ class OTIOCreator:
 
 class MovieObject:
     """
-    Класс-объект видеофайла .mov или .mp4
+    Класс-объект видеофайла .MOV или .MP4.
     """
     def __init__(self, path, frame_pattern=None):
         self.path = path
@@ -634,13 +635,13 @@ class MovieObject:
     @property
     def name(self)-> str:
         """
-        Получение имени клипа
+        Получение имени клипа.
         """
         return os.path.basename(self.path)
     
     def get_duration(self, frame_rate:int)-> int:
         """
-        Получение длительности видеофайла
+        Получение длительности видеофайла.
         """
         try:
             media_info = MediaInfo.parse(self.path)
@@ -649,32 +650,34 @@ class MovieObject:
                 if track.track_type == "Video":
                     duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
                     duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
+
                     # Переводим в целое количество кадров
-                    duration = int(duration_frames) - 1 #-1 для корректного восприятия в Davinci Resolve
+                    duration = int(duration_frames) - 1  # -1 для корректного восприятия в Davinci Resolve
                     return duration
                 
         except Exception as e:
             print(f"Ошибка при получении длительности видео: {e}")
             return None
         
-    def extract_timecode(self, frame_rate)-> tuple:
+    def extract_timecode(self, frame_rate) -> tuple:
         """
-        Получение стартового таймкода, конечного таймкода и длительности видеофайла
+        Получение стартового таймкода, конечного таймкода и длительности видеофайла.
         """
         try:
             media_info = MediaInfo.parse(self.path)
             # Получаем длительность и начальный таймкод видео
             for track in media_info.tracks:
                 if track.track_type == "Video":
+
                     # Длительность видео в секундах
                     duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
                     duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
-                    duration = int(duration_frames) - 1 # -1 для корректного восприятия в Davinci Resolve
+                    duration = int(duration_frames) - 1  # -1 для корректного восприятия в Davinci Resolve
 
                     # Извлекаем начальный таймкод
                     if track.other_delay:
-                        start_timecode = tc(frame_rate, track.other_delay[4]).frames - 1 # -1 для корректного восприятия в Davinci Resolve
-                        start_timecode += 1 # +1 - отрезаем первый кадр слейта
+                        start_timecode = tc(frame_rate, track.other_delay[4]).frames - 1  # -1 для корректного восприятия в Davinci Resolve
+                        start_timecode += 1  # +1 - отрезаем первый кадр слейта
 
                     end_timecode = start_timecode + duration
                     return (start_timecode, end_timecode, duration)
@@ -685,7 +688,7 @@ class MovieObject:
 
 class SequenceFrames:
     """
-    Класс-объект секвенции EXR или JPG
+    Класс-объект секвенций EXR или JPG.
     """
     def __init__(self, path_to_sequence, extension, frame_pattern=None):
         self.path = path_to_sequence
@@ -706,28 +709,28 @@ class SequenceFrames:
     @cached_property
     def frames_list(self):
         """
-        Получаем список кадров секвенции отсортированных по возрастанию
+        Получаем список кадров секвенции отсортированных по возрастанию.
         """
         return sorted([f for f in os.listdir(self.path) if f.lower().endswith(f'.{self.extension.lower()}')])
     
     @cached_property
     def first_frame_path(self):
         """
-        Определяем путь к первому кадру секвенции
+        Определяем путь к первому кадру секвенции.
         """
         return os.path.join(self.path, self.frames_list[0])
     
     @property
-    def last_frame_path(self)->str:
+    def last_frame_path(self) -> str:
         """
-        Определяем путь к последнему кадру секвенции
+        Определяем путь к последнему кадру секвенции.
         """
         return os.path.join(self.path, self.frames_list[-1])
     
     @property
-    def first_frame_number(self)->str:
+    def first_frame_number(self) -> str:
         """
-        Извлекаем номер кадра из имени первого кадра секвенции
+        Извлекаем номер кадра из имени первого кадра секвенции.
         """
         match = re.search(self.frame_pattern, self.first_frame_path)
         if not match:
@@ -735,9 +738,9 @@ class SequenceFrames:
         return match.group(1)
     
     @property
-    def last_frame_number(self)->str:
+    def last_frame_number(self) -> str:
         """
-        Извлекаем номер кадра из имени последнего кадра секвенции
+        Извлекаем номер кадра из имени последнего кадра секвенции.
         """
         match = re.search(self.frame_pattern, self.last_frame_path)
         if not match:
@@ -745,11 +748,11 @@ class SequenceFrames:
         return match.group(1)
     
     @property
-    def name(self)->str:
+    def name(self) -> str:
         """
-        Получаем имя секвенции
+        Получаем имя секвенции.
         Обрабатывает стандартный формат имени 015_3030_comp_v002.1004.exr
-        и частый ошибочный формат имени 015_3030_comp_v002_1004.exr
+        и частый ошибочный формат имени 015_3030_comp_v002_1004.exr.
         """
         base_name = re.sub(r'(\.|_)\d+\.\w+$', '', os.path.basename(self.first_frame_path))
         frame_range = f"[{self.first_frame_number}-{self.last_frame_number}]"
@@ -757,17 +760,17 @@ class SequenceFrames:
         return f"{base_name}{sep}{frame_range}.{self.extension.lower()}"
     
     @staticmethod
-    def format_timecode(timecode_str:str)->str:
+    def format_timecode(timecode_str: str) -> str:
         """
         Форматирует таймкод в двухзначный формат для всех его компонентов (HH:MM:SS:FF).
         """
         formatted_parts = ':'.join([part.zfill(2) for part in timecode_str.split(':')])  # Каждый элемент приводит к двухзначному формату
         return formatted_parts
 
-    def extract_timecode(self, project_fps:int)->tuple:
+    def extract_timecode(self, project_fps: int) -> tuple:
         """
         Извлекает таймкод из кадра секвенции и форматирует его.
-        Настроен на композы из Nuke
+        Настроен на композы из Nuke.
         """
         try:
             frame = OpenEXR.InputFile(self.first_frame_path)
@@ -776,6 +779,7 @@ class SequenceFrames:
             start_timecode = None
 
             if timecode:
+
                 # Таймкод хранится в формате объекта. Преобразуем в строку и извлекаем время.
                 timecode_str = str(timecode)
                 time_match = timecode_str.split("time: ")[1].split(",")[0].strip()  # Извлекаем значение времени
@@ -787,7 +791,7 @@ class SequenceFrames:
                 end_timecode = start_timecode + (len(self.frames_list))
                 duration = (end_timecode - start_timecode) 
             else:
-                start_timecode = float(tc(project_fps, start_timecode).frames - 1) # -1 что бы корректно воспринимал Resolve
+                start_timecode = float(tc(project_fps, start_timecode).frames - 1) #  -1 что бы корректно воспринимал Resolve
                 end_timecode = start_timecode + (len(self.frames_list))
                 duration = (end_timecode - start_timecode) 
                           
@@ -800,7 +804,7 @@ class SequenceFrames:
 
 class OTIOWorker(QThread):
     """
-    Класс работы с логикой в отдельном потоке
+    Класс работы с логикой в отдельном потоке.
     """
     error_signal = pyqtSignal(str)
     success_signal = pyqtSignal(str)
@@ -831,9 +835,9 @@ class OTIOWorker(QThread):
 
 class ConformCheckerMixin:
     """
-    Методы примеси для класса Autoconform
+    Методы примеси для класса Autoconform.
     """
-    def count_otio_clips(self, otio_path)-> int:
+    def count_otio_clips(self, otio_path) -> int:
         """
         Читает OTIO и получает количество видео-объектов(шотов) на таймлайне(не учитывая версии шотов)
         """
@@ -851,10 +855,10 @@ class ConformCheckerMixin:
             logger.warning(f"Ошибка при чтении OTIO: {e}")
             return 0
 
-    def count_clips_on_storage(self, shots_folder, extension)-> int:
+    def count_clips_on_storage(self, shots_folder, extension) -> int:
         """
         Сканирует папку на хранилище с шотами (секвенциями или видеофайлами), 
-        участвующими в сборке OTIO, и получает их количество
+        участвующими в сборке OTIO, и получает их количество.
         """
         count = 0 
         for dirpath, _, files in os.walk(shots_folder):
@@ -872,7 +876,7 @@ class ConformCheckerMixin:
 
 class ConfigValidator:
     """
-    Класс собирает и валидирует пользовательские данные
+    Класс собирает и валидирует пользовательские данные.
     """
     def __init__(self, gui):
         self.gui = gui
@@ -880,7 +884,7 @@ class ConfigValidator:
 
     def collect_config(self) -> dict:
         """
-        Собирает пользовательские данные из GUI
+        Собирает пользовательские данные из GUI.
         """
         selected_radio = self.gui.logic_mode_group.checkedButton()
         handles_logic = selected_radio.property("mode")
@@ -899,7 +903,7 @@ class ConfigValidator:
 
     def validate(self, user_config: dict) -> bool:
         """
-        Валидирует конфиг
+        Валидирует конфиг.
         """
         self.errors.clear()
 
@@ -1103,9 +1107,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def is_OS(self, path):
         '''
-        Метод конвертирует путь под платформу
+        Метод конвертирует путь под платформу.
 
-        :return result_path: Конвертированный под платформу путь
+        :return result_path: Конвертированный под платформу путь.
         '''
         platform = {"windows": "J:/", 
                     "darwin": "/Volumes/share2/"}[sys.platform]
@@ -1114,7 +1118,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def get_project(self):
         """
-        Метод получает список проектов
+        Метод получает список проектов.
         """
         base_path = self.is_OS(Constant.project_path)
         return sorted([i for i in os.listdir(base_path) if os.path.isdir(base_path / i)])
@@ -1151,7 +1155,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def start(self):
         """
-        Запуск основной логики
+        Запуск основной логики.
         """
         self.validator = ConfigValidator(self)
         self.user_config = self.validator.collect_config()
@@ -1177,7 +1181,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def appent_warning_field(self, message):
         """
-        Добавляет уведомления и ошибки в warning_field через сигналы
+        Добавляет уведомления и ошибки в warning_field через сигналы.
         """
         if self.warning_field.toPlainText().strip().startswith("Здесь будут показаны предупреждения программы."):
             self.warning_field.clear()
@@ -1203,7 +1207,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def open_logs(self):
         """
-        Метод открывает лог-файл
+        Метод открывает лог-файл.
         """
         log_file_path = self.is_OS(Constant.log_path)
 
@@ -1217,7 +1221,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def update_result_label(self):
         """
-        Метод создает и обновляет данные результата сборки
+        Метод обновляет данные результата сборки в self.result_label.
         """
         otio_path = self.otio_input.text().strip()
         shots_path = self.shots_input.text().strip()
