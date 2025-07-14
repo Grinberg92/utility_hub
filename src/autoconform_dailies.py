@@ -197,7 +197,7 @@ class OTIOCreator:
         
         return paths
     
-    def is_drop_frames(self, exr_files, target_folder):
+    def is_drop_frames(self, shot_frames, shot_path, shot_name):
         """
         Проверяет шот(секвенцию) на предмет битых кадров.
         Работает только с секвенциями.
@@ -205,21 +205,21 @@ class OTIOCreator:
         :return: Уведомление в GUI.
         """
         # Проверяем файлы на наличие веса ниже 10% от максимального
-        max_file_size = 0
+        max_frame_size = 0
         size_threshold = 0
         percent = 0.1
-        for file in exr_files:
-            file_path = os.path.join(target_folder, file)
-            file_size = os.path.getsize(file_path)
+        for frame in shot_frames:
+            frame_path = os.path.join(shot_path, frame)
+            frame_size = os.path.getsize(frame_path)
 
             # Обновляем максимальный размер файла и порог
-            if file_size > max_file_size:
-                max_file_size = file_size
-                size_threshold = max_file_size * percent
+            if frame_size > max_frame_size:
+                max_frame_size = frame_size
+                size_threshold = max_frame_size * percent
 
             # Проверяем текущий файл
-            if file_size < size_threshold:
-                warning_messege = f"Маленький размер файла в секвенции. Вес: {file_size} байт."
+            if frame_size < size_threshold:
+                warning_messege = f"Маленький размер файла {frame} в секвенции {shot_name}. Вес: {frame_size} байт."
                 self.send_warning(warning_messege)
                 logger.warning(f"\n{warning_messege}")
                 break
@@ -257,7 +257,7 @@ class OTIOCreator:
         frames_numbers_list = [int(re.search(self.frame_pattern, i).group(0).split(".")[0]) for i in frames_list]  
         if not all(frames_numbers_list[i] + 1 == frames_numbers_list[i + 1] 
                    for i in range(len(frames_numbers_list) - 1)):
-            message = f"Секвенция {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
+            message = f"Шот {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
             self.send_warning(message)
             logger.warning(message)
             return False
@@ -274,34 +274,6 @@ class OTIOCreator:
         Метод получает таймкод из значений фреймов.
         """
         return tc(self.frame_rate, frames=frames)
-    
-    def get_fixed_frame_handles(self, src_duration, timeline_duration, start_frame) -> int:
-        """Функция определяет есть ли захлесты у шота.
-        Если длина исходника больше длины продолжительности шота на таймлайне и равна 6(3 + 3 захлеста), 8 и 10,
-        то прибавляем к стартовому фрейму захлест.
-        """  
-        shot_start_frame = None  # None по дефолту на случай, если пересечения таймкодов нет.
-        if src_duration - timeline_duration == 6:
-            shot_start_frame = float(start_frame + 3)
-        elif src_duration - timeline_duration == 8:
-            shot_start_frame = float(start_frame + 4)
-        elif src_duration - timeline_duration == 10:
-            shot_start_frame = float(start_frame + 5)
-        return shot_start_frame
-    
-    def get_frame_handles_from_edl_in(self, edl_source_in, edl_source_out, source_in, source_out) -> int:
-        """Функция определяет вхождение сорс диапазона шота в таймлайн диапазон из EDL.
-        Если условие удовлетворяется - получаем стартовый таймкод из EDL и передаем в create_otio_timeline_object
-        для выставления этого значения в качестве начального таймкода клипа.
-        """  
-
-        edl_src_start_frame = None  # None по дефолту на случай, если пересечения таймкодов нет.
-        edl_src_start_tc_in_frames = self.timecode_to_frame(edl_source_in)
-        edl_src_end_tc_in_frames = self.timecode_to_frame(edl_source_out)
-        if edl_src_start_tc_in_frames >= source_in and edl_src_end_tc_in_frames <= source_out:  
-            edl_src_start_frame = float(edl_src_start_tc_in_frames - 1)
-
-        return edl_src_start_frame
     
     def get_filtred_shots(self, shot_name):
             """
@@ -321,7 +293,7 @@ class OTIOCreator:
                     if re.search(shot_name.lower(), folder_name): 
                         target_list.append(folder_path)
                 else:
-                    if folder_name.endswith(".mov") and re.search(shot_name.lower(), folder_name): 
+                    if folder_name.endswith((".mov", ".mp4")) and re.search(shot_name.lower(), folder_name): 
                         target_list.append(folder_path)
 
             return target_list
@@ -341,7 +313,7 @@ class OTIOCreator:
 
         return (pref, suff, start)
 
-    def create_otio_gap_obj(self, gap_duration, track_index):
+    def set_gap_obj(self, gap_duration, track_index):
         """
         Метод создает объект GAP в OTIO конструкторе.
         """
@@ -361,7 +333,7 @@ class OTIOCreator:
 
             logger.info(f'GAP duration: {gap_duration}')
 
-    def create_otio_timeline_obj_mov(self, shot_data, shot_start_frame, track_index):
+    def set_timeline_obj_clip(self, shot_data, shot_start_frame, track_index):
         """
         Функция добавления треков и gap объектов на таймлайн для видеофайлов.
         """
@@ -401,7 +373,7 @@ class OTIOCreator:
         except Exception as e:
             logger.exception(f"Не удалось добавить на таймлайн секвенцию {clip_name}.") 
 
-    def create_otio_timeline_obj(self, shot_data, shot_start_frame, track_index):
+    def set_timeline_obj_seq(self, shot_data, shot_start_frame, track_index):
         """
         Функция добавления треков и gap объектов на таймлайн для секвенций.
         """
@@ -416,7 +388,7 @@ class OTIOCreator:
 
             pref, suff, start = self.split_name(clip_name)
 
-            logger.info(f'Shot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}\nParse name: {pref, suff, start}\n\n\n')
+            logger.info(f'Shot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}\nParse name: {pref, suff, start}')
 
             # Создание ссылки на клип
             media_reference = otio.schema.ImageSequenceReference(
@@ -476,7 +448,7 @@ class OTIOCreator:
         """
         if source_duration < timeline_duration:
             result = timeline_duration - source_duration
-            warning_message = f"Предупреждение. Шот {shot_name} короче, чем его длина в EDL."
+            warning_message = f"Шот {shot_name} короче, чем его длина в EDL."
             self.send_warning(warning_message)
             logger.warning(f'\n{warning_message}')
 
@@ -518,7 +490,7 @@ class OTIOCreator:
         if not self.is_correct_fps(shot):
             return False
 
-        self.is_drop_frames(shot.frames_list, shot.path)
+        self.is_drop_frames(shot.frames_list, shot.path, shot.name)
 
         return True
 
@@ -561,19 +533,188 @@ class OTIOCreator:
             logger.exception(error_message) 
             self.send_warning(f'Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
             return []
+        
+    def start_frame_logic(self, data):
+        """
+        Логика конформа шотов которая устанавливает с какого фрейма будет начинаться шот на таймлайне.
+        Значение получено из ui.
+
+        :return: Метод ничего не возвращает.
+        """  
+        source_in = data["source_in_tc"]
+        shot_name = data["shot_name"]
+        gap_duration = data["gap_duration"]
+        track_index = data["track_index"]
+        source_duration = data["source_duration"]
+        timeline_duration = data["timeline_duration"]
+
+        shot_start_frame = source_in + self.start_frame_ui
+
+        self.is_correct_lenght(source_duration, timeline_duration, shot_name)
+
+        self.set_gap_obj(gap_duration, track_index)  
+
+        if self.not_movie_bool:
+            self.set_timeline_obj_seq(data, shot_start_frame, track_index)
+        else:
+            self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+    
+    def edl_start_logic(self, data):
+        """
+        Логика конформа шотов определяет вхождение сорс диапазона шота в таймлайн диапазон из EDL.
+        Если условие удовлетворяется - получаем стартовый таймкод из EDL и передаем в set_timeline_obj_seq/clip
+        для выставления этого значения в качестве начального таймкода клипа.
+
+        :return: Метод ничего не возвращает.
+        """  
+        source_in = data["source_in_tc"]
+        source_out = data["source_out_tc"]
+        shot_name = data["shot_name"]
+        edl_source_in = self.timecode_to_frame(data["edl_source_in"])
+        edl_source_out = self.timecode_to_frame(data["edl_source_out"])
+        gap_duration = data["gap_duration"]
+        track_index = data["track_index"]
+        source_duration = data["source_duration"]
+        timeline_duration = data["timeline_duration"]
+
+        shot_start_frame = None  # None по дефолту на случай, если пересечения таймкодов нет.
+
+        self.is_correct_lenght(source_duration, timeline_duration, shot_name)
+
+        if edl_source_in >= source_in and edl_source_out <= source_out:  
+            shot_start_frame = float(edl_source_in - 1)
+
+        self.set_gap_obj(gap_duration, track_index)  
+
+        if self.not_movie_bool:
+            self.set_timeline_obj_seq(data, shot_start_frame, track_index)
+        else:
+            self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+    
+    def full_conform_logic(self, data):
+        """
+        Логика конформа шотов, учитывающая все сценарии пересечения тайкодов исходника,
+        полученных из EDL и данных таймкодов, полученных непосредственно из шота.
+        В случае полного отсутствия пересечения таймкодов используется значение из ui, которое устанавливает
+        с какого фрейма будет начинаться шот на таймлайне.
+
+        :return: Метод ничего не возвращает.
+        """
+        source_in = data["source_in_tc"]
+        source_out = data["source_out_tc"]
+        shot_name = data["shot_name"]
+        edl_source_in = self.timecode_to_frame(data["edl_source_in"])
+        edl_source_out = self.timecode_to_frame(data["edl_source_out"])
+        gap_duration = data["gap_duration"]
+        track_index = data["track_index"]
+        source_duration = data["source_duration"]
+        timeline_duration = data["timeline_duration"]
+
+        shot_start_frame = None
+
+        # Полное отсутствие пересечения
+        if source_out < edl_source_in or source_in > edl_source_out:
+
+            shot_start_frame = source_in + self.start_frame_ui
+            logger.debug("Полное отсутствие пересечения")
+
+            self.set_gap_obj(gap_duration, track_index)
+
+            if self.not_movie_bool:
+                self.set_timeline_obj_seq(data, shot_start_frame, track_index)
+            else:
+                self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+    
+            self.send_warning(f"Шот {shot_name} Нет пересечения диапазона")
+            logger.info(f"Шот {shot_name} Нет пересечения диапазона")
+
+
+        # Полное пересечение (EDL внутри исходника)
+        elif edl_source_in >= source_in and edl_source_out <= source_out:  
+
+            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
+
+            shot_start_frame = float(edl_source_in - 1)
+            logger.debug("Полное пересечение (EDL внутри исходника)")
+
+            self.set_gap_obj(gap_duration, track_index)
+
+            if self.not_movie_bool:
+                self.set_timeline_obj_seq(data, shot_start_frame, track_index)
+            else:
+                self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+
+        
+        # Часть исходника ДО EDL, часть внутри
+        elif edl_source_in >= source_in and edl_source_out > source_out:
+
+            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
+
+            shot_start_frame = float(edl_source_in - 1)
+            cutted_duration = (edl_source_out - source_out) - 1
+            data["timeline_duration"] = data["timeline_duration"] - cutted_duration
+            logger.debug("Часть исходника ДО EDL, часть внутри")
+
+            self.set_gap_obj(gap_duration, track_index)  
+
+            if self.not_movie_bool:
+                self.set_timeline_obj_seq(data, shot_start_frame, track_index)
+            else:
+                self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+
+            self.set_gap_obj(cutted_duration, track_index)
+
+        # Часть исходника ПОСЛЕ EDL, часть внутри
+        elif edl_source_in < source_in and edl_source_out <= source_out:
+
+            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
+
+            shot_start_frame = float(source_in - 1)
+            cutted_duration = (source_in - edl_source_in) - 1 + 2  # Почему именно так?
+            data["timeline_duration"] = data["timeline_duration"] - cutted_duration
+            new_gap_duration = gap_duration + cutted_duration
+            logger.debug("Часть исходника ПОСЛЕ EDL, часть внутри")
+
+            self.set_gap_obj(new_gap_duration, track_index)  
+
+            if self.not_movie_bool:
+                self.set_timeline_obj_seq(data, shot_start_frame, track_index)
+            else:
+                self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+
+        # Исходник полностью внутри EDL 
+        elif edl_source_in < source_in and edl_source_out > source_out:
+
+            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
+
+            shot_start_frame = float(source_in - 1)
+            cutted_duration_start = (source_in - edl_source_in) - 1 + 2
+            cutted_duration_end = (edl_source_out - source_out) - 1
+            data["timeline_duration"] = data["timeline_duration"] - (cutted_duration_start + cutted_duration_end)
+            gap_duration_start = gap_duration + cutted_duration_start
+            logger.debug(f"Исходник полностью внутри EDL ")
+
+            self.set_gap_obj(gap_duration_start, track_index)  
+
+            if self.not_movie_bool:
+                self.set_timeline_obj_seq(data, shot_start_frame, track_index)
+            else:
+                self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+
+            self.set_gap_obj(cutted_duration_end, track_index)
 
     def run(self):
         """
-        Основной метод логики.
+        Основная логика создания OTIO таймлайна.
         """
         self.edl_path = self.user_config["edl_path"]
         self.frame_rate = self.user_config["frame_rate"]
         self.ignore_dublicates_bool = self.user_config["ignore_dublicates"]
         self.clip_extension = self.user_config["extension"]
         self.handles_logic = self.user_config["handles_logic"]
+        self.start_frame_ui = int(self.user_config["start_frame_ui"])
         self.not_movie_bool = self.clip_extension not in ("mov", "mp4")
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
-
 
         edl_data = EDLParser_v3(self.edl_path)
 
@@ -600,39 +741,37 @@ class OTIOCreator:
                     
                     source_in_tc, source_out_tc, source_duration = shot.extract_timecode(self.frame_rate)
 
-                    # Вычисление таймлайн дюрэйшн
                     timeline_duration = self.timecode_to_frame(edl_record_out) - self.timecode_to_frame(edl_record_in)
 
-                    # Нахождение страртового кадра для создания OTIO клипа и выставления захлеста
-                    if self.handles_logic == "fixed":
-                        shot_start_frame = self.get_fixed_frame_handles(source_duration, timeline_duration, source_in_tc)
-                    elif self.handles_logic == "from_edl":
-                        shot_start_frame = self.get_frame_handles_from_edl_in(edl_source_in, 
-                                                                                   edl_source_out, source_in_tc, source_out_tc)
-                    # Вычисление GAP для клипов
                     gap_duration = self.get_gap_value(edl_record_in, timeline_in_tc, edl_start_timecodes, track_index)
-
-                    logger.info(f"Source start tc: {source_in_tc}\nSource end tc: {source_out_tc}")
-                    logger.info(f'\nTimeline start timecode: {edl_record_in}\nTimeline end timecode: {edl_record_out}')
-                    logger.info(f'\nEDL source start timecode: {edl_source_in}\nEDL source end timecode: {edl_source_out}\nTimeline duration: {timeline_duration}')
-
-                    self.create_otio_gap_obj(gap_duration, track_index)
-
-                    self.is_correct_lenght(source_duration, timeline_duration, shot.name)
 
                     shot_data = {
                         'exr_path': shot.path,
                         'shot_name': shot.name,
-                        'gap_duration': gap_duration,
                         'source_in_tc': source_in_tc,
+                        'source_out_tc': source_out_tc,
                         'source duration': source_duration,
                         'timeline_duration': timeline_duration,
-                        'track_index': track_index
-                                            }
-                    if self.not_movie_bool:
-                        self.create_otio_timeline_obj(shot_data, shot_start_frame, track_index)
-                    else:
-                        self.create_otio_timeline_obj_mov(shot_data, shot_start_frame, track_index)
+                        'track_index': track_index,
+                        'gap_duration': gap_duration,
+                        'source_duration': source_duration,
+                        "edl_source_in": edl_source_in,
+                        "edl_source_out": edl_source_out,
+                    }
+
+                    # Выбор логики конформа
+                    if self.handles_logic == "from_start_frame":
+                        self.start_frame_logic(shot_data)
+                    elif self.handles_logic == "from_edl_start":
+                        self.edl_start_logic(shot_data)
+                    elif self.handles_logic == "full_logic":
+                        self.full_conform_logic(shot_data)
+
+                    logger.info("\n".join((
+                                           f'Source in: {source_in_tc}', f'Source out: {source_out_tc}', 
+                                          f'EDL timeline start timecode: {edl_record_in}', f'EDL timeline end timecode: {edl_record_out}',
+                                          f'EDL source start timecode: {edl_source_in}', f'EDL source end timecode: {edl_source_out}', 
+                                          f'Timeline duration: {timeline_duration}', "\n\n\n")))
 
                     edl_start_timecodes[track_index] = edl_record_out
 
@@ -643,6 +782,7 @@ class OTIOCreator:
             logger.exception(f"Сбой в работе программы. Не удалось сформировать OTIO файл: {e}") 
 
 class MovieObject:
+    
     """
     Класс-объект видеофайла .MOV или .MP4.
     """
@@ -916,7 +1056,8 @@ class ConfigValidator:
             "project": self.gui.project_menu.currentText(),
             "ignore_dublicates": self.gui.no_dublicates.isChecked(),
             "frame_rate": self.gui.frame_rate,
-            "handles_logic": handles_logic
+            "handles_logic": handles_logic,
+            "start_frame_ui": self.gui.start_frame.text().strip()
         }
 
     def validate(self, user_config: dict) -> bool:
@@ -935,6 +1076,7 @@ class ConfigValidator:
         try:
             int(user_config["track_in"])
             int(user_config["track_out"])
+            int(user_config["start_frame_ui"])
         except ValueError:
             self.errors.append("Значения должны быть целыми числами")
         return not self.errors
@@ -959,6 +1101,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.selected_track_in = "8"
         self.selected_track_out = "8"
         self.selected_format = "EXR"
+        self.select_frame = "3"
 
         self.otio_counter = 0
         self.folder_counter = 0
@@ -966,12 +1109,15 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.projects = self.get_project()
         self.selected_project = self.projects[0] if self.projects else ""
 
-        self.logic_mode_fixed = QRadioButton()
-        self.logic_mode_fixed.setChecked(True) 
-        self.logic_mode_fixed.setProperty("mode", "fixed")
+        self.from_start_frame_mode = QRadioButton()
+        self.from_start_frame_mode.setChecked(True) 
+        self.from_start_frame_mode.setProperty("mode", "from_start_frame")
 
-        self.logic_mode_from_edl_in = QRadioButton()
-        self.logic_mode_from_edl_in.setProperty("mode", "from_edl")
+        self.from_edl_start_mode = QRadioButton()
+        self.from_edl_start_mode.setProperty("mode", "from_edl_start")
+
+        self.full_conform_mode = QRadioButton()
+        self.full_conform_mode.setProperty("mode","full_logic")
 
         self.init_ui()
 
@@ -985,41 +1131,48 @@ class Autoconform(QWidget, ConformCheckerMixin):
         main_layout.addWidget(self.warning_field)
 
         # Логика
-        logic_group = QGroupBox("Handles logic")
-        logic_group.setFixedHeight(70)
-        logic_group.setFixedWidth(300)
+        logic_group = QGroupBox("Conform logic")
+        logic_group.setFixedHeight(75)
+        logic_group.setFixedWidth(400)
         logic_layout = QHBoxLayout()
 
         self.logic_mode_group = QButtonGroup(self)
-        self.logic_mode_group.addButton(self.logic_mode_fixed)
-        self.logic_mode_group.addButton(self.logic_mode_from_edl_in)
+        self.logic_mode_group.addButton(self.from_start_frame_mode)
+        self.logic_mode_group.addButton(self.from_edl_start_mode)
+        self.logic_mode_group.addButton(self.full_conform_mode)
 
         vbox1 = QVBoxLayout()
-        fixed_label = QLabel("Fixed")
-        fixed_label.setAlignment(Qt.AlignHCenter)
-        vbox1.addWidget(self.logic_mode_fixed, alignment=Qt.AlignHCenter)
-        vbox1.addWidget(fixed_label)
+        from_start_label = QLabel("From start frame")
+        from_start_label.setAlignment(Qt.AlignHCenter)
+        vbox1.addWidget(self.from_start_frame_mode, alignment=Qt.AlignHCenter)
+        vbox1.addWidget(from_start_label)
 
         vbox2 = QVBoxLayout()
-        edl_in_label = QLabel("From EDL in")
-        edl_in_label.setAlignment(Qt.AlignHCenter)
-        vbox2.addWidget(self.logic_mode_from_edl_in, alignment=Qt.AlignHCenter)
-        vbox2.addWidget(edl_in_label)
+        from_edl_label = QLabel("From EDL start")
+        from_edl_label.setAlignment(Qt.AlignHCenter)
+        vbox2.addWidget(self.from_edl_start_mode, alignment=Qt.AlignHCenter)
+        vbox2.addWidget(from_edl_label)
+
+        vbox3 = QVBoxLayout()
+        full_logic_label = QLabel("Full conform")
+        full_logic_label.setAlignment(Qt.AlignHCenter)
+        vbox3.addWidget(self.full_conform_mode, alignment=Qt.AlignHCenter)
+        vbox3.addWidget(full_logic_label)
 
         logic_layout.addStretch()
         logic_layout.addLayout(vbox1)
-        logic_layout.addSpacing(60)
+        logic_layout.addSpacing(25)
         logic_layout.addLayout(vbox2)
+        logic_layout.addStretch()
+        logic_layout.addLayout(vbox3)
         logic_layout.addStretch()
 
         logic_group.setLayout(logic_layout)
         main_layout.addWidget(logic_group, alignment=Qt.AlignHCenter)
 
-        # 
+        # Группа Settings
         settings_group = QGroupBox("Settings")
         settings_layout = QVBoxLayout()
-
-        # --- Project + Extension (горизонтальный слой с двумя вертикальными)
         top_row_layout = QHBoxLayout()
 
         # Левая вертикаль: проект
@@ -1040,16 +1193,15 @@ class Autoconform(QWidget, ConformCheckerMixin):
         format_vbox.addWidget(format_label)
         format_vbox.addWidget(self.format_menu)
 
-        # Объединяем в горизонтальный слой
         top_row_layout.addLayout(project_vbox)
         top_row_layout.addSpacing(40)
         top_row_layout.addLayout(format_vbox)
 
-        # --- Нижняя строка: чекбокс и диапазон треков
+        # Игнорирование дубликатов и стартовый фрейм
         bottom_row_layout = QHBoxLayout()
-        self.no_dublicates = QCheckBox("Ignore dublicates")
+        self.no_dublicates = QCheckBox("Ignore dubl")
         bottom_row_layout.addWidget(self.no_dublicates)
-        bottom_row_layout.addSpacing(30)
+        bottom_row_layout.addSpacing(20)
 
         bottom_row_layout.addWidget(QLabel("tracks range:"))
 
@@ -1062,6 +1214,12 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.track_out_input = QLineEdit(self.selected_track_out)
         self.track_out_input.setFixedWidth(30)
         bottom_row_layout.addWidget(self.track_out_input)
+        bottom_row_layout.addSpacing(45)
+
+        bottom_row_layout.addWidget(QLabel("Start frame:"))
+        self.start_frame = QLineEdit(self.select_frame)
+        self.start_frame.setFixedWidth(30) 
+        bottom_row_layout.addWidget(self.start_frame)
         bottom_row_layout.addStretch()
 
         # Финальная сборка
@@ -1071,7 +1229,6 @@ class Autoconform(QWidget, ConformCheckerMixin):
         settings_group.setLayout(settings_layout)
 
         main_layout.addWidget(settings_group)
-
 
         # Выбор EDL
         edl_path_layout = QHBoxLayout()
@@ -1084,7 +1241,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         edl_path_layout.addWidget(edl_button)
         main_layout.addLayout(edl_path_layout)
 
-        # Shots folder
+        # Выбор фолдера с шотами
         shots_path_layout = QHBoxLayout()
         shots_path_layout.addWidget(QLabel("Shots folder:"))
         shots_path_layout.addSpacing(10)
@@ -1095,7 +1252,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         shots_path_layout.addWidget(shots_button)
         main_layout.addLayout(shots_path_layout)
 
-        # OTIO
+        # Выбор OTIO
         otio_path_layout = QHBoxLayout()
         otio_path_layout.addWidget(QLabel("Save OTIO file:"))
         self.otio_input = QLineEdit()
@@ -1110,6 +1267,12 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.button_create.clicked.connect(self.start)
         main_layout.addWidget(self.button_create)
 
+        # Кнопка Import
+        self.button_import = QPushButton("Import OTIO")
+        self.button_import.clicked.connect(self.resolve_import_timeline)
+        main_layout.addWidget(self.button_import)
+
+        # Статус обрабортки шотов
         self.result_label = QLabel("Processed 0 from 0 shots")
         main_layout.addWidget(self.result_label)
 
@@ -1122,6 +1285,50 @@ class Autoconform(QWidget, ConformCheckerMixin):
         main_layout.addLayout(bottom_layout)
 
         self.setLayout(main_layout)
+
+        # Связь сигналов с обновлением UI
+        self.no_dublicates.stateChanged.connect(self.update_ui_state)
+        self.logic_mode_group.buttonClicked.connect(self.update_ui_state)
+
+        # Вызов для установки начального состояния
+        self.update_ui_state()
+
+    def resolve_import_timeline(self):
+        """
+        Импорт OTIO таймлайна в Davinci Resolve
+        """
+
+        resolve = dvr.scriptapp("Resolve")
+        project = resolve.GetProjectManager().GetCurrentProject()
+        media_pool = project.GetMediaPool()
+
+        timeline = media_pool.ImportTimelineFromFile(self.otio_path, {
+            "timelineName": f"{os.path.basename(str(self.otio_path))}",
+            "importSourceClips": True,   
+        })
+
+        current_folder = media_pool.GetCurrentFolder().GetClipList()
+        items = [item for item in current_folder if item.GetClipProperty("Type") == "Video"]
+        for item in items:
+            if item.GetClipProperty("Alpha mode") != "None":
+                item.SetClipProperty("Alpha mode", "None") 
+            if item.GetClipColor() == "":
+                item.SetClipColor("Lime") 
+
+    def update_ui_state(self):
+        """
+        Блокировка и активация полей ui.
+        """
+        track_inputs_enabled = self.no_dublicates.isChecked()
+        self.track_in_input.setEnabled(track_inputs_enabled)
+        self.track_out_input.setEnabled(track_inputs_enabled)
+
+        selected_button = self.logic_mode_group.checkedButton()
+        selected_mode = selected_button.property("mode") if selected_button else None
+
+        start_frame_enabled = selected_mode in ("from_start_frame", "full_logic")
+        self.start_frame.setEnabled(start_frame_enabled)
+
 
     def is_OS(self, path):
         '''
