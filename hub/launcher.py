@@ -35,7 +35,7 @@ class HubApp(QWidget):
         row1 = self.create_button_description_row(
             button_name="Autoconfom",
             description_text="Автоматическая сборка дейлизов (EXR, JPG)",
-            script_name="autoconform_dailies_EXR_JPG.py"
+            script_name="autoconform_dailies.py"
         )
         row2 = self.create_button_description_row(
             button_name="Exr delivery",
