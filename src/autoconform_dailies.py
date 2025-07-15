@@ -1336,7 +1336,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         :return result_path: Конвертированный под платформу путь.
         '''
-        platform = {"windows": "J:/", 
+        platform = {"win32": "J:/", 
                     "darwin": "/Volumes/share2/"}[sys.platform]
         result_path = Path(platform) / path
         return result_path
