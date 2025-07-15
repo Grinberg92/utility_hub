@@ -1,9 +1,3 @@
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QTextEdit, QComboBox, QScrollBar, QFileDialog, QCheckBox, QFrame, QSizePolicy, QMessageBox,
-    QGroupBox, QRadioButton, QButtonGroup
-)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import os
 import sys
 import re
@@ -13,8 +7,13 @@ from timecode import Timecode as tc
 import OpenEXR
 from dataclasses import dataclass
 import opentimelineio as otio
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
+    QLineEdit, QTextEdit, QComboBox, QScrollBar, QFileDialog, QCheckBox, QFrame, QSizePolicy, QMessageBox,
+    QGroupBox, QRadioButton, QButtonGroup
+)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import DaVinciResolveScript as dvr
-from collections import Counter
 from pymediainfo import MediaInfo
 from functools import cached_property
 from dvr_tools.logger_config import get_logger
