@@ -663,13 +663,13 @@ class OTIOCreator:
 
             self.set_gap_obj(cutted_duration, track_index)
 
-        # Часть исходника ПОСЛЕ EDL, часть внутри
+        # Часть исходника ПОСЛЕ EDL, часть внутри         
         elif edl_source_in < source_in and edl_source_out <= source_out:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
             shot_start_frame = float(source_in - 1)
-            cutted_duration = (source_in - edl_source_in) - 1 + 2  # Почему именно так?
+            cutted_duration = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в резолв 
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
             new_gap_duration = gap_duration + cutted_duration
             logger.debug("Часть исходника ПОСЛЕ EDL, часть внутри")
@@ -687,7 +687,7 @@ class OTIOCreator:
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
             shot_start_frame = float(source_in - 1)
-            cutted_duration_start = (source_in - edl_source_in) - 1 + 2
+            cutted_duration_start = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в резолв 
             cutted_duration_end = (edl_source_out - source_out) - 1
             data["timeline_duration"] = data["timeline_duration"] - (cutted_duration_start + cutted_duration_end)
             gap_duration_start = gap_duration + cutted_duration_start
