@@ -1103,9 +1103,6 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
         self.frame_rate = 24
-        self.edl_path = ""
-        self.shots_folder = ""
-        self.otio_path = ""
 
         self.selected_track_in = "8"
         self.selected_track_out = "8"
@@ -1374,7 +1371,6 @@ class Autoconform(QWidget, ConformCheckerMixin):
                                               "EDL files (*.edl)")
         if path:
             self.edl_input.setText(path)
-            self.edl_path = path
 
     def select_shots_folder(self):
         init_dir = {"windows": "R:/", 
@@ -1384,7 +1380,6 @@ class Autoconform(QWidget, ConformCheckerMixin):
                                                 init_dir)
         if path:
             self.shots_input.setText(path)
-            self.shots_folder = path
 
     def save_otio(self):
         init_dir = str(self.is_OS(f'003_transcode_to_vfx/projects/{self.project_menu.currentText()}/'))
@@ -1394,7 +1389,6 @@ class Autoconform(QWidget, ConformCheckerMixin):
                                               "OTIO files (*.otio)")
         if path:
             self.otio_input.setText(path)
-            self.otio_path = path
 
     def start(self):
         """
