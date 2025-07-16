@@ -587,7 +587,7 @@ class OTIOCreator:
         self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
         if edl_source_in >= source_in and edl_source_out <= source_out:  
-            shot_start_frame = float(edl_source_in - 1)
+            shot_start_frame = edl_source_in - 1
 
         self.set_gap_obj(gap_duration, track_index)  
 
@@ -639,7 +639,7 @@ class OTIOCreator:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
-            shot_start_frame = float(edl_source_in - 1)
+            shot_start_frame = edl_source_in - 1
             logger.debug("Полное пересечение (EDL внутри исходника)")
 
             self.set_gap_obj(gap_duration, track_index)
@@ -655,7 +655,7 @@ class OTIOCreator:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
-            shot_start_frame = float(edl_source_in - 1)
+            shot_start_frame = edl_source_in - 1
             cutted_duration = (edl_source_out - source_out) - 1
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
             logger.debug("Часть исходника ДО EDL, часть внутри")
@@ -674,7 +674,7 @@ class OTIOCreator:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
-            shot_start_frame = float(source_in - 1)
+            shot_start_frame = source_in - 1
             cutted_duration = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в резолв 
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
             new_gap_duration = gap_duration + cutted_duration
@@ -692,7 +692,7 @@ class OTIOCreator:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
-            shot_start_frame = float(source_in - 1)
+            shot_start_frame = source_in - 1
             cutted_duration_start = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в резолв 
             cutted_duration_end = (edl_source_out - source_out) - 1
             data["timeline_duration"] = data["timeline_duration"] - (cutted_duration_start + cutted_duration_end)
@@ -953,11 +953,11 @@ class SequenceFrames:
                 start_timecode = self.format_timecode(time_match)  # Приводим к двухзначному формату
                  
             if start_timecode is None:
-                start_timecode = float(tc(project_fps, "00:00:00:00").frames - 1)  # -1 что бы корректно воспринимал Resolve
+                start_timecode = tc(project_fps, "00:00:00:00").frames - 1  # -1 что бы корректно воспринимал Resolve
                 end_timecode = start_timecode + (len(self.frames_list))
                 duration = (end_timecode - start_timecode) 
             else:
-                start_timecode = float(tc(project_fps, start_timecode).frames - 1) #  -1 что бы корректно воспринимал Resolve
+                start_timecode = tc(project_fps, start_timecode).frames - 1 #  -1 что бы корректно воспринимал Resolve
                 end_timecode = start_timecode + (len(self.frames_list))
                 duration = (end_timecode - start_timecode) 
                           
