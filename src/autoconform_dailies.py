@@ -1301,10 +1301,13 @@ class Autoconform(QWidget, ConformCheckerMixin):
         project = resolve.GetProjectManager().GetCurrentProject()
         media_pool = project.GetMediaPool()
 
-        timeline = media_pool.ImportTimelineFromFile(self.otio_path, {
-            "timelineName": f"{os.path.basename(str(self.otio_path))}",
+        timeline = media_pool.ImportTimelineFromFile(self.otio_input.text(), {
+            "timelineName": f"{os.path.basename(str(self.otio_input.text()))}",
             "importSourceClips": True,   
         })
+
+        if timeline is None:
+            QMessageBox.warning(self, "Ошибка", "Ошибка импорта таймлайна")
 
         current_folder = media_pool.GetCurrentFolder().GetClipList()
         items = [item for item in current_folder if item.GetClipProperty("Type") == "Video"]
