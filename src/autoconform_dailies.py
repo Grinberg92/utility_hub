@@ -533,6 +533,12 @@ class OTIOCreator:
             self.send_warning(f'Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
             return []
         
+    def cut_slate(self, source_in_tc) -> int:
+        """
+        Метод отрезает 1 кадр слейта в .mov дейлизах, оставляя его в захлесте
+        """
+        return source_in_tc + 1
+        
     def start_frame_logic(self, data):
         """
         Логика конформа шотов которая устанавливает с какого фрейма будет начинаться шот на таймлайне.
@@ -714,6 +720,7 @@ class OTIOCreator:
         self.start_frame_ui = int(self.user_config["start_frame_ui"])
         self.not_movie_bool = self.clip_extension not in ("mov", "mp4")
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
+        self.include_slate = self.user_config["include_slate"]
 
         edl_data = EDLParser_v3(self.edl_path)
 
@@ -739,6 +746,9 @@ class OTIOCreator:
                 for track_index, shot in enumerate(shot_versions):
                     
                     source_in_tc, source_out_tc, source_duration = shot.extract_timecode(self.frame_rate)
+
+                    if self.include_slate:
+                        source_in_tc = self.cut_slate(source_in_tc)
 
                     timeline_duration = self.timecode_to_frame(edl_record_out) - self.timecode_to_frame(edl_record_in)
 
@@ -834,7 +844,6 @@ class MovieObject:
                     # Извлекаем начальный таймкод
                     if track.other_delay:
                         start_timecode = tc(frame_rate, track.other_delay[4]).frames - 1  # -1 для корректного восприятия в Davinci Resolve
-                        start_timecode += 1  # +1 - отрезаем первый кадр слейта
 
                     end_timecode = start_timecode + duration
                     return (start_timecode, end_timecode, duration)
@@ -1056,7 +1065,8 @@ class ConfigValidator:
             "ignore_dublicates": self.gui.no_dublicates.isChecked(),
             "frame_rate": self.gui.frame_rate,
             "handles_logic": handles_logic,
-            "start_frame_ui": self.gui.start_frame.text().strip()
+            "start_frame_ui": self.gui.start_frame.text().strip(),
+            "include_slate": self.gui.include_slate.isChecked()
         }
 
     def validate(self, user_config: dict) -> bool:
@@ -1189,6 +1199,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.format_menu = QComboBox()
         self.format_menu.addItems(["EXR", "JPG", "MOV", "MP4"])
         self.format_menu.setCurrentText(self.selected_format)
+        self.format_menu.currentTextChanged.connect(self.update_ui_state)
         format_vbox.addWidget(format_label)
         format_vbox.addWidget(self.format_menu)
 
@@ -1221,7 +1232,10 @@ class Autoconform(QWidget, ConformCheckerMixin):
         bottom_row_layout.addWidget(self.start_frame)
         bottom_row_layout.addStretch()
 
-        # Финальная сборка
+        self.include_slate = QCheckBox("Include slate")
+        bottom_row_layout.addWidget(self.include_slate)
+
+
         settings_layout.addLayout(top_row_layout)
         settings_layout.addSpacing(10)
         settings_layout.addLayout(bottom_row_layout)
@@ -1288,6 +1302,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         # Связь сигналов с обновлением UI
         self.no_dublicates.stateChanged.connect(self.update_ui_state)
         self.logic_mode_group.buttonClicked.connect(self.update_ui_state)
+        self.include_slate.stateChanged.connect(self.update_ui_state)
 
         # Вызов для установки начального состояния
         self.update_ui_state()
@@ -1331,6 +1346,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         start_frame_enabled = selected_mode in ("from_start_frame", "full_logic")
         self.start_frame.setEnabled(start_frame_enabled)
 
+        self.include_slate.setEnabled(self.format_menu.currentText() in ("MOV", "MP4"))
 
     def is_OS(self, path):
         '''
