@@ -689,6 +689,8 @@ class OTIOCreator:
         track_index = data["track_index"]
         source_duration = data["source_duration"]
         timeline_duration = data["timeline_duration"]
+        edl_record_in = data["edl_record_in"]
+        edl_record_out = data["edl_record_out"]
 
         shot_start_frame = None
 
@@ -775,6 +777,13 @@ class OTIOCreator:
 
             self.set_gap_obj(cutted_duration_end, track_index)
 
+        logger.info("\n".join((
+                                f'Source in: {source_in}', f'Source out: {source_out}', 
+                                f'Shot start frame: {shot_start_frame}'
+                                f'EDL timeline start timecode: {edl_record_in}', f'EDL timeline end timecode: {edl_record_out}',
+                                f'EDL source start timecode: {edl_source_in}', f'EDL source end timecode: {edl_source_out}', 
+                                f'Timeline duration: {timeline_duration}', "\n\n\n")))
+
     def run(self):
         """
         Основная логика создания OTIO таймлайна.
@@ -833,6 +842,8 @@ class OTIOCreator:
                         'source_duration': source_duration,
                         "edl_source_in": edl_source_in,
                         "edl_source_out": edl_source_out,
+                        "edl_record_in": edl_record_in,
+                        "edl_record_out": edl_record_out
                     }
 
                     # Выбор логики конформа
@@ -842,12 +853,6 @@ class OTIOCreator:
                         self.edl_start_logic(shot_data)
                     elif self.handles_logic == "full_logic":
                         self.full_conform_logic(shot_data)
-
-                    logger.info("\n".join((
-                                           f'Source in: {source_in_tc}', f'Source out: {source_out_tc}', 
-                                          f'EDL timeline start timecode: {edl_record_in}', f'EDL timeline end timecode: {edl_record_out}',
-                                          f'EDL source start timecode: {edl_source_in}', f'EDL source end timecode: {edl_source_out}', 
-                                          f'Timeline duration: {timeline_duration}', "\n\n\n")))
 
                     edl_start_timecodes[track_index] = edl_record_out
 
