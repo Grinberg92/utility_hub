@@ -613,7 +613,20 @@ class OTIOCreator:
         Метод отрезает 1 кадр слейта в .mov дейлизах, оставляя его в захлесте
         """
         return source_in_tc + 1
-        
+    
+    def resolve_compensation_tc(self, frame) -> int:
+        """
+        Вычитает -1 фрейм для корректной интерпретации в Resolve.
+        """
+        return frame - 1
+    
+    def resolve_compensation_edl(self, frame) -> int:
+        """
+        Вычитает -1 фрейм. 
+        В EDL изначально edl_source_out + 1 для правильной машинной интерпретации, но для арифметики логики это не корректно.
+        """
+        return frame - 1
+
     def start_frame_logic(self, data):
         """
         Логика конформа шотов которая устанавливает с какого фрейма будет начинаться шот на таймлайне.
@@ -628,7 +641,7 @@ class OTIOCreator:
         source_duration = data["source_duration"]
         timeline_duration = data["timeline_duration"]
 
-        shot_start_frame = source_in + self.start_frame_ui
+        shot_start_frame = source_in + self.start_frame_ui - 1 # компенсация для корректной интерпретации в Resolve
 
         self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
@@ -651,7 +664,7 @@ class OTIOCreator:
         source_out = data["source_out_tc"]
         shot_name = data["shot_name"]
         edl_source_in = self.timecode_to_frame(data["edl_source_in"])
-        edl_source_out = self.timecode_to_frame(data["edl_source_out"])
+        edl_source_out = self.resolve_compensation_edl(self.timecode_to_frame(data["edl_source_out"]))
         gap_duration = data["gap_duration"]
         track_index = data["track_index"]
         source_duration = data["source_duration"]
@@ -663,6 +676,7 @@ class OTIOCreator:
 
         if edl_source_in >= source_in and edl_source_out <= source_out:  
             shot_start_frame = edl_source_in - 1
+            data["source_in_tc"] = source_in - 1 
 
         self.set_gap_obj(gap_duration, track_index)  
 
@@ -684,7 +698,7 @@ class OTIOCreator:
         source_out = data["source_out_tc"]
         shot_name = data["shot_name"]
         edl_source_in = self.timecode_to_frame(data["edl_source_in"])
-        edl_source_out = self.timecode_to_frame(data["edl_source_out"])
+        edl_source_out = self.resolve_compensation_edl(self.timecode_to_frame(data["edl_source_out"]))
         gap_duration = data["gap_duration"]
         track_index = data["track_index"]
         source_duration = data["source_duration"]
@@ -707,8 +721,8 @@ class OTIOCreator:
         elif edl_source_in >= source_in and edl_source_out <= source_out:  
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
-
-            shot_start_frame = edl_source_in - 1
+            data["source_in_tc"] = self.resolve_compensation_tc(source_in) 
+            shot_start_frame = self.resolve_compensation_tc(edl_source_in)
             logger.debug("Полное пересечение (EDL внутри исходника)")
 
             self.set_gap_obj(gap_duration, track_index)
@@ -717,16 +731,16 @@ class OTIOCreator:
                 self.set_timeline_obj_seq(data, shot_start_frame, track_index)
             else:
                 self.set_timeline_obj_clip(data, shot_start_frame, track_index)
-
         
         # Часть исходника ДО EDL, часть внутри
         elif edl_source_in >= source_in and edl_source_out > source_out:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
-            shot_start_frame = edl_source_in - 1
-            cutted_duration = (edl_source_out - source_out) - 1
+            shot_start_frame = self.resolve_compensation_tc(edl_source_in)
+            cutted_duration = edl_source_out - source_out
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
+            data["source_in_tc"] = self.resolve_compensation_tc(source_in)
             logger.debug("Часть исходника ДО EDL, часть внутри")
 
             self.set_gap_obj(gap_duration, track_index)  
@@ -743,9 +757,10 @@ class OTIOCreator:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
-            shot_start_frame = source_in - 1
-            cutted_duration = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в Resolve
+            shot_start_frame = self.resolve_compensation_tc(source_in)
+            cutted_duration = source_in - edl_source_in
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
+            data["source_in_tc"] = self.resolve_compensation_tc(source_in)
             new_gap_duration = gap_duration + cutted_duration
             logger.debug("Часть исходника ПОСЛЕ EDL, часть внутри")
 
@@ -761,10 +776,11 @@ class OTIOCreator:
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
-            shot_start_frame = source_in - 1
-            cutted_duration_start = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в Resolve
-            cutted_duration_end = (edl_source_out - source_out) - 1
+            shot_start_frame = self.resolve_compensation_tc(source_in) 
+            cutted_duration_start = source_in - edl_source_in
+            cutted_duration_end = edl_source_out - source_out
             data["timeline_duration"] = data["timeline_duration"] - (cutted_duration_start + cutted_duration_end)
+            data["source_in_tc"] = self.resolve_compensation_tc(source_in)
             gap_duration_start = gap_duration + cutted_duration_start
             logger.debug(f"Исходник полностью внутри EDL ")
 
@@ -793,7 +809,7 @@ class OTIOCreator:
         self.ignore_dublicates_bool = self.user_config["ignore_dublicates"]
         self.clip_extension = self.user_config["extension"]
         self.handles_logic = self.user_config["handles_logic"]
-        self.start_frame_ui = int(self.user_config["start_frame_ui"]) - 1 # компенсация для корректного воспиятия в Resolve
+        self.start_frame_ui = int(self.user_config["start_frame_ui"]) 
         self.not_movie_bool = self.clip_extension not in ("mov", "mp4")
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
@@ -1025,13 +1041,13 @@ class SequenceFrames:
                 start_timecode = self.format_timecode(time_match)  # Приводим к двухзначному формату
                  
             if start_timecode is None:
-                start_timecode = tc(project_fps, "00:00:00:00").frames - 1  # -1 что бы корректно воспринимал Resolve
+                start_timecode = tc(project_fps, "00:00:00:00").frames - 1  # компенсация некорректной конвертации таймкода во фреймы
                 end_timecode = start_timecode + (len(self.frames_list))
-                duration = (end_timecode - start_timecode) 
+                duration = (end_timecode - start_timecode)
             else:
-                start_timecode = tc(project_fps, start_timecode).frames - 1 #  -1 что бы корректно воспринимал Resolve
+                start_timecode = tc(project_fps, start_timecode).frames - 1  # компенсация некорректной конвертации таймкода во фреймы
                 end_timecode = start_timecode + (len(self.frames_list))
-                duration = (end_timecode - start_timecode) 
+                duration = (end_timecode - start_timecode)
                           
             return (start_timecode, end_timecode, duration)
 
