@@ -695,15 +695,7 @@ class OTIOCreator:
         # Полное отсутствие пересечения
         if source_out < edl_source_in or source_in > edl_source_out:
 
-            shot_start_frame = source_in + self.start_frame_ui
-            logger.debug("Полное отсутствие пересечения")
-
-            self.set_gap_obj(gap_duration, track_index)
-
-            if self.not_movie_bool:
-                self.set_timeline_obj_seq(data, shot_start_frame, track_index)
-            else:
-                self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+            self.start_frame_logic(data)
     
             self.send_warning(f"Шот {shot_name} Нет пересечения диапазона")
             logger.info(f"Шот {shot_name} Нет пересечения диапазона")
@@ -750,7 +742,7 @@ class OTIOCreator:
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
             shot_start_frame = source_in - 1
-            cutted_duration = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в резолв 
+            cutted_duration = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в Resolve
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
             new_gap_duration = gap_duration + cutted_duration
             logger.debug("Часть исходника ПОСЛЕ EDL, часть внутри")
@@ -768,7 +760,7 @@ class OTIOCreator:
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
             shot_start_frame = source_in - 1
-            cutted_duration_start = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в резолв 
+            cutted_duration_start = (source_in - edl_source_in) + 1 # +1 компенсация для source in, для корректного восприятия дюрейшн в Resolve
             cutted_duration_end = (edl_source_out - source_out) - 1
             data["timeline_duration"] = data["timeline_duration"] - (cutted_duration_start + cutted_duration_end)
             gap_duration_start = gap_duration + cutted_duration_start
@@ -792,7 +784,7 @@ class OTIOCreator:
         self.ignore_dublicates_bool = self.user_config["ignore_dublicates"]
         self.clip_extension = self.user_config["extension"]
         self.handles_logic = self.user_config["handles_logic"]
-        self.start_frame_ui = int(self.user_config["start_frame_ui"])
+        self.start_frame_ui = int(self.user_config["start_frame_ui"]) - 1 # компенсация для корректного воспиятия в Resolve
         self.not_movie_bool = self.clip_extension not in ("mov", "mp4")
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
