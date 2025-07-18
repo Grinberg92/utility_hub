@@ -64,6 +64,7 @@ class EDLParser_v23:
         edl_source_out: str
         edl_record_in: str
         edl_record_out: str 
+        retime: bool
 
     def __init__(self, edl_path):
         self.edl_path = edl_path
@@ -82,17 +83,18 @@ class EDLParser_v23:
         """
         parts = line.split()
         return self.EDLEntry(
-                    edl_record_id= parts[0],
-                    edl_record_in= parts[6],
-                    edl_record_out= parts[7],
-                    edl_track_type= parts[2],
-                    edl_transition= parts[3],
-                    edl_shot_name= parts[1],
-                    edl_source_out= parts[5],
-                    edl_source_in= parts[4] 
+                    edl_record_id=parts[0],
+                    edl_record_in=parts[6],
+                    edl_record_out=parts[7],
+                    edl_track_type=parts[2],
+                    edl_transition=parts[3],
+                    edl_shot_name=parts[1],
+                    edl_source_out=parts[5],
+                    edl_source_in=parts[4],
+                    retime=False 
                     )
 
-class EDLParser_v3:
+class EDLParser_v3_old:
     """
     Класс-итератор. Итерирует EDL-файл, возвращая только те пары,
     где есть строка данных (000xxx) и соответствующая *LOC строка.
@@ -165,7 +167,7 @@ class EDLParser_v3:
             else:
                 i += 1
 
-class EDLParser_v3_1:
+class EDLParser_v3:
     """
     Класс-итератор. Итерирует EDL-файл, возвращая только те пары,
     где есть строка данных (000xxx) и соответствующая *LOC строка.
@@ -605,6 +607,19 @@ class OTIOCreator:
             self.send_warning(f'Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
             return []
         
+    def detect_edl_parser(self, edl_path):
+        """
+        Определяем тип EDL файла по содержимому файла.
+
+        :return: Класс EDL парсера
+        """
+        with open(edl_path, "r", encoding="utf-8") as f:
+            for string in f:
+                print(string)
+                if "*loc" in string.lower():
+                    return EDLParser_v3(edl_path)
+            return EDLParser_v23(edl_path)
+        
     def cut_slate(self, source_in_tc) -> int:
         """
         Метод отрезает 1 кадр слейта в .mov дейлизах, оставляя его в захлесте
@@ -620,7 +635,8 @@ class OTIOCreator:
     def resolve_compensation_edl(self, frame) -> int:
         """
         Вычитает -1 фрейм. 
-        В EDL изначально edl_source_out + 1 для правильной машинной интерпретации, но для арифметики логики это не корректно.
+        В EDL изначально edl_source_out + 1 для правильной машинной интерпретации, 
+        но для логики сравнения в программе это не корректно.
         """
         return frame - 1
 
@@ -829,7 +845,7 @@ class OTIOCreator:
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
 
-        edl_data = EDLParser_v3_1(self.edl_path)
+        edl_data = self.detect_edl_parser(self.edl_path)
 
         try:
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
