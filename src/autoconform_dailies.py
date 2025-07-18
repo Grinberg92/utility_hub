@@ -1156,8 +1156,41 @@ class ConformCheckerMixin:
                 for file in files:
                     if file.lower().endswith(f'.{extension.lower()}'):
                         count += 1  
-
         return count
+    
+    def set_attributes(self):
+        """
+        Устанавливает цвет для шота, если к шоту не был применен цвет ранее.
+        Устанавливает альфу на None.
+        """
+        resolve = ResolveObjects()
+        current_folder = resolve.mediapool_current_folder.GetClipList()
+        items = [item for item in current_folder if "Video" in item.GetClipProperty("Type")]
+        for item in items:
+            if item.GetClipProperty("Alpha mode") != "None":
+                item.SetClipProperty("Alpha mode", "None") 
+            if item.GetClipColor() == "":
+                item.SetClipColor("Lime") 
+    
+    def resolve_import_timeline(self):
+        """
+        Импорт OTIO таймлайна в Davinci Resolve
+        """
+        try:
+            resolve = ResolveObjects()
+            media_pool = resolve.mediapool
+
+            timeline = media_pool.ImportTimelineFromFile(self.otio_input.text(), {
+                "timelineName": f"{os.path.basename(str(self.otio_input.text()))}",
+                "importSourceClips": True,   
+            })
+
+            if timeline is None:
+                QMessageBox.warning(self, "Ошибка", "Ошибка импорта таймлайна")
+            
+                    
+        except Exception as e:
+            QMessageBox.warning(self, "Ошибка", str(e))
 
 class ConfigValidator:
     """
@@ -1432,33 +1465,6 @@ class Autoconform(QWidget, ConformCheckerMixin):
         # Вызов для установки начального состояния
         self.update_ui_state()
         self.update_result_label()
-
-    def resolve_import_timeline(self):
-        """
-        Импорт OTIO таймлайна в Davinci Resolve
-        """
-        try:
-            resolve = ResolveObjects()
-            media_pool = resolve.mediapool
-
-            timeline = media_pool.ImportTimelineFromFile(self.otio_input.text(), {
-                "timelineName": f"{os.path.basename(str(self.otio_input.text()))}",
-                "importSourceClips": True,   
-            })
-
-            if timeline is None:
-                QMessageBox.warning(self, "Ошибка", "Ошибка импорта таймлайна")
-
-            current_folder = resolve.mediapool_current_folder.GetClipList()
-            items = [item for item in current_folder if "Video" in item.GetClipProperty("Type")]
-            for item in items:
-                if item.GetClipProperty("Alpha mode") != "None":
-                    item.SetClipProperty("Alpha mode", "None") 
-                if item.GetClipColor() == "":
-                    item.SetClipColor("Lime") 
-                    
-        except Exception as e:
-            QMessageBox.warning(self, "Ошибка", str(e))
 
     def update_ui_state(self):
         """
