@@ -19,6 +19,7 @@ from functools import cached_property
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_timeline_shots_names import get_resolve_shot_list
 from dvr_tools.css_style import apply_style
+from dvr_tools.resolve_objects import ResolveObjects
 
 
 logger = get_logger(__file__)
@@ -1437,26 +1438,28 @@ class Autoconform(QWidget, ConformCheckerMixin):
         """
         Импорт OTIO таймлайна в Davinci Resolve
         """
+        try:
+            resolve = ResolveObjects()
+            media_pool = resolve.mediapool
 
-        resolve = dvr.scriptapp("Resolve")
-        project = resolve.GetProjectManager().GetCurrentProject()
-        media_pool = project.GetMediaPool()
+            timeline = media_pool.ImportTimelineFromFile(self.otio_input.text(), {
+                "timelineName": f"{os.path.basename(str(self.otio_input.text()))}",
+                "importSourceClips": True,   
+            })
 
-        timeline = media_pool.ImportTimelineFromFile(self.otio_input.text(), {
-            "timelineName": f"{os.path.basename(str(self.otio_input.text()))}",
-            "importSourceClips": True,   
-        })
+            if timeline is None:
+                QMessageBox.warning(self, "Ошибка", "Ошибка импорта таймлайна")
 
-        if timeline is None:
-            QMessageBox.warning(self, "Ошибка", "Ошибка импорта таймлайна")
-
-        current_folder = media_pool.GetCurrentFolder().GetClipList()
-        items = [item for item in current_folder if item.GetClipProperty("Type") == "Video"]
-        for item in items:
-            if item.GetClipProperty("Alpha mode") != "None":
-                item.SetClipProperty("Alpha mode", "None") 
-            if item.GetClipColor() == "":
-                item.SetClipColor("Lime") 
+            current_folder = resolve.mediapool_current_folder.GetClipList()
+            items = [item for item in current_folder if "Video" in item.GetClipProperty("Type")]
+            for item in items:
+                if item.GetClipProperty("Alpha mode") != "None":
+                    item.SetClipProperty("Alpha mode", "None") 
+                if item.GetClipColor() == "":
+                    item.SetClipColor("Lime") 
+                    
+        except Exception as e:
+            QMessageBox.warning(self, "Ошибка", str(e))
 
     def update_ui_state(self):
         """
@@ -1587,9 +1590,10 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
     def reset_counter(self):
         """
-        Обнуляем данные из обработанных таймлайнов
+        Обнуляем данные из обработанных таймлайнов и окно предупреждений
         """
         self.update_result_label(forse_reset=True)
+        self.warning_field.clear()
 
     def update_result_label(self, forse_reset=False):
         """
