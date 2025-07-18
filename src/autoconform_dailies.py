@@ -292,7 +292,7 @@ class OTIOCreator:
 
             # Проверяем текущий файл
             if frame_size < size_threshold:
-                warning_messege = f"Маленький размер файла {frame} в секвенции {shot_name}. Вес: {frame_size} байт."
+                warning_messege = f"🟡  Маленький размер файла {frame} в секвенции {shot_name}. Вес: {frame_size} байт."
                 self.send_warning(warning_messege)
                 logger.warning(f"\n{warning_messege}")
                 break
@@ -330,7 +330,7 @@ class OTIOCreator:
         frames_numbers_list = [int(re.search(self.frame_pattern, i).group(0).split(".")[0]) for i in frames_list]  
         if not all(frames_numbers_list[i] + 1 == frames_numbers_list[i + 1] 
                    for i in range(len(frames_numbers_list) - 1)):
-            message = f"Шот {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
+            message = f"🔴  Шот {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
             self.send_warning(message)
             logger.warning(message)
             return False
@@ -521,7 +521,7 @@ class OTIOCreator:
         """
         if source_duration < timeline_duration:
             result = timeline_duration - source_duration
-            warning_message = f"Шот {shot_name} короче, чем его длина в EDL."
+            warning_message = f"🟡  Шот {shot_name} короче, чем его длина в EDL."
             self.send_warning(warning_message)
             logger.warning(f'\n{warning_message}')
 
@@ -538,7 +538,7 @@ class OTIOCreator:
                 # Иногда информация о фрейм рейте хранится в байтовом представлении. Учитываем это.
                 frame_fps = float(frame_fps.decode()) if isinstance(frame_fps, bytes) else float(frame_fps)
                 if int(self.frame_rate) != int(frame_fps):
-                    warning_message = f"FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}"
+                    warning_message = f"🟡  FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}"
                     self.send_warning(warning_message)
                     logger.warning(warning_message)
                     return False
@@ -604,7 +604,7 @@ class OTIOCreator:
         except Exception as e:
             error_message = f"Ошибка при обработке секвенции: {e}"
             logger.exception(error_message) 
-            self.send_warning(f'Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
+            self.send_warning(f'🔴  Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
             return []
         
     def detect_edl_parser(self, edl_path):
@@ -735,8 +735,8 @@ class OTIOCreator:
 
             self.start_frame_logic(data)
     
-            self.send_warning(f"Шот {shot_name} Нет пересечения диапазона")
-            logger.info(f"Шот {shot_name} Нет пересечения диапазона")
+            self.send_warning(f"🟡  Шот {shot_name}. Нет пересечения диапазона")
+            logger.info(f"Шот {shot_name}. Нет пересечения диапазона")
 
 
         # Полное пересечение (EDL внутри исходника)
