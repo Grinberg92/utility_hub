@@ -615,7 +615,6 @@ class OTIOCreator:
         """
         with open(edl_path, "r", encoding="utf-8") as f:
             for string in f:
-                print(string)
                 if "*loc" in string.lower():
                     return EDLParser_v3(edl_path)
             return EDLParser_v23(edl_path)
@@ -1130,10 +1129,10 @@ class ConformCheckerMixin:
         try:
             timeline = otio.adapters.read_from_file(otio_path)
             total_clips = 0 
-            # Проходим по всем дорожкам
+
             for _, track in enumerate(timeline.tracks):
                 clip_count = sum(1 for item in track if isinstance(item, otio.schema.Clip))
-                total_clips += clip_count  # Добавляем к общему количеству
+                total_clips += clip_count
 
             return total_clips
 
@@ -1234,6 +1233,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         self.projects = self.get_project()
         self.selected_project = self.projects[0] if self.projects else ""
+
+        self.result_label = QLabel()
 
         self.from_start_frame_mode = QRadioButton()
         self.from_start_frame_mode.setChecked(True) 
@@ -1380,6 +1381,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         shots_path_layout.addWidget(self.shots_input)
         shots_button = QPushButton("Choose")
         shots_button.clicked.connect(self.select_shots_folder)
+        shots_button.clicked.connect(self.update_result_label)
         shots_path_layout.addWidget(shots_button)
         main_layout.addLayout(shots_path_layout)
 
@@ -1404,8 +1406,13 @@ class Autoconform(QWidget, ConformCheckerMixin):
         main_layout.addWidget(self.button_import)
 
         # Статус обрабортки шотов
-        self.result_label = QLabel("Processed 0 from 0 shots")
-        main_layout.addWidget(self.result_label)
+        result_label_layout = QHBoxLayout()
+        result_label_layout.addWidget(self.result_label)
+        reset_result_button = QPushButton("Reset")
+        reset_result_button.clicked.connect(self.reset_counter)
+        result_label_layout.addWidget(reset_result_button)
+        result_label_layout.addStretch()
+        main_layout.addLayout(result_label_layout)
 
         # Кнопка Logs
         bottom_layout = QHBoxLayout()
@@ -1424,6 +1431,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         # Вызов для установки начального состояния
         self.update_ui_state()
+        self.update_result_label()
 
     def resolve_import_timeline(self):
         """
@@ -1577,18 +1585,26 @@ class Autoconform(QWidget, ConformCheckerMixin):
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Ошибка при открытии файла логов: {e}")
 
-    def update_result_label(self):
+    def reset_counter(self):
+        """
+        Обнуляем данные из обработанных таймлайнов
+        """
+        self.update_result_label(forse_reset=True)
+
+    def update_result_label(self, forse_reset=False):
         """
         Метод обновляет данные результата сборки в self.result_label.
         """
         otio_path = self.otio_input.text().strip()
         shots_path = self.shots_input.text().strip()
         extension = self.format_menu.currentText()
-
-        self.otio_counter += self.count_otio_clips(otio_path) # self.otio_counter: Количетсво шотов на таймлайне OTIO
+        if forse_reset:
+            self.otio_counter = 0
+        else:
+            self.otio_counter += self.count_otio_clips(otio_path) # self.otio_counter: Количетсво шотов на таймлайне OTIO
         self.in_folder_counter = self.count_clips_on_storage(shots_path, extension) # self.folder_counter: Общее количество шотов в целевой папке shots_path
 
-        self.result_label.setText(f'Обработано {self.otio_counter} из {self.in_folder_counter} шотов')
+        self.result_label.setText(f'Processed  {self.otio_counter}  from  {self.in_folder_counter}  shots')
 
 
 if __name__ == "__main__":
