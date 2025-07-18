@@ -17,9 +17,8 @@ import DaVinciResolveScript as dvr
 from pymediainfo import MediaInfo
 from functools import cached_property
 from dvr_tools.logger_config import get_logger
-from dvr_tools.resolve_timeline_shots_names import get_resolve_shot_list
 from dvr_tools.css_style import apply_style
-from dvr_tools.resolve_objects import ResolveObjects
+from dvr_tools.resolve_objects import ResolveObjects, get_resolve_shot_list
 
 
 logger = get_logger(__file__)
