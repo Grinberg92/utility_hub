@@ -165,9 +165,6 @@ class EDLParser_v3:
             else:
                 i += 1
 
-import re
-from dataclasses import dataclass
-
 class EDLParser_v3_1:
     """
     Класс-итератор. Итерирует EDL-файл, возвращая только те пары,
@@ -641,7 +638,7 @@ class OTIOCreator:
         source_duration = data["source_duration"]
         timeline_duration = data["timeline_duration"]
 
-        shot_start_frame = source_in + self.start_frame_ui - 1 # компенсация для корректной интерпретации в Resolve
+        shot_start_frame = self.resolve_compensation_tc(source_in) + self.start_frame_ui
 
         self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
@@ -669,6 +666,8 @@ class OTIOCreator:
         track_index = data["track_index"]
         source_duration = data["source_duration"]
         timeline_duration = data["timeline_duration"]
+        edl_record_in = data["edl_record_in"]
+        edl_record_out = data["edl_record_out"]
 
         shot_start_frame = None  # None по дефолту на случай, если пересечения таймкодов нет.
 
@@ -684,6 +683,13 @@ class OTIOCreator:
             self.set_timeline_obj_seq(data, shot_start_frame, track_index)
         else:
             self.set_timeline_obj_clip(data, shot_start_frame, track_index)
+
+        logger.info("\n".join(( "\n",
+                                f'Source in (frame): {source_in}', f'Source out (frame): {source_out}', 
+                                f'Shot start frame: {shot_start_frame}'
+                                f'EDL record in: {edl_record_in}', f'EDL record out: {edl_record_out}',
+                                f'EDL source in (frame): {edl_source_in}', f'EDL source out (frame): {edl_source_out}', 
+                                f'Timeline duration: {timeline_duration}', "\n\n\n")))
     
     def full_conform_logic(self, data):
         """
@@ -705,6 +711,7 @@ class OTIOCreator:
         timeline_duration = data["timeline_duration"]
         edl_record_in = data["edl_record_in"]
         edl_record_out = data["edl_record_out"]
+        retime_bool = data["retime_bool"]
 
         shot_start_frame = None
 
@@ -734,6 +741,10 @@ class OTIOCreator:
         
         # Часть исходника ДО EDL, часть внутри
         elif edl_source_in >= source_in and edl_source_out > source_out:
+
+            if retime_bool:
+                self.start_frame_logic(data)
+                return
 
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
@@ -774,6 +785,10 @@ class OTIOCreator:
         # Исходник полностью внутри EDL 
         elif edl_source_in < source_in and edl_source_out > source_out:
 
+            if retime_bool:
+                self.start_frame_logic(data)
+                return
+
             self.is_correct_lenght(source_duration, timeline_duration, shot_name)
 
             shot_start_frame = self.resolve_compensation_tc(source_in) 
@@ -793,11 +808,11 @@ class OTIOCreator:
 
             self.set_gap_obj(cutted_duration_end, track_index)
 
-        logger.info("\n".join((
-                                f'Source in: {source_in}', f'Source out: {source_out}', 
+        logger.info("\n".join(( "\n",
+                                f'Source in (frame): {source_in}', f'Source out (frame): {source_out}', 
                                 f'Shot start frame: {shot_start_frame}'
-                                f'EDL timeline start timecode: {edl_record_in}', f'EDL timeline end timecode: {edl_record_out}',
-                                f'EDL source start timecode: {edl_source_in}', f'EDL source end timecode: {edl_source_out}', 
+                                f'EDL record in: {edl_record_in}', f'EDL record out: {edl_record_out}',
+                                f'EDL source in (frame): {edl_source_in}', f'EDL source out (frame): {edl_source_out}', 
                                 f'Timeline duration: {timeline_duration}', "\n\n\n")))
 
     def run(self):
@@ -814,7 +829,7 @@ class OTIOCreator:
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
 
-        edl_data = EDLParser_v3(self.edl_path)
+        edl_data = EDLParser_v3_1(self.edl_path)
 
         try:
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
@@ -859,7 +874,8 @@ class OTIOCreator:
                         "edl_source_in": edl_source_in,
                         "edl_source_out": edl_source_out,
                         "edl_record_in": edl_record_in,
-                        "edl_record_out": edl_record_out
+                        "edl_record_out": edl_record_out,
+                        "retime_bool": data.retime
                     }
 
                     # Выбор логики конформа
