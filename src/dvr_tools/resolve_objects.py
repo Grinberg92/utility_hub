@@ -6,6 +6,9 @@ class ResolveObjects:
     """
     def __init__(self):
         self.resolve = dvr.scriptapp("Resolve")
+        if self.resolve is None:
+            raise RuntimeError("Ошибка подключения к Resolve")
+        
         self.resolve_project_manager = self.resolve.GetProjectManager()
         self.resolve_project = self.resolve_project_manager.GetCurrentProject()
         self.resolve_mediapool = self.resolve_project.GetMediaPool()
