@@ -1,11 +1,11 @@
-
-class ResolveTimelineItemExtractor():
+from resolve_objects import ResolveObjects
+class ResolveTimelineItemExtractor(ResolveObjects):
 
     '''
     Класс получения resolve timelineitems и mediapoolitems
     '''
-    def __init__(self, timeline):
-        self.timeline = timeline
+    def __init__(self):
+        super().__init__()
 
     def get_timeline_items(self, start_track: int, end_track: int, exceptions: tuple=None, mpitems: bool=False, track_type: str="video") -> list:
         '''
