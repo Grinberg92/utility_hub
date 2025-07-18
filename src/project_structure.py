@@ -104,11 +104,12 @@ RESOLVE_REEL_FOLDER = RESOLVE_REEL_FOLDER = {
     "003_VFX": {
         "CURRENT_DAY": {}
     },
-    "004_REEDIT": {},
+    "004_EDIT_REF": {
+        "SOUND_MIX": {}
+    },
     "005_TITLES": {},
     "006_MASKS": {},
-    "007_MASTERS": {},
-    "008_TMP": {}
+    "007_TMP": {}
 }
 
 class MainWindow(QWidget):
