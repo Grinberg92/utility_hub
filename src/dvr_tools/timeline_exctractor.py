@@ -1,4 +1,4 @@
-from dvr_tools.resolve_objects import ResolveObjects
+from dvr_tools.resolve_utils import ResolveObjects
 class ResolveTimelineItemExtractor(ResolveObjects):
 
     '''
