@@ -19,33 +19,11 @@ from functools import cached_property
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveObjects, get_resolve_shot_list
-
+from config.config_loader import load_config
+from config.config import get_config
+from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
-
-
-class Constant:
-    frame_pattern = r'(\d+)(?:\.|_)\w+$' # Паттерн на номера секвении [1001-...]
-    main_shot_pattern = r'(\.|_)\d+\.\w+$'
-    project_path = r"003_transcode_to_vfx/projects/"
-    log_path = r"003_transcode_to_vfx/projects/log.log"
-    
-PROJECT_SETTINGS = {
-    "paths": {
-        "project_path": "003_transcode_to_vfx/projects/",
-        "log_path": "003_transcode_to_vfx/projects/log.log",
-        "windows_share_root": "J:/",
-        "mac_share_root": "/Volumes/share2/",
-        "windows_shots_root": "R:/",
-        "mac_shots_root": "/Volumes/RAID/",
-    },
-    "patterns": {
-        "frame_number": r'(\d+)(?:\.|_)\w+$',               # для кадров [1001.exr] или [1001_exr]
-        "main_shot": r'(\.|_)\d+\.\w+$',                   # конец имени файла: .1001.exr / _1001.exr
-        "edl_line_start": r'^\d+\s',                       # строки типа "001  AX  V     C ..."
-        "shot_name_split": r'(.+?)([\._])\[(\d+)-\d+\]\.\w+$', # парсинг имени секвенции
-    }
-}
 
 class EDLParser_v23:
     """
@@ -248,9 +226,7 @@ class OTIOCreator:
         self.user_config = user_config
         self.resolve_shot_list = resolve_shot_list
         self.send_warning = lambda msg: None
-
-        self.frame_pattern = r'(\d+)(?:\.|_)\w+$' # Паттерн на номера секвении [1001-...]
-        self.main_shot_pattern = r'(\.|_)\d+\.\w+$'
+        self.frame_mask = get_config()["patterns"]["frame_number"]
 
     def get_shots_paths(self, path):
         """
@@ -327,7 +303,7 @@ class OTIOCreator:
         Функция проверяет есть ли битые кадры в секвенции.
         Работает только с секвенциями.
         """
-        frames_numbers_list = [int(re.search(self.frame_pattern, i).group(0).split(".")[0]) for i in frames_list]  
+        frames_numbers_list = [int(re.search(self.frame_mask, i).group(0).split(".")[0]) for i in frames_list]  
         if not all(frames_numbers_list[i] + 1 == frames_numbers_list[i + 1] 
                    for i in range(len(frames_numbers_list) - 1)):
             message = f"🔴  Шот {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
@@ -839,7 +815,7 @@ class OTIOCreator:
         self.ignore_dublicates_bool = self.user_config["ignore_dublicates"]
         self.clip_extension = self.user_config["extension"]
         self.handles_logic = self.user_config["handles_logic"]
-        self.start_frame_ui = int(self.user_config["start_frame_ui"]) 
+        self.start_frame_ui = self.user_config["start_frame_ui"]
         self.not_movie_bool = self.clip_extension not in ("mov", "mp4")
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
@@ -916,7 +892,6 @@ class MovieObject:
     """
     def __init__(self, path, frame_pattern=None):
         self.path = path
-        self.frame_pattern = Constant.frame_pattern
 
     @property
     def name(self)-> str:
@@ -978,7 +953,8 @@ class SequenceFrames:
     def __init__(self, path_to_sequence, extension, frame_pattern=None):
         self.path = path_to_sequence
         self.extension = extension
-        self.frame_pattern = Constant.frame_pattern
+        self.frame_mask = get_config()["patterns"]["frame_number"]
+        self.shot_name_mask = get_config()["patterns"]["shot_name"]
 
     def __repr__(self):
         return F"Sequence'{self.name}'"
@@ -1017,7 +993,7 @@ class SequenceFrames:
         """
         Извлекаем номер кадра из имени первого кадра секвенции.
         """
-        match = re.search(self.frame_pattern, self.first_frame_path)
+        match = re.search(self.frame_mask, self.first_frame_path)
         if not match:
             raise ValueError(f"Невозможно извлечь номер кадра из кадра {self.first_frame_path}.")
         return match.group(1)
@@ -1027,7 +1003,7 @@ class SequenceFrames:
         """
         Извлекаем номер кадра из имени последнего кадра секвенции.
         """
-        match = re.search(self.frame_pattern, self.last_frame_path)
+        match = re.search(self.frame_mask, self.last_frame_path)
         if not match:
             raise ValueError(f"Невозможно извлечь номер кадра из кадра {self.last_frame_number}.")
         return match.group(1)
@@ -1039,7 +1015,7 @@ class SequenceFrames:
         Обрабатывает стандартный формат имени 015_3030_comp_v002.1004.exr
         и частый ошибочный формат имени 015_3030_comp_v002_1004.exr.
         """
-        base_name = re.sub(r'(\.|_)\d+\.\w+$', '', os.path.basename(self.first_frame_path))
+        base_name = re.sub(self.shot_name_mask, '', os.path.basename(self.first_frame_path))
         frame_range = f"[{self.first_frame_number}-{self.last_frame_number}]"
         sep = '.' if '.' in os.path.splitext(self.first_frame_path)[0] else '_'
         return f"{base_name}{sep}{frame_range}.{self.extension.lower()}"
@@ -1217,7 +1193,7 @@ class ConfigValidator:
             "ignore_dublicates": self.gui.no_dublicates.isChecked(),
             "frame_rate": self.gui.frame_rate,
             "handles_logic": handles_logic,
-            "start_frame_ui": self.gui.start_frame.text().strip(),
+            "start_frame_ui": int(self.gui.start_frame.text().strip()),
             "include_slate": self.gui.include_slate.isChecked()
         }
 
@@ -1341,6 +1317,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.project_menu = QComboBox()
         self.project_menu.addItems(self.projects)
         self.project_menu.setCurrentText(self.selected_project)
+        self.project_menu.currentTextChanged.connect(self.get_project_settings)
         project_vbox.addWidget(project_label)
         project_vbox.addWidget(self.project_menu)
 
@@ -1466,6 +1443,14 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.update_ui_state()
         self.update_result_label()
 
+    def get_project_settings(self):
+        """
+        Получаем проектный конфиг
+        """
+        project_name = self.project_menu.currentText()
+        load_config(project_name)
+        self.config = get_config()
+
     def update_ui_state(self):
         """
         Блокировка и активация полей ui.
@@ -1488,8 +1473,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         :return result_path: Конвертированный под платформу путь.
         '''
-        platform = {"win32": "J:/", 
-                    "darwin": "/Volumes/share2/"}[sys.platform]
+        platform = {"win32": self.config["paths"]["init_project_root_win"], 
+                    "darwin": self.config["paths"]["init_project_root_mac"]}[sys.platform]
         result_path = Path(platform) / path
         return result_path
 
@@ -1497,11 +1482,12 @@ class Autoconform(QWidget, ConformCheckerMixin):
         """
         Метод получает список проектов.
         """
-        base_path = self.is_OS(Constant.project_path)
-        return sorted([i for i in os.listdir(base_path) if os.path.isdir(base_path / i)])
+        base_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
+                    "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+        return sorted([i for i in os.listdir(Path(base_path)) if os.path.isdir(Path(base_path) / i)])
 
     def select_edl(self):
-        init_dir = str(self.is_OS(f'003_transcode_to_vfx/projects/{self.project_menu.currentText()}/'))
+        init_dir = str(self.is_OS(f'{self.config["paths"]["project_path"]}/{self.project_menu.currentText()}/'))
         path, _ = QFileDialog.getOpenFileName(self, 
                                               "Choose EDL file", 
                                               init_dir, 
@@ -1510,8 +1496,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
             self.edl_input.setText(path)
 
     def select_shots_folder(self):
-        init_dir = {"windows": "R:/", 
-                    "darwin": "/Volumes/RAID/"}[sys.platform]
+        init_dir = {"win32": self.config["paths"]["init_shots_root_win"], 
+                    "darwin": self.config["paths"]["init_shots_root_mac"]}[sys.platform]
         path = QFileDialog.getExistingDirectory(self, 
                                                 "Choose Shots Folder",
                                                 init_dir)
@@ -1519,7 +1505,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
             self.shots_input.setText(path)
 
     def save_otio(self):
-        init_dir = str(self.is_OS(f'003_transcode_to_vfx/projects/{self.project_menu.currentText()}/'))
+
+        init_dir = str(self.is_OS(f'{self.config["paths"]["project_path"]}/{self.project_menu.currentText()}/'))
         path, _ = QFileDialog.getSaveFileName(self, 
                                               "Save OTIO file", 
                                               init_dir, 
@@ -1583,7 +1570,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         """
         Метод открывает лог-файл.
         """
-        log_file_path = self.is_OS(Constant.log_path)
+        log_file_path = self.is_OS(self.config["paths"]["log_path"])
 
         try:
             if sys.platform == 'win32': 
