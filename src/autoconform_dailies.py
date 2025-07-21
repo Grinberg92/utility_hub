@@ -381,7 +381,7 @@ class OTIOCreator:
             )
             video_track.append(gap)
 
-            logger.info(f'GAP duration: {gap_duration}')
+            logger.info(f'\nGAP duration: {gap_duration}')
 
     def set_timeline_obj_clip(self, shot_data, shot_start_frame, track_index):
         """
@@ -396,7 +396,7 @@ class OTIOCreator:
             clip_start_frame = shot_data['source_in_tc']
             timeline_duration = shot_data['timeline_duration']
 
-            debug_exr_info = f'Shot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}'
+            debug_exr_info = f'\nShot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}'
             logger.debug(f'\n{debug_exr_info}')
 
             # Создание ссылки на видеофайл
@@ -438,7 +438,7 @@ class OTIOCreator:
 
             pref, suff, start = self.split_name(clip_name)
 
-            logger.info(f'Shot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}\nParse name: {pref, suff, start}')
+            logger.info(f'\nShot name: {clip_name}\nShot start timecode: {clip_start_frame}\nShot duration: {clip_duration}\nShot path: {clip_path}\nParse name: {pref, suff, start}')
 
             # Создание ссылки на клип
             media_reference = otio.schema.ImageSequenceReference(
