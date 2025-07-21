@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import subprocess
+from pprint import pformat
 from pathlib import Path
 from timecode import Timecode as tc
 import OpenEXR
@@ -1196,7 +1197,7 @@ class ConfigValidator:
             "start_frame_ui": int(self.gui.start_frame.text().strip()),
             "include_slate": self.gui.include_slate.isChecked()
         }
-
+    
     def validate(self, user_config: dict) -> bool:
         """
         Валидирует конфиг.
@@ -1553,6 +1554,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
             QMessageBox.critical(self, "Validation error", "\n".join(self.validator.get_errors()))
             return
         
+        logger.info(f"\n\nSetUp:\n{pformat(self.user_config)}\n")
+
         self.main_process = OTIOWorker(self,self.user_config, self.resolve_shots_list)
         self.button_create.setEnabled(False)
         self.main_process.finished.connect(lambda : self.button_create.setEnabled(True))
