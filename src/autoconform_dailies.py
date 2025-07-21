@@ -1318,6 +1318,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.project_menu.addItems(self.projects)
         self.project_menu.setCurrentText(self.selected_project)
         self.project_menu.currentTextChanged.connect(self.get_project_settings)
+        self.project_menu.currentTextChanged.connect(self.project_ui_state)
         project_vbox.addWidget(project_label)
         project_vbox.addWidget(self.project_menu)
 
@@ -1378,9 +1379,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
         edl_path_layout.addSpacing(32)
         self.edl_input = QLineEdit()
         edl_path_layout.addWidget(self.edl_input)
-        edl_button = QPushButton("Choose")
-        edl_button.clicked.connect(self.select_edl)
-        edl_path_layout.addWidget(edl_button)
+        self.edl_button = QPushButton("Choose")
+        self.edl_button.clicked.connect(self.select_edl)
+        edl_path_layout.addWidget(self.edl_button)
         main_layout.addLayout(edl_path_layout)
 
         # Выбор фолдера с шотами
@@ -1389,10 +1390,10 @@ class Autoconform(QWidget, ConformCheckerMixin):
         shots_path_layout.addSpacing(10)
         self.shots_input = QLineEdit()
         shots_path_layout.addWidget(self.shots_input)
-        shots_button = QPushButton("Choose")
-        shots_button.clicked.connect(self.select_shots_folder)
-        shots_button.clicked.connect(self.update_result_label)
-        shots_path_layout.addWidget(shots_button)
+        self.shots_button = QPushButton("Choose")
+        self.shots_button.clicked.connect(self.select_shots_folder)
+        self.shots_button.clicked.connect(self.update_result_label)
+        shots_path_layout.addWidget(self.shots_button)
         main_layout.addLayout(shots_path_layout)
 
         # Выбор OTIO
@@ -1400,9 +1401,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
         otio_path_layout.addWidget(QLabel("Save OTIO file:"))
         self.otio_input = QLineEdit()
         otio_path_layout.addWidget(self.otio_input)
-        otio_button = QPushButton("Choose")
-        otio_button.clicked.connect(self.save_otio)
-        otio_path_layout.addWidget(otio_button)
+        self.otio_button = QPushButton("Choose")
+        self.otio_button.clicked.connect(self.save_otio)
+        otio_path_layout.addWidget(self.otio_button)
         main_layout.addLayout(otio_path_layout)
 
         # Кнопка Start
@@ -1442,6 +1443,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         # Вызов для установки начального состояния
         self.update_ui_state()
         self.update_result_label()
+        self.project_ui_state()
 
     def get_project_settings(self):
         """
@@ -1467,6 +1469,25 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         self.include_slate.setEnabled(self.format_menu.currentText() in ("MOV", "MP4"))
 
+    def project_ui_state(self):
+        """
+        Блокирует все инпуты, если не выбран проект.
+        """
+        if self.project_menu.currentText() == "Select Project":
+            self.otio_input.setEnabled(False)
+            self.edl_input.setEnabled(False)
+            self.shots_input.setEnabled(False)
+            self.edl_button.setEnabled(False)
+            self.shots_button.setEnabled(False)
+            self.otio_button.setEnabled(False)
+        else:
+            self.otio_input.setEnabled(True)
+            self.edl_input.setEnabled(True)
+            self.shots_input.setEnabled(True)
+            self.edl_button.setEnabled(True)
+            self.shots_button.setEnabled(True)
+            self.otio_button.setEnabled(True)
+
     def is_OS(self, path):
         '''
         Метод конвертирует путь под платформу.
@@ -1484,7 +1505,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
         """
         base_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
                     "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
-        return sorted([i for i in os.listdir(Path(base_path)) if os.path.isdir(Path(base_path) / i)])
+        project_list = sorted([i for i in os.listdir(Path(base_path)) if os.path.isdir(Path(base_path) / i)])
+        project_list.insert(0, "Select Project")
+        return project_list
 
     def select_edl(self):
         init_dir = str(self.is_OS(f'{self.config["paths"]["project_path"]}/{self.project_menu.currentText()}/'))
