@@ -70,13 +70,13 @@ def get_resolve_shot_list(track_in, track_out, extension, pattern=None):
         print(f"Ошибка подключения к API Resolve: {e}")
         return []
 
-class ResolveTimelineItemExtractor(ResolveObjects):
+class ResolveTimelineItemExtractor():
 
     '''
     Класс получения resolve timelineitems и mediapoolitems
     '''
-    def __init__(self):
-        super().__init__()
+    def __init__(self, timeline):
+        self.timeline = timeline
 
     def get_timeline_items(self, start_track: int, end_track: int, exceptions: tuple=None, mpitems: bool=False, track_type: str="video") -> list:
         '''
