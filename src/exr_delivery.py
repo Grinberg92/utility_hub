@@ -1,94 +1,511 @@
 import sys
-import os
 import re
 import math
 import time
-import DaVinciResolveScript as dvr
+from pprint import pformat
+from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox
+    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
+from dvr_tools.resolve_utils import ResolveObjects
+from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
+
 
 logger = get_logger(__file__)
 
-class DvrRenderApp(QWidget):
+COLORS = ["Orange", "Yellow", "Lime", "Violet", "Blue"]
+EXTENTIONS = (".mxf", ".braw", ".arri", ".r3d", ".dng")
+
+class DvrTimelineObject():
+    "Пользовательский класс для удобного получения атрибутов объекта на таймлайне"
+    def __init__(self, mp_item, track_type_ind, clip_start_tmln, source_start, source_end, clip_dur, clip_color):
+        self.mp_item = mp_item
+        self.track_type_ind = track_type_ind
+        self.clip_start = clip_start_tmln
+        self.clip_duration = clip_dur
+        self.clip_end = self.clip_start + (self.clip_duration - 1)
+        self.source_start = source_start
+        self.source_end = source_end
+        self.clip_color = clip_color
+
+class DeliveryPipline:
+    """
+    Конвеер создания рендер джобов и их последующего рендера.
+    """
+    def __init__(self, user_config, signals):
+        self.user_config = user_config
+        self.signals = signals
+
+    def get_api_resolve(self):
+        """
+        Проверка подключения к API Resolve.
+        """
+        try:
+            resolve = ResolveObjects().resolve
+            return ResolveObjects()
+        except RuntimeError as re:
+            raise
+
+    def get_mediapoolitems(self, start_track, end_track):
+        """
+        Получение списка с экземплярами DvrTimelineObject,
+        содержащими необходимые данные о клипе. 
+        """
+        timeline_extractor = ResolveTimelineItemExtractor()
+        timeline_items = timeline_extractor.get_timeline_items(start_track, end_track)
+        filtred_items = []
+        for item in timeline_items:
+            filtred_items.append(DvrTimelineObject(item.GetMediaPoolItem(), item.GetTrackTypeAndIndex()[1],
+                                item.GetStart(), item.GetSourceStartFrame(),
+                                item.GetSourceEndFrame(), item.GetDuration(),
+                                item.GetClipColor()))
+        return filtred_items
+    
+    def get_tracks(self, start_track=2, track_type="video"):
+        """
+        Получем индексы не пустых треков.
+        """
+        no_empty_tracks = []
+        all_track = self.timeline.GetTrackCount(track_type)
+        for track_num in range(start_track, all_track + 1):
+            if self.timeline.GetItemListInTrack(track_type, track_num) != []:
+                no_empty_tracks.append(track_num)
+
+        return no_empty_tracks
+    
+    def set_project_preset(self):
+        """
+        Установка пресета проекта.
+        """
+        set_preset_var = self.project.SetPreset(self.project_preset)
+        if set_preset_var is not None:
+            logger.info(f"Применен пресет проекта: {self.project_preset}")
+            return True
+        else:
+            self.signals.error_signal.emit(f"Пресет проекта не применен {self.project_preset}")
+            return False
+    def set_enable_for_track(self, current_track_number):
+        '''
+        Функция отключает все дорожки кроме текущей.
+        '''
+        max_track = self.timeline.GetTrackCount("video")
+        for track_number in range(1, max_track + 1):
+            self.timeline.SetTrackEnable("video", track_number, track_number == current_track_number)
+        logger.info(f"Начало работы с {current_track_number} треком")
+
+    def get_handles(self, timeline_item) -> str:
+        '''
+        Функция получения значения захлестов.
+        '''
+        start_frame = timeline_item.source_start
+        end_frame = timeline_item.source_end
+        duration = timeline_item.clip_duration
+
+        retime_speed = (end_frame - start_frame) / duration * 100
+        excess = max(0, retime_speed - 100)
+        if retime_speed <= 133:
+            # Округляем вниз только в этом диапазоне. Что бы сгладить баг давинчи с  определением in/out.
+            # Будет отсутствовать 4 захлеста
+            increment = int(excess // 33.34)
+        else:
+            # Выше 133 — округляем вверх
+            increment = math.ceil(excess / 33.34)
+        handles = self.frame_handles + increment
+        return f"EXR_{handles}hndl"
+    
+    def standart_resolution(self, clip):
+        """
+        Пересчет разрешения исходника под стандартное разрешение для рендера(2к).
+        """
+        # Находит анаморф, вычисляет ширину по аспекту
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
+            aspect = clip.GetClipProperty('PAR')
+            width, height = clip.GetClipProperty('Resolution').split('x')
+            calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            resolution = "x".join([calculate_width, self.height_res_glob])
+            return resolution
+        
+        else:
+            aspect = clip.GetClipProperty('PAR')
+            width, height = clip.GetClipProperty('Resolution').split('x')
+            calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
+            resolution = "x".join([self.width_res_glob, calculate_height])
+            return resolution
+        
+    def scale_1_5_resolution(self, clip):
+        """
+        Пересчет разрешения исходника под стандартное разрешение для рендера,
+        умноженное на 1.5 при зуме(скеиле) свыше 10%.
+        """
+        # Находит анаморф, вычисляет ширину по аспекту
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
+            aspect = clip.GetClipProperty('PAR')
+            width, height = clip.GetClipProperty('Resolution').split('x')
+            calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            resolution = "x".join([str(int(int(calculate_height) * 1.5)), str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
+            return resolution
+        else:
+            aspect = clip.GetClipProperty('PAR')
+            width, height = clip.GetClipProperty('Resolution').split('x')
+            calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
+            resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 1.5) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 1.5) / 2) * 2))])
+            return resolution
+        
+    def scale_2_resolution(self, clip):
+        """
+        Пересчет разрешения исходника под стандартное разрешение для рендера,
+        умноженное на 2 при зуме(скеиле) свыше 50%.
+        """
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
+            aspect = clip.GetClipProperty('PAR')
+            width, height = clip.GetClipProperty('Resolution').split('x')
+            calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            resolution = "x".join([str(int(int(calculate_height) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
+            return resolution
+        else:
+            aspect = clip.GetClipProperty('PAR')
+            width, height = clip.GetClipProperty('Resolution').split('x')
+            calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
+            resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 2) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 2) / 2) * 2))])
+            return resolution
+        
+    def full_resolution(self, clip):
+        """
+        Полное разрешение исходника.
+        """
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
+            aspect = clip.GetClipProperty('PAR')
+            width, height = clip.GetClipProperty('Resolution').split('x')
+            calculate_height = str((math.ceil((int(height) / float(aspect))  / 2) * 2))
+            resolution = "x".join([width, calculate_height])
+            return resolution
+        else:
+            return clip.GetClipProperty('Resolution')
+        
+    def get_resolution_settings(self, timeline_item) -> str:
+        """
+        Метод логики вычисления разрешения для рендера.
+
+        :return resolution: Разрешение в виде строки : '2500x858'.
+        """
+        
+        clip = timeline_item.mp_item
+        clip_color = timeline_item.clip_color
+
+        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[0]:
+            resolution = self.standart_resolution(clip)
+
+        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[1]:
+            resolution = self.scale_1_5_resolution(clip)
+        
+        # 2-кратное увеличение разрешение от стандартного(условный 4К)
+        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[2]:
+            resolution = self.scale_2_resolution(clip)
+            
+        # Полное съемочное разрешение
+        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[3]:
+            resolution = self.full_resolution(clip)
+
+        return resolution
+    
+    def stop_process(self):
+        """
+        Приостановка конвеера, пока идет процесс рендера текущего итема.
+        """
+        def rendering_in_progress():
+            return self.project.IsRenderingInProgress()
+        while rendering_in_progress():
+            time.sleep(1)
+
+    def set_render_preset(self, calc_handl):
+        '''
+        Метод ищет полученное в get_retime значение захлеста через регулярное выражение 
+        в списке всех пресетов рендера.
+        '''
+
+        preset_list = self.project.GetRenderPresetList()
+        for preset in preset_list:
+            if re.match(calc_handl, preset):
+                self.project.LoadRenderPreset(preset)
+                logger.info(f"Установлен пресет рендера: {calc_handl} ")
+                return True
+        self.signals.error_signal.emit(f"Не удалось применить пресет рендера {calc_handl}")
+        return False 
+            
+    def set_project_resolution(self, height_res, width_res):
+        """
+        Установка проектного разрешения перед рендером.
+        """
+        self.project.SetSetting("timelineResolutionHeight", height_res)
+        self.project.SetSetting("timelineResolutionWidth", width_res)
+            
+    def set_render_settings(self, clip, clip_resolution):
+        '''
+        Метод задает настройки для  рендера текущего итема 
+        и добавляет текущий render job в очередь.
+
+        :return: Кортеж (Флаг ошибки, render job item)
+        '''
+        try:
+            resolution = re.search(r'\d{4}x\d{3,4}', clip_resolution).group(0)
+            width, height = resolution.split("x")
+            logger.info(f"Установлено разрешение с настройках рендера: {width}x{height}")
+        except Exception as e:
+            self.signals.error_signal.emit(f"Не удалось вычислить разрешение {resolution}: {e}")
+            return False
+        
+        self.set_project_resolution(height, width)
+
+        render_settings = {
+            "SelectAllFrames": False,
+            "MarkIn": clip.clip_start,
+            "MarkOut": clip.clip_end,
+            "TargetDir": str(self.render_path),
+            "FormatWidth": int(width),
+            "FormatHeight": int(height)
+            }
+        
+        set_render = self.project.SetRenderSettings(render_settings)
+        render_job = self.project.AddRenderJob()
+
+        if set_render is not None and render_job is not None:
+            logger.info(f"Запустился рендер клипа {clip.mp_item.GetName()} с разрешением {width}x{height}")
+            return True, render_job
+        else:
+            self.signals.error_signal.emit(f"Не удалось установить разрешение рендера {resolution}")
+            return False, None 
+        
+    def skip_item(self, item) -> bool:
+        """
+        Пропускает итем, для последующей обработки вручную, при условии,
+        что у клипа установлен дефолтный цвет 'Blue'.
+        """
+        if item.clip_color == COLORS[4]:
+            return True
+
+    def start_render(self, render_job):
+        """
+        Запуск render job.
+        """    
+        start_render = self.project.StartRendering([render_job], isInteractiveMode=True)
+        if not start_render:
+            self.signals.error_signal.emit(f"Ошибка обработки рендера: {render_job}")
+            return False
+        return True
+    
+    def export_timeline(self):
+        """
+        Экспорт таймлайна после окончания рендера в формате xml.
+        """
+        xml_name = str(self.timeline.GetName())
+        path = (Path(self.render_path) / ".." / f'{xml_name}.xml').resolve()  
+        result = self.timeline.Export(str(path), self.resolve.EXPORT_FCP_7_XML)
+        if result is None:
+            self.signals.warning_signal.emit(f"Ошибка экспорта таймлайна {xml_name}")
+        else:
+            logger.info(f"Таймлайн {xml_name} успешно экспортирован")
+    def run(self):
+        """
+        Логика конвеера рендера.
+        """
+        self.resolve_api = self.get_api_resolve()
+        self.resolve = self.resolve_api.resolve
+        self.media_pool = self.resolve_api.mediapool
+        self.timeline = self.resolve_api.timeline
+        self.project = self.resolve_api.project
+        self.project_preset = self.user_config["project_preset"]
+        self.frame_handles = int(self.user_config["handles"])
+        self.height_res_glob = self.user_config["resolution_height"]
+        self.width_res_glob = self.user_config["resolution_width"]
+        self.render_path = self.user_config["render_path"]
+        self.export_bool = self.user_config["export_xml"]
+
+        video_tracks = self.get_tracks()
+        if video_tracks == []:
+            self.signals.warning_signal.emit("Отсутствуют клипы для обработки.")
+            return False
+
+        project_preset_var = self.set_project_preset()
+        if not project_preset_var:
+            return False
+
+        # Цикл по дорожкам(по основному и допплейтам, если таковые имеются).
+        for track in video_tracks:
+
+            track_items = self.get_mediapoolitems(start_track=track, end_track=track)
+
+            self.set_enable_for_track(track)
+            
+            # Цикл по клипам на дорожке.
+            for item in track_items:
+                
+                if self.skip_item(item):
+                    continue
+
+                logger.debug("\n".join(("\n", f"timline duration: {item.clip_duration}",
+                             f"source duration: {item.source_end - item.source_start}",
+                             f"timline start: {item.clip_start}",
+                             f"timeline end: {item.clip_end}",
+                             f"source start: {item.source_start}",
+                             f"source end: {item.source_end}")))
+
+                handles_value = self.get_handles(item)
+
+                item_resolution = self.get_resolution_settings(item)
+
+                self.stop_process()
+
+                render_preset_var = self.set_render_preset(handles_value)
+                if not render_preset_var:
+                    return False
+                
+                render_settings_var, render_job = self.set_render_settings(item, item_resolution)
+                if not render_settings_var:
+                    return False
+                
+                start_render_var = self.start_render(render_job)
+                if not start_render_var:
+                    return False
+
+            # Ожидаем, переключаемся на вкладку edit и уходим на новый трек.
+            self.stop_process()
+            self.resolve.OpenPage("edit")
+
+        if self.export_bool:    
+            self.export_timeline()
+        self.signals.success_signal.emit(f"Рендер успешно завершен")
+
+class RenderThread(QThread):
 
     render_preset_error = pyqtSignal(str)
     project_preset_error = pyqtSignal(str)
-    success_message = pyqtSignal()
+    success_signal = pyqtSignal(str)
+    warning_signal = pyqtSignal(str)
+    error_signal = pyqtSignal(str)
     empty_track_warning = pyqtSignal()
     render_settings_error = pyqtSignal(str)
     resolve_connect_error = pyqtSignal()
 
-    class RenderThread(QThread):
-        def __init__(self, parent):
-            super().__init__()
-            self.parent = parent
+    def __init__(self, parent, user_config):
+        super().__init__(parent)
+        self.user_config = user_config
 
-        def run(self):
-            self.parent.render_logic()
+    def run(self):
+        try:
+            logic = DeliveryPipline(self.user_config, self)
+            success = logic.run()
 
+        except Exception as e:
+            print(f"Ошибка программы {e}")
+
+class ConfigValidator:
+    """
+    Класс собирает и валидирует пользовательские данные.
+    """
+    def __init__(self, gui):
+        self.gui = gui
+        self.errors = []
+
+    def collect_config(self) -> dict:
+        """
+        Собирает пользовательские данные из GUI.
+        """
+
+        return {
+            "resolution_height": self.gui.height_input.text().strip(),
+            "resolution_width": self.gui.width_input.text().strip(),
+            "project_preset": self.gui.preset_combo.currentText().strip(),
+            "handles": self.gui.handle_input.text().strip(),
+            "render_path": self.gui.render_path.text().strip(),
+            "export_xml": self.gui.export_cb.isChecked()
+        }
+    
+    def validate(self, user_config: dict) -> bool:
+        """
+        Валидирует конфиг.
+        """
+        self.errors.clear()
+
+        if not user_config["render_path"]:
+            self.errors.append("Укажите путь для рендера")
+
+        try:
+            int(user_config["resolution_height"])
+            int(user_config["resolution_width"])
+            int(user_config["handles"])
+        except ValueError:
+            self.errors.append("Значения должны быть целыми числами")
+        return not self.errors
+
+    def get_errors(self) -> list:
+        return self.errors
+        
+
+class ExrDelivery(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EXR Delivery")
-        self.resize(550, 200)
+        self.resize(600, 200)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+
+        self.res_group = QGroupBox("Resolution")
+        self.res_group.setFixedHeight(70)
+        self.width_input = QLineEdit("1998")
+        self.width_input.setFixedWidth(60)
+        self.height_input = QLineEdit("1080")
+        self.height_input.setFixedWidth(60)
+
+        self.preset_combo = QComboBox()
+        self.preset_combo.addItems(["GRN_EXR_1998x1054", "PRESET_A", "PRESET_B"])
+        self.preset_combo.setCurrentText("GRN_EXR_1998x1054")
+        self.preset_combo.setFixedWidth(170)
+        self.export_cb = QCheckBox("Export .xml")
+        self.handle_input = QLineEdit("3")
+        self.handle_input.setFixedWidth(40)
+
+        self.render_path = QLineEdit()
+        self.browse_btn = QPushButton("Choose")
+        self.browse_btn.clicked.connect(self.select_folder)
+
         self.init_ui()
-        self.render_preset_error.connect(self.on_render_preset_error)
-        self.project_preset_error.connect(self.on_project_preset_error)
-        self.success_message.connect(self.on_success_message)
-        self.empty_track_warning.connect(self.on_empty_track_warning)
-        self.render_settings_error.connect(self.on_render_settings_error)
-        self.resolve_connect_error.connect(self.on_resolve_connect_error)
 
     def init_ui(self):
         layout = QVBoxLayout()
 
         # --- Разрешение ---
-        res_group = QGroupBox("Resolution")
-        res_group.setFixedHeight(70)
         res_layout = QHBoxLayout()
         res_layout.addStretch()
-        self.width_input = QLineEdit("1998")
-        self.width_input.setFixedWidth(60)
-        self.height_input = QLineEdit("1080")
-        self.height_input.setFixedWidth(60)
         res_layout.addWidget(self.width_input)
         res_layout.addWidget(QLabel("x"))
         res_layout.addWidget(self.height_input)
         res_layout.addStretch()
-        res_group.setLayout(res_layout)
-        layout.addWidget(res_group, alignment=Qt.AlignHCenter)
+        self.res_group.setLayout(res_layout)
+        layout.addWidget(self.res_group, alignment=Qt.AlignHCenter)
 
         # --- Пресет + захлест ---
         preset_layout = QHBoxLayout()
-        self.preset_combo = QComboBox()
-        self.preset_combo.addItems(["GRN_EXR_1998x1054", "PRESET_A", "PRESET_B"])
-        self.preset_combo.setCurrentText("GRN_EXR_1998x1054")
-        self.preset_combo.setFixedWidth(170)
-        self.handle_input = QLineEdit("3")
-        self.handle_input.setFixedWidth(40)
         preset_layout.addWidget(QLabel("Project preset:"))
         preset_layout.addWidget(self.preset_combo)
-        preset_layout.addSpacing(40)
+        preset_layout.addSpacing(20)
         preset_layout.addWidget(QLabel("Handles:"))
         preset_layout.addWidget(self.handle_input)
+        preset_layout.addSpacing(20)
+        preset_layout.addWidget(self.export_cb)
+        
         preset_layout.addStretch()
         layout.addLayout(preset_layout)
 
         # --- Путь рендера ---
         path_layout = QHBoxLayout()
-        self.path_input = QLineEdit()
-        browse_btn = QPushButton("Choose")
-        browse_btn.clicked.connect(self.select_folder)
         path_layout.addWidget(QLabel("Render path:"))
         path_layout.addSpacing(10)
-        path_layout.addWidget(self.path_input)
-        path_layout.addWidget(browse_btn)
+        path_layout.addWidget(self.render_path)
+        path_layout.addWidget(self.browse_btn)
         layout.addLayout(path_layout)
 
         # --- Кнопка запуска ---
@@ -98,322 +515,45 @@ class DvrRenderApp(QWidget):
 
         self.setLayout(layout)
 
-    def on_render_preset_error(self, message):
-        QMessageBox.critical(self, "Ошибка установки пресета рендера", message)
-
-    def on_project_preset_error(self, message):
-        QMessageBox.critical(self, "Ошибка установки пресета проекта", message)
-
-    def on_success_message(self):
+    def on_success_signal(self):
         QMessageBox.information(self, "Успех", "Рендер успешно завершен")
 
-    def on_empty_track_warning(self):
-        QMessageBox.warning(self, "Предупреждение","На дорожках 2-5 отсутствуют клипы")
+    def on_warning_signal(self, message):
+        QMessageBox.warning(self, "Успех", message)
+        logger.warning(message)
 
-    def on_render_settings_error(self, message):
-        QMessageBox.critical(self, "Ошибка установки разрешения в настройки рендера", message)
-
-    def on_resolve_connect_error(self):
-        QMessageBox.critical(self, "Ошибка", "Ошибка запуска. Откройте Resolve")
+    def on_error_signal(self, message):
+        QMessageBox.warning(self, "Успех", message)
+        logger.exception(message)
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Выбор папки")
         if folder:
-            self.path_input.setText(folder)
+            self.render_path.setText(folder)
 
     def run_render(self):
 
         logger.debug("Запуск скрипта")
-        
-        self.output_folder = self.path_input.text()
-        if not self.output_folder:
-            QMessageBox.warning(self, "Ошибка", "Укажите путь для рендера")
-            logger.warning("Укажите путь для рендера")
+
+        self.validator = ConfigValidator(self)
+        self.user_config = self.validator.collect_config()
+
+        if not self.validator.validate(self.user_config):
+            QMessageBox.critical(self, "Ошибка валидации", "\n".join(self.validator.get_errors()))
             return
-        
-        self.width_res_glob = self.width_input.text()
-        self.height_res_glob = self.height_input.text()
-        if not self.width_res_glob or not self.height_res_glob:
-            QMessageBox.warning(self, "Ошибка", "Укажите значение ширины или высоты кадра")
-            logger.warning("Укажите ширину или высоту кадра")
-            return
-        
-        self.frame_handles = int(self.handle_input.text())
-        if not self.frame_handles:
-            QMessageBox.warning(self, "Ошибка", "Укажите значение захлеста")
-            logger.warning("Укажите значение захлеста")
-            return
-        
-        logger.debug("SetUp:", 
-                     f"Resolution: {self.width_res_glob}x{self.height_res_glob}", 
-                     f"Handles - {self.frame_handles}", 
-                     f"Path - {self.output_folder}")
-        
-        self.render_thread = self.RenderThread(self)
+   
+        logger.info(f"\n\n{pformat(self.user_config)}\n")
+        self.render_thread = RenderThread(self, self.user_config)
+        self.run_button.setEnabled(False)
+        self.render_thread.finished.connect(lambda: self.run_button.setEnabled(True))
+        self.render_thread.success_signal.connect(self.on_success_signal)
+        self.render_thread.warning_signal.connect(self.on_warning_signal)
+        self.render_thread.error_signal.connect(self.on_error_signal)
         self.render_thread.start()
 
-    def render_logic(self):
-        project_preset_name = self.preset_combo.currentText()
-
-        class DvrTimelineObject():
-            "Пользовательский класс для удобного получения атрибутов объекта на таймлайне"
-            def __init__(self, mp_item, track_type_ind, clip_start_tmln, source_start, source_end, clip_dur):
-                self.mp_item = mp_item
-                self.track_type_ind = track_type_ind
-                self.clip_start_tmln = clip_start_tmln
-                self.clip_dur = clip_dur
-                self.clip_end = self.clip_start_tmln + (self.clip_dur - 1)
-                self.source_start = source_start
-                self.source_end = source_end
-        
-        resolve = dvr.scriptapp("Resolve")
-
-        if resolve is None:
-            self.resolve_connect_error.emit()
-            return
-        
-        project_manager = resolve.GetProjectManager()
-        project = project_manager.GetCurrentProject()
-        media_pool = project.GetMediaPool()
-        timeline = project.GetCurrentTimeline()
-        root_folder = media_pool.GetRootFolder()
-
-        def get_mediapoolitems(end_track, start_track):
-            # Получение списка кортежей с атрибутами timelineitems
-            all_items = []
-            for track in range(start_track, end_track + 1):
-                clips = timeline.GetItemListInTrack('video', int(track))
-                for clip in clips:
-                    all_items.append((clip.GetMediaPoolItem(), clip.GetTrackTypeAndIndex()[1],
-                                      clip.GetStart(), clip.GetSourceStartFrame(),
-                                      clip.GetSourceEndFrame(), clip.GetDuration()))
-            return [DvrTimelineObject(*item) for item in all_items]
-
-        def set_project_preset():
-            # Устанавливаем пресет проекта
-            try:
-                project.SetPreset(project_preset_name)
-                logger.debug(f"Применен пресет проекта: {project_preset_name}")
-                return True
-            except Exception as e:
-                self.project_preset_error.emit(f"Не удалось применить пресет проекта {project_preset_name}: {e}")
-                logger.error(f"Не удалось применить пресет проекта {project_preset_name}: {e}")
-                return False
-
-        def get_resolution_settings(clip, track_number):
-            """
-            Функция получения разрешения клипа
-            """
-            extentions = (".mxf", ".braw", ".arri", ".r3d", ".dng", 
-                        ".MXF", ".BRAW", ".R3D", ".ARRI", ".DNG")
-
-            # Стандартный пересчет аспекта под 2К
-            if clip.GetName() != '' and clip.GetName().lower().endswith(extentions) and track_number == 2:
-                # Находит анаморф, вычисляет ширину по аспекту
-                if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-                    aspect = clip.GetClipProperty('PAR')
-                    width, height = clip.GetClipProperty('Resolution').split('x')
-                    calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-                    if calculate_width == "2500": # Временная правка для выдачи BOI
-                        calculate_width = "2498"
-                    resolution = "x".join([calculate_width, self.height_res_glob])
-                    return resolution
-                else:
-                    aspect = clip.GetClipProperty('PAR')
-                    width, height = clip.GetClipProperty('Resolution').split('x')
-                    calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
-                    resolution = "x".join([self.width_res_glob, calculate_height])
-                    return resolution
-
-            # 1.5-кратное увеличение разрешение от стандартного
-            if clip.GetName() != '' and clip.GetName().lower().endswith(extentions) and track_number == 3:
-                # Находит анаморф, вычисляет ширину по аспекту
-                if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-                    aspect = clip.GetClipProperty('PAR')
-                    width, height = clip.GetClipProperty('Resolution').split('x')
-                    calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-                    resolution = "x".join([str(int(int(calculate_height) * 1.5)), str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
-                    return resolution
-                else:
-                    aspect = clip.GetClipProperty('PAR')
-                    width, height = clip.GetClipProperty('Resolution').split('x')
-                    calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
-                    resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 1.5) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 1.5) / 2) * 2))])
-                    return resolution
-            
-            # 2-кратное увеличение разрешение от стандартного(условный 4К)
-            if clip.GetName() != '' and clip.GetName().lower().endswith(extentions) and track_number == 4:
-                # Находит анаморф, вычисляет ширину по аспекту
-                if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-                    aspect = clip.GetClipProperty('PAR')
-                    width, height = clip.GetClipProperty('Resolution').split('x')
-                    calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-                    resolution = "x".join([str(int(int(calculate_height) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
-                    return resolution
-                else:
-                    aspect = clip.GetClipProperty('PAR')
-                    width, height = clip.GetClipProperty('Resolution').split('x')
-                    calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
-                    resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 2) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 2) / 2) * 2))])
-                    return resolution
-                
-            # Полное съемочное разрешение
-            if clip.GetName() != '' and clip.GetName().lower().endswith(extentions) and track_number == 5:
-                # Находит анаморф, вычисляет ширину по аспекту
-                if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-                    aspect = clip.GetClipProperty('PAR')
-                    width, height = clip.GetClipProperty('Resolution').split('x')
-                    calculate_height = str((math.ceil((int(height) / float(aspect))  / 2) * 2))
-                    resolution = "x".join([width, calculate_height])
-                    return resolution
-                else:
-                    return clip.GetClipProperty('Resolution')
-
-        def rendering_in_progress():
-            return project.IsRenderingInProgress()
-
-        def set_enable_for_track(current_track_number):
-            '''
-            Функция отключает все дорожки кроме текущей
-            '''
-            max_track = timeline.GetTrackCount("video")
-            for track_number in range(1, max_track + 1):
-                timeline.SetTrackEnable("video", track_number, track_number == current_track_number)
-
-        def get_retime(strt_frame, end_frame, duration) -> str:
-
-            '''
-            Функция получения значения захлестов
-            '''
-            if duration == 0:
-                raise ValueError("Деление на ноль")
-            retime_speed = (end_frame - strt_frame) / duration * 100
-            excess = max(0, retime_speed - 100)
-            if retime_speed <= 133:
-                # Округляем вниз только в этом диапазоне. Что бы сгладить баг давинчи с  определением in/out.
-                # Будет отсутствовать 4 захлеста
-                increment = int(excess // 33.34)
-            else:
-                # Выше 133 — округляем вверх
-                increment = math.ceil(excess / 33.34)
-            handles = self.frame_handles + increment
-            return f"EXR_{handles}hndl"
-
-        def set_render_preset(calc_handl):
-            '''
-            Функция ищет полученное в get_retime значение захлеста через регулярное выражение в списке всех пресетов рендера
-            '''
-            try:
-                preset_list = project.GetRenderPresetList()
-                for preset in preset_list:
-                    if re.match(calc_handl, preset):
-                        project.LoadRenderPreset(preset)
-                        logger.debug(f"Установлен пресет рендера: {calc_handl} ")
-                        return True
-            except Exception as e:
-                self.render_preset_error.emit(f"Не удалось применить пресет рендера {calc_handl}: {e}")
-                logger.error(f"Не удалось применить пресет рендера {calc_handl}: {e}")
-                return False 
-
-        def set_render_settings(mark_in, mark_out, clip_resolution):
-            '''
-            Функция задает настройки для последующего рендера клипа
-            '''
-            try:
-                resolution = re.search(r'\d{4}x\d{3,4}', clip_resolution).group(0)
-                width, height = resolution.split("x")
-                render_settings = {
-                    "SelectAllFrames": False,
-                    "MarkIn": mark_in,
-                    "MarkOut": mark_out,
-                    "TargetDir": self.output_folder,
-                    "FormatWidth": int(width),
-                    "FormatHeight": int(height)
-                }
-                project.SetRenderSettings(render_settings)
-                render_item = project.AddRenderJob()
-                return render_item, width, height
-            
-            except Exception as e:
-                self.render_preset_error.emit(f"Не удалось установить разрешение рендера {resolution}: {e}")
-                logger.error(f"Не удалось применить пресет рендера {resolution}: {e}")
-                return False 
-            
-        def create_empty_tracks(current_traks_value):
-            "Функция создает дополнительные дорожки при значении < 5 на таймлайне"
-            for _ in range(5 - current_traks_value):
-                timeline.AddTrack("video")
-
-        # Проверка на наличие 5 обязательных дорожек
-        if timeline.GetTrackCount("video") < 5:
-            create_empty_tracks(timeline.GetTrackCount("video"))
-
-        # Получение объектов таймлайна с дорожек 2-5, представленных в виде пользовательского класса DvrTimelineObject
-        pipeline_scale_track_2 = get_mediapoolitems(end_track=2, start_track=2) 
-        scale_1_5x_track_3 = get_mediapoolitems(end_track=3, start_track=3)
-        scale_2x_track_4 = get_mediapoolitems(end_track=4, start_track=4)
-        full_res_track_5 = get_mediapoolitems(end_track=5, start_track=5)
-        all_tracks = (pipeline_scale_track_2, scale_1_5x_track_3, scale_2x_track_4, full_res_track_5)
-        logger.debug("Собраны списки медиапул объектов со всех дорожек")
-
-        # Установка пресета проекта
-        set_project_preset_var = set_project_preset()
-        if not set_project_preset_var:
-            return
-
-        if all(not track for track in all_tracks):
-            self.empty_track_warning.emit()
-            logger.warning("На дорожках 2-5 отсутствют клипы")
-            return
-
-        # Основной цикл идущий по дорожкам 2-5
-        for track in all_tracks:
-
-            try:
-                set_enable_for_track(track[0].track_type_ind)
-                logger.debug(f"Начало работы с {track[0].track_type_ind} треком")
-            except IndexError:
-                continue
-
-            # Цикл фнутри одной из дорожек
-            for clip in track:
-
-                current_track_number = clip.track_type_ind
-                calc_handl = get_retime(clip.source_start, clip.source_end, clip.clip_dur)
-                clip_resolution = get_resolution_settings(clip.mp_item, current_track_number)
-
-                # Последующий цикл не проходит пока идет рендер
-                while rendering_in_progress():
-                    time.sleep(1)
-
-                # Установка пресета рендера и настроек рендера
-                set_render_preset_var = set_render_preset(calc_handl)
-                if not set_render_preset_var:
-                    return
-                
-                render_item, width_res, height_res = set_render_settings(clip.clip_start_tmln, clip.clip_end, clip_resolution)
-                if not render_item or not width_res or not height_res:
-                    return
-                
-                logger.debug(f"Установлено разрешение с настройках рендера: {width_res}x{height_res}")
-
-                # Установка разрешение проекта
-                project.SetSetting("timelineResolutionWidth", width_res)
-                project.SetSetting("timelineResolutionHeight", height_res)
-                logger.debug(f"Запустился рендер клипа {clip.mp_item.GetName()} с разрешением {width_res}x{height_res}")
-
-                # Запуск текущего render job
-                project.StartRendering(render_item)
-
-            # Ожидает пока закончиться рендер последнего клипа на дорожке n, переключает на вкладку edit и цикл уходит на новый трек
-            while rendering_in_progress():
-                time.sleep(1)
-            resolve.OpenPage("edit")
-        self.success_message.emit()
-        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     apply_style(app)
-    window = DvrRenderApp()
+    window = ExrDelivery()
     window.show()
     sys.exit(app.exec_())
