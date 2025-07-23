@@ -372,6 +372,7 @@ class DeliveryPipline:
 
                 item_resolution = self.get_resolution_settings(item)
 
+                # Ставится до установки render preset
                 self.stop_process()
 
                 render_preset_var = self.set_render_preset(handles_value)
@@ -523,7 +524,61 @@ class ExrDelivery(QWidget):
         self.run_button.clicked.connect(self.run_render)
         layout.addWidget(self.run_button)
 
+        palette_widget = self.create_color_palette()
+        layout.addWidget(palette_widget, alignment=Qt.AlignLeft)
+
         self.setLayout(layout)
+
+    def create_color_palette(self, labels=None):
+        palette_group = QGroupBox("")
+
+        main_layout = QVBoxLayout()
+        label_layout = QHBoxLayout()
+        color_layout = QHBoxLayout()
+
+        labels = {
+            "Orange": "Standart res",
+            "Yellow": "1.5x res",
+            "Lime": "2x res",
+            "Violet": "Full res",
+            "Blue": "Ignore"
+        }
+        color_map = {
+            "Orange": "#FFA500",
+            "Yellow": "#FFFF00",
+            "Lime": "#00FF00",
+            "Violet": "#8A2BE2",
+            "Blue": "#1E90FF"
+        }
+
+        self.color_labels = {}
+
+        for name, hex_color in color_map.items():
+            # Если задан labels — берём из него, иначе "Label"
+            label_text = labels.get(name, "Label") if labels else "Label"
+
+            # Верхний лейбл
+            label = QLabel(label_text)
+            label.setAlignment(Qt.AlignCenter)
+            self.color_labels[name] = label
+            label_layout.addWidget(label)
+
+            # Цветной блок с подписью внутри
+            color_box = QLabel(name)
+            color_box.setFixedSize(107, 25)
+            color_box.setAlignment(Qt.AlignCenter)
+            color_box.setStyleSheet(f"""
+                background-color: {hex_color};
+                color: black;
+                border: 1px solid gray;
+                border-radius: 4px;
+            """)
+            color_layout.addWidget(color_box)
+
+        main_layout.addLayout(label_layout)
+        main_layout.addLayout(color_layout)
+        palette_group.setLayout(main_layout)
+        return palette_group
 
     def on_success_signal(self):
         QMessageBox.information(self, "Успех", "Рендер успешно завершен")
