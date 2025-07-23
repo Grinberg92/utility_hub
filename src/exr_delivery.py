@@ -525,7 +525,7 @@ class ExrDelivery(QWidget):
         layout.addWidget(self.run_button)
 
         palette_widget = self.create_color_palette()
-        layout.addWidget(palette_widget, alignment=Qt.AlignLeft)
+        layout.addWidget(palette_widget)
 
         self.setLayout(layout)
 
