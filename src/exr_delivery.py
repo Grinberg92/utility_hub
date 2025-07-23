@@ -22,7 +22,9 @@ COLORS = ["Orange", "Yellow", "Lime", "Violet", "Blue"]
 EXTENTIONS = (".mxf", ".braw", ".arri", ".r3d", ".dng")
 
 class DvrTimelineObject():
-    "Пользовательский класс для удобного получения атрибутов объекта на таймлайне"
+    """
+    Объект с атрибутами итема на таймлайне.
+    """
     def __init__(self, mp_item, track_type_ind, clip_start_tmln, source_start, source_end, clip_dur, clip_color):
         self.mp_item = mp_item
         self.track_type_ind = track_type_ind
@@ -35,15 +37,15 @@ class DvrTimelineObject():
 
 class DeliveryPipline:
     """
-    Конвеер создания рендер джобов и их последующего рендера.
+    Конвеер создания render jobs и их последующего рендера.
     """
     def __init__(self, user_config, signals):
         self.user_config = user_config
         self.signals = signals
 
-    def get_api_resolve(self):
+    def get_api_resolve(self) -> ResolveObjects:
         """
-        Проверка подключения к API Resolve.
+        Проверка подключения к API Resolve и получение основного объекта Resolve.
         """
         try:
             resolve = ResolveObjects().resolve
@@ -51,7 +53,7 @@ class DeliveryPipline:
         except RuntimeError as re:
             raise
 
-    def get_mediapoolitems(self, start_track, end_track):
+    def get_mediapoolitems(self, start_track, end_track) -> list:
         """
         Получение списка с экземплярами DvrTimelineObject,
         содержащими необходимые данные о клипе. 
@@ -66,7 +68,7 @@ class DeliveryPipline:
                                 item.GetClipColor()))
         return filtred_items
     
-    def get_tracks(self, start_track=2, track_type="video"):
+    def get_tracks(self, start_track=2, track_type="video") -> list:
         """
         Получем индексы не пустых треков.
         """
@@ -78,7 +80,7 @@ class DeliveryPipline:
 
         return no_empty_tracks
     
-    def set_project_preset(self):
+    def set_project_preset(self) -> bool:
         """
         Установка пресета проекта.
         """
@@ -91,7 +93,7 @@ class DeliveryPipline:
             return False
     def set_enable_for_track(self, current_track_number):
         '''
-        Функция отключает все дорожки кроме текущей.
+        Отключаем все дорожки кроме текущей.
         '''
         max_track = self.timeline.GetTrackCount("video")
         for track_number in range(1, max_track + 1):
@@ -100,7 +102,7 @@ class DeliveryPipline:
 
     def get_handles(self, timeline_item) -> str:
         '''
-        Функция получения значения захлестов.
+        Получаем значения захлестов.
         '''
         start_frame = timeline_item.source_start
         end_frame = timeline_item.source_end
@@ -116,13 +118,19 @@ class DeliveryPipline:
             # Выше 133 — округляем вверх
             increment = math.ceil(excess / 33.34)
         handles = self.frame_handles + increment
+
         return f"EXR_{handles}hndl"
     
-    def standart_resolution(self, clip):
+    def standart_resolution(self, clip) -> str:
         """
         Пересчет разрешения исходника под стандартное разрешение для рендера(2к).
+        Обрабатывает и сферическую и анаморфную линзу. 
+        Для вычисления выходного разрешения ширины сферической линзы используется формула: 
+        (ширина кадра текущего клипа * высота целевого разрешения) / (высота кадра такущего клипа / аспект текущего клипа).
+        Для вычисления выходного разрешения высоты анаморфной линзы используется формула: 
+        (высота кадра текущего клипа * ширина целевого разрешения) / (ширина кадра такущего клипа).
+        Если полученное значение ширины или высоты кадра получается нечетным, то идет округление до ближайшего четного значения.
         """
-        # Находит анаморф, вычисляет ширину по аспекту
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
             aspect = clip.GetClipProperty('PAR')
             width, height = clip.GetClipProperty('Resolution').split('x')
@@ -137,10 +145,11 @@ class DeliveryPipline:
             resolution = "x".join([self.width_res_glob, calculate_height])
             return resolution
         
-    def scale_1_5_resolution(self, clip):
+    def scale_1_5_resolution(self, clip) -> str:
         """
         Пересчет разрешения исходника под стандартное разрешение для рендера,
         умноженное на 1.5 при зуме(скеиле) свыше 10%.
+        Вычисление аналогично standart_resolution, но при этом и ширина и высота домножаются на коэффициент 1.5.
         """
         # Находит анаморф, вычисляет ширину по аспекту
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
@@ -156,10 +165,11 @@ class DeliveryPipline:
             resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 1.5) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 1.5) / 2) * 2))])
             return resolution
         
-    def scale_2_resolution(self, clip):
+    def scale_2_resolution(self, clip) -> str:
         """
         Пересчет разрешения исходника под стандартное разрешение для рендера,
         умноженное на 2 при зуме(скеиле) свыше 50%.
+        Вычисление аналогично standart_resolution, но при этом и ширина и высота домножаются на коэффициент 2.
         """
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
             aspect = clip.GetClipProperty('PAR')
@@ -174,9 +184,12 @@ class DeliveryPipline:
             resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 2) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 2) / 2) * 2))])
             return resolution
         
-    def full_resolution(self, clip):
+    def full_resolution(self, clip) -> str:
         """
         Полное разрешение исходника.
+        Для вычисления выходного разрешения высоты анаморфной линзы используется формула: 
+        (высота кадра текущего клипа / аспект текущего клипа).
+        Если полученное значение высоты кадра получается нечетным, то идет округление до ближайшего четного значения.
         """
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
             aspect = clip.GetClipProperty('PAR')
@@ -222,19 +235,18 @@ class DeliveryPipline:
         while rendering_in_progress():
             time.sleep(1)
 
-    def set_render_preset(self, calc_handl):
+    def set_render_preset(self, handles_value) -> bool:
         '''
         Метод ищет полученное в get_retime значение захлеста через регулярное выражение 
         в списке всех пресетов рендера.
         '''
-
         preset_list = self.project.GetRenderPresetList()
         for preset in preset_list:
-            if re.match(calc_handl, preset):
+            if re.match(handles_value, preset):
                 self.project.LoadRenderPreset(preset)
-                logger.info(f"Установлен пресет рендера: {calc_handl} ")
+                logger.info(f"Установлен пресет рендера: {handles_value} ")
                 return True
-        self.signals.error_signal.emit(f"Не удалось применить пресет рендера {calc_handl}")
+        self.signals.error_signal.emit(f"Не удалось применить пресет рендера {handles_value}")
         return False 
             
     def set_project_resolution(self, height_res, width_res):
@@ -288,7 +300,7 @@ class DeliveryPipline:
         if item.clip_color == COLORS[4]:
             return True
 
-    def start_render(self, render_job):
+    def start_render(self, render_job) -> bool:
         """
         Запуск render job.
         """    
@@ -301,6 +313,7 @@ class DeliveryPipline:
     def export_timeline(self):
         """
         Экспорт таймлайна после окончания рендера в формате xml.
+
         """
         xml_name = str(self.timeline.GetName())
         path = (Path(self.render_path) / ".." / f'{xml_name}.xml').resolve()  
@@ -309,6 +322,7 @@ class DeliveryPipline:
             self.signals.warning_signal.emit(f"Ошибка экспорта таймлайна {xml_name}")
         else:
             logger.info(f"Таймлайн {xml_name} успешно экспортирован")
+
     def run(self):
         """
         Логика конвеера рендера.
@@ -380,16 +394,13 @@ class DeliveryPipline:
             self.export_timeline()
         self.signals.success_signal.emit(f"Рендер успешно завершен")
 
-class RenderThread(QThread):
-
-    render_preset_error = pyqtSignal(str)
-    project_preset_error = pyqtSignal(str)
+class RenderWorker(QThread):
+    """
+    Запуск логики из отдельного потока.
+    """
     success_signal = pyqtSignal(str)
     warning_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
-    empty_track_warning = pyqtSignal()
-    render_settings_error = pyqtSignal(str)
-    resolve_connect_error = pyqtSignal()
 
     def __init__(self, parent, user_config):
         super().__init__(parent)
@@ -415,7 +426,6 @@ class ConfigValidator:
         """
         Собирает пользовательские данные из GUI.
         """
-
         return {
             "resolution_height": self.gui.height_input.text().strip(),
             "resolution_width": self.gui.width_input.text().strip(),
@@ -533,8 +543,6 @@ class ExrDelivery(QWidget):
 
     def run_render(self):
 
-        logger.debug("Запуск скрипта")
-
         self.validator = ConfigValidator(self)
         self.user_config = self.validator.collect_config()
 
@@ -543,7 +551,7 @@ class ExrDelivery(QWidget):
             return
    
         logger.info(f"\n\n{pformat(self.user_config)}\n")
-        self.render_thread = RenderThread(self, self.user_config)
+        self.render_thread = RenderWorker(self, self.user_config)
         self.run_button.setEnabled(False)
         self.render_thread.finished.connect(lambda: self.run_button.setEnabled(True))
         self.render_thread.success_signal.connect(self.on_success_signal)
