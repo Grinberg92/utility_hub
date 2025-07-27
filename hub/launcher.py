@@ -43,36 +43,41 @@ class HubApp(QWidget):
             script_name="exr_delivery.py"
         )
         row3 = self.create_button_description_row(
+            button_name="Exr delivery_FD",
+            description_text="Автоматический рендер EXR для FilmDirection",
+            script_name="exr_delivery_fd.py"
+        )
+        row4 = self.create_button_description_row(
             button_name="Copy Grade",
             description_text="Копирование грейда",
             script_name="copy_grade.py"
         )
-        row4 = self.create_button_description_row(
+        row5 = self.create_button_description_row(
             button_name="Shot Versions",
             description_text="Получение отчета об актуальности версий шотов",
             script_name="compare_versions.py"
         )
-        row5 = self.create_button_description_row(
+        row6 = self.create_button_description_row(
             button_name="Get Shot",
             description_text="Загрузка дейлизов в медиапул",
             script_name="get_shot_in_dvr.py"
         )
-        row6 = self.create_button_description_row(
+        row7 = self.create_button_description_row(
             button_name="Render Proxy",
             description_text="Автоматический рендер MXF прокси для Avid",
             script_name="mxf_proxy_render.py"
         )
-        row7 = self.create_button_description_row(
+        row8 = self.create_button_description_row(
             button_name="OCF Color and FPS",
             description_text="Установка проектного FPS и цвета для исходников по их разрешению",
             script_name="ocf_set_source_color.py"
         )
-        row8 = self.create_button_description_row(
+        row9 = self.create_button_description_row(
             button_name="Name from Offline",
             description_text="Установка имени оффлайн клипа в атрибут клипа на таймлайне",
             script_name="set_name_from_offline.py"
         )
-        row9 = self.create_button_description_row(
+        row10 = self.create_button_description_row(
             button_name="Additional Programs",
             description_text="Хаб для работы с маркерами и созданием EDL",
             script_name="loc_offline_edl_utility.py"
@@ -87,6 +92,7 @@ class HubApp(QWidget):
         resolve_layout.addLayout(row7)
         resolve_layout.addLayout(row8)
         resolve_layout.addLayout(row9)
+        resolve_layout.addLayout(row10)
 
 
         resolve_box.setLayout(resolve_layout)
