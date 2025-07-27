@@ -95,8 +95,8 @@ class DeliveryPipline:
         '''
         Отключаем все дорожки кроме текущей.
         '''
-        max_track = self.timeline.GetTrackCount("video")
-        for track_number in range(1, max_track + 1):
+        self.max_track = self.timeline.GetTrackCount("video")
+        for track_number in range(1, self.max_track + 1):
             self.timeline.SetTrackEnable("video", track_number, track_number == current_track_number)
         logger.info(f"Начало работы с {current_track_number} треком")
 
@@ -108,15 +108,18 @@ class DeliveryPipline:
         end_frame = timeline_item.source_end
         duration = timeline_item.clip_duration
         source_duration = end_frame - start_frame
-        if source_duration % duration == 1:
-            source_duration = source_duration -1 
+        
+        # Если source duration врет на 1 фрейм то вычитаем его(баг Resolve).
+        # Второе условие пропускает только ретаймы кратные 100(т.е 100, 200, 300 и тд)
+        if source_duration % duration == 1 and (source_duration - 1 / duration * 100) % 100 == 0:
+            source_duration = source_duration - 1 
 
         retime_speed = source_duration / duration * 100
         excess = max(0, retime_speed - 100)
 
         increment = math.ceil(excess / 33.34)
         handles = self.frame_handles + increment
-        print(source_duration, duration)
+
         return f"EXR_{handles}hndl"
     
     def standart_resolution(self, clip) -> str:
@@ -127,7 +130,7 @@ class DeliveryPipline:
         (ширина кадра текущего клипа * высота целевого разрешения) / (высота кадра такущего клипа / аспект текущего клипа).
         Для вычисления выходного разрешения высоты анаморфной линзы используется формула: 
         (высота кадра текущего клипа * ширина целевого разрешения) / (ширина кадра такущего клипа).
-        Если полученное значение ширины или высоты кадра получается нечетным, то идет округление до ближайшего четного значения.
+        Если полученное значение ширины или высоты кадра получается нечетным, то идет округление вверх до ближайшего четного значения.
         """
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
             aspect = clip.GetClipProperty('PAR')
@@ -187,7 +190,7 @@ class DeliveryPipline:
         Полное разрешение исходника.
         Для вычисления выходного разрешения высоты анаморфной линзы используется формула: 
         (высота кадра текущего клипа / аспект текущего клипа).
-        Если полученное значение высоты кадра получается нечетным, то идет округление до ближайшего четного значения.
+        Если полученное значение высоты кадра получается нечетным, то идет округление вверх до ближайшего четного значения.
         """
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
             aspect = clip.GetClipProperty('PAR')
@@ -398,7 +401,7 @@ class DeliveryPipline:
         self.set_enabled()
         if self.export_bool:    
             self.export_timeline()
-        self.signals.success_signal.emit(f"Рендер успешно завершен")
+        self.signals.success_signal.emit(f"Рендер успешно завершен!")
 
 class RenderWorker(QThread):
     """
@@ -477,9 +480,9 @@ class ExrDelivery(QWidget):
         self.height_input.setFixedWidth(60)
 
         self.preset_combo = QComboBox()
-        self.preset_combo.addItems(["GRN_EXR_1998x1054", "PRESET_A", "PRESET_B"])
-        self.preset_combo.setCurrentText("GRN_EXR_1998x1054")
-        self.preset_combo.setFixedWidth(170)
+        self.preset_combo.addItems(["aces1.2_smoother_preset"])
+        self.preset_combo.setCurrentText("aces1.2_smoother_preset")
+        self.preset_combo.setMinimumWidth(180)
         self.export_cb = QCheckBox("Export .xml")
         self.handle_input = QLineEdit("3")
         self.handle_input.setFixedWidth(40)
@@ -589,11 +592,11 @@ class ExrDelivery(QWidget):
         QMessageBox.information(self, "Успех", "Рендер успешно завершен")
 
     def on_warning_signal(self, message):
-        QMessageBox.warning(self, "Успех", message)
+        QMessageBox.warning(self, "Предупреждение", message)
         logger.warning(message)
 
     def on_error_signal(self, message):
-        QMessageBox.warning(self, "Успех", message)
+        QMessageBox.critical(self, "Ошибка", message)
         logger.exception(message)
 
     def select_folder(self):
