@@ -91,7 +91,7 @@ class DeliveryPipline:
         else:
             self.signals.error_signal.emit(f"Пресет проекта не применен {self.project_preset}")
             return False
-    def set_enable_for_track(self, current_track_number):
+    def set_disabled(self, current_track_number):
         '''
         Отключаем все дорожки кроме текущей.
         '''
@@ -323,6 +323,12 @@ class DeliveryPipline:
         else:
             logger.info(f"Таймлайн {xml_name} успешно экспортирован")
 
+    def set_enabled(self):
+
+        for track_number in range(1, self.max_track + 1):
+            
+            self.timeline.SetTrackEnable("video", track_number, True)
+
     def run(self):
         """
         Логика конвеера рендера.
@@ -353,7 +359,7 @@ class DeliveryPipline:
 
             track_items = self.get_mediapoolitems(start_track=track, end_track=track)
 
-            self.set_enable_for_track(track)
+            self.set_disabled(track)
             
             # Цикл по клипам на дорожке.
             for item in track_items:
@@ -391,6 +397,7 @@ class DeliveryPipline:
             self.stop_process()
             self.resolve.OpenPage("edit")
 
+        self.set_enabled
         if self.export_bool:    
             self.export_timeline()
         self.signals.success_signal.emit(f"Рендер успешно завершен")
