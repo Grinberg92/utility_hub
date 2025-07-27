@@ -107,18 +107,16 @@ class DeliveryPipline:
         start_frame = timeline_item.source_start
         end_frame = timeline_item.source_end
         duration = timeline_item.clip_duration
+        source_duration = end_frame - start_frame
+        if source_duration % duration == 1:
+            source_duration = source_duration -1 
 
-        retime_speed = (end_frame - start_frame) / duration * 100
+        retime_speed = source_duration / duration * 100
         excess = max(0, retime_speed - 100)
-        if retime_speed <= 133:
-            # Округляем вниз только в этом диапазоне. Что бы сгладить баг давинчи с  определением in/out.
-            # Будет отсутствовать 4 захлеста
-            increment = int(excess // 33.34)
-        else:
-            # Выше 133 — округляем вверх
-            increment = math.ceil(excess / 33.34)
-        handles = self.frame_handles + increment
 
+        increment = math.ceil(excess / 33.34)
+        handles = self.frame_handles + increment
+        print(source_duration, duration)
         return f"EXR_{handles}hndl"
     
     def standart_resolution(self, clip) -> str:
@@ -397,7 +395,7 @@ class DeliveryPipline:
             self.stop_process()
             self.resolve.OpenPage("edit")
 
-        self.set_enabled
+        self.set_enabled()
         if self.export_bool:    
             self.export_timeline()
         self.signals.success_signal.emit(f"Рендер успешно завершен")
