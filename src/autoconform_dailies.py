@@ -1228,7 +1228,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Autoconform Dailies")
-        self.resize(640, 720)
+        self.resize(640, 770)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
         self.frame_rate = 24
@@ -1269,8 +1269,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         # Логика
         logic_group = QGroupBox("Conform logic")
-        logic_group.setFixedHeight(75)
-        logic_group.setFixedWidth(400)
+        logic_group.setMinimumHeight(90)
+        logic_group.setMinimumWidth(400)
         logic_layout = QHBoxLayout()
 
         self.logic_mode_group = QButtonGroup(self)
@@ -1304,74 +1304,88 @@ class Autoconform(QWidget, ConformCheckerMixin):
         logic_layout.addLayout(vbox3)
         logic_layout.addStretch()
 
-        logic_group.setLayout(logic_layout)
+        outer_layout = QVBoxLayout()
+        outer_layout.addStretch()
+        outer_layout.addLayout(logic_layout)
+        outer_layout.addStretch()
+
+        logic_group.setLayout(outer_layout)
         main_layout.addWidget(logic_group, alignment=Qt.AlignHCenter)
 
         # Группа Settings
         settings_group = QGroupBox("Settings")
-        settings_layout = QVBoxLayout()
-        top_row_layout = QHBoxLayout()
+        settings_layout = QHBoxLayout()
 
-        # Левая вертикаль: проект
-        project_vbox = QVBoxLayout()
-        project_label = QLabel("Choose project:")
+        # Левая колонка: проект + расширение
+        left_vbox = QVBoxLayout()
+
+        project_label = QLabel("Project:")
         self.project_menu = QComboBox()
         self.project_menu.addItems(self.projects)
         self.project_menu.setCurrentText(self.selected_project)
         self.project_menu.currentTextChanged.connect(self.get_project_settings)
         self.project_menu.currentTextChanged.connect(self.project_ui_state)
-        project_vbox.addWidget(project_label)
-        project_vbox.addWidget(self.project_menu)
+        left_vbox.addWidget(project_label)
+        left_vbox.addWidget(self.project_menu)
 
-        # Правая вертикаль: расширение
-        format_vbox = QVBoxLayout()
         format_label = QLabel("Extension:")
         self.format_menu = QComboBox()
         self.format_menu.addItems(["EXR", "JPG", "MOV", "MP4"])
         self.format_menu.setCurrentText(self.selected_format)
         self.format_menu.currentTextChanged.connect(self.update_ui_state)
-        format_vbox.addWidget(format_label)
-        format_vbox.addWidget(self.format_menu)
+        self.format_menu.setMinimumWidth(270)
+        left_vbox.addWidget(format_label)
+        left_vbox.addWidget(self.format_menu)
 
-        top_row_layout.addLayout(project_vbox)
-        top_row_layout.addSpacing(40)
-        top_row_layout.addLayout(format_vbox)
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
 
-        # Игнорирование дубликатов и стартовый фрейм
-        bottom_row_layout = QHBoxLayout()
+        # Правая колонка
+        right_vbox = QVBoxLayout()
+
+        # Первая строка: Ignore dubl + tracks range
+        tracks_hbox = QHBoxLayout()
         self.no_dublicates = QCheckBox("Ignore dubl")
-        bottom_row_layout.addWidget(self.no_dublicates)
-        bottom_row_layout.addSpacing(20)
+        tracks_hbox.addWidget(self.no_dublicates)
 
-        bottom_row_layout.addWidget(QLabel("tracks range:"))
+        tracks_hbox.addSpacing(5)
+        tracks_hbox.addWidget(QLabel("from tracks:"))
 
         self.track_in_input = QLineEdit(self.selected_track_in)
         self.track_in_input.setFixedWidth(30)
-        bottom_row_layout.addWidget(self.track_in_input)
+        tracks_hbox.addWidget(self.track_in_input)
 
-        bottom_row_layout.addWidget(QLabel("-"))
+        tracks_hbox.addWidget(QLabel("-"))
 
         self.track_out_input = QLineEdit(self.selected_track_out)
         self.track_out_input.setFixedWidth(30)
-        bottom_row_layout.addWidget(self.track_out_input)
-        bottom_row_layout.addSpacing(45)
+        tracks_hbox.addWidget(self.track_out_input)
+        tracks_hbox.addStretch()
+        right_vbox.addLayout(tracks_hbox)
 
-        bottom_row_layout.addWidget(QLabel("Start frame:"))
-        self.start_frame = QLineEdit(self.select_frame)
-        self.start_frame.setFixedWidth(30) 
-        bottom_row_layout.addWidget(self.start_frame)
-        bottom_row_layout.addStretch()
+        # Вторая строка: Start frame + Include slate
+        frame_hbox = QHBoxLayout()
 
         self.include_slate = QCheckBox("Include slate")
         self.include_slate.setChecked(True)
-        bottom_row_layout.addWidget(self.include_slate)
+        frame_hbox.addWidget(self.include_slate)
+        frame_hbox.addSpacing(50)
+        frame_hbox.addWidget(QLabel("Start frame:"))
+        self.start_frame = QLineEdit(self.select_frame)
+        self.start_frame.setFixedWidth(30)
+        frame_hbox.addWidget(self.start_frame)
 
+        frame_hbox.addStretch()
+        right_vbox.addLayout(frame_hbox)
 
-        settings_layout.addLayout(top_row_layout)
-        settings_layout.addSpacing(10)
-        settings_layout.addLayout(bottom_row_layout)
+        settings_layout.addLayout(left_vbox)
+        settings_layout.addSpacing(20)
+        settings_layout.addWidget(separator)
+        settings_layout.addSpacing(20)
+        settings_layout.addLayout(right_vbox)
+
         settings_group.setLayout(settings_layout)
-
         main_layout.addWidget(settings_group)
 
         # Выбор EDL
@@ -1481,6 +1495,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
             self.edl_button.setEnabled(False)
             self.shots_button.setEnabled(False)
             self.otio_button.setEnabled(False)
+            self.button_logs.setEnabled(False)
         else:
             self.otio_input.setEnabled(True)
             self.edl_input.setEnabled(True)
@@ -1488,6 +1503,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
             self.edl_button.setEnabled(True)
             self.shots_button.setEnabled(True)
             self.otio_button.setEnabled(True)
+            self.button_logs.setEnabled(True)
 
     def is_OS(self, path):
         '''
@@ -1544,11 +1560,15 @@ class Autoconform(QWidget, ConformCheckerMixin):
         """
         self.validator = ConfigValidator(self)
         self.user_config = self.validator.collect_config()
-        self.resolve_shots_list = get_resolve_shot_list(
-            int(self.user_config["track_in"]),
-            int(self.user_config["track_out"]),
-            self.user_config["extension"]
-        )
+
+        if self.no_dublicates.isChecked():
+            self.resolve_shots_list = get_resolve_shot_list(
+                int(self.user_config["track_in"]),
+                int(self.user_config["track_out"]),
+                self.user_config["extension"]
+            )
+        else:
+            self.resolve_shots_list = None
 
         if not self.validator.validate(self.user_config):
             QMessageBox.critical(self, "Validation error", "\n".join(self.validator.get_errors()))
