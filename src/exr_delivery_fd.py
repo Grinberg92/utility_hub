@@ -937,13 +937,13 @@ class ExrDelivery(QWidget):
             "Orange": "No retime",
             "Beige": "Linear retime",
             "Brown": "Non-linear retime",
-            "Blue": "Ignore"
+
         }
         color_map = {
             "Orange": "#FFA500",
             "Beige": "#F5F5DC",
             "Brown": "#8B4513",
-            "Blue": "#1E90FF"
+
         }
         self.color_labels = {}
 
@@ -959,7 +959,7 @@ class ExrDelivery(QWidget):
 
             # Цветной блок с подписью внутри
             color_box = QLabel(name)
-            color_box.setFixedSize(125, 25)
+            color_box.setFixedSize(160, 25)
             color_box.setAlignment(Qt.AlignCenter)
             color_box.setStyleSheet(f"""
                 background-color: {hex_color};
