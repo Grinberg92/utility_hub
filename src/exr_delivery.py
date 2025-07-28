@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveObjects
-from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
+from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
 
 
 logger = get_logger(__file__)
@@ -58,7 +58,7 @@ class DeliveryPipline:
         Получение списка с экземплярами DvrTimelineObject,
         содержащими необходимые данные о клипе. 
         """
-        timeline_extractor = ResolveTimelineItemExtractor()
+        timeline_extractor = ResolveTimelineItemExtractor(self.timeline)
         timeline_items = timeline_extractor.get_timeline_items(start_track, end_track)
         filtred_items = []
         for item in timeline_items:

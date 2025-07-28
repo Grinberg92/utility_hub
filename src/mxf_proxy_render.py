@@ -12,7 +12,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtCore import Qt
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
-from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
+from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
 
 logger = get_logger(__file__)
 
