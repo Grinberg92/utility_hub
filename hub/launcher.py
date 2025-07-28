@@ -38,13 +38,13 @@ class HubApp(QWidget):
             script_name="autoconform_dailies.py"
         )
         row2 = self.create_button_description_row(
-            button_name="Exr delivery",
-            description_text="Автоматический рендер EXR",
+            button_name="Conform delivery",
+            description_text="Внутристудийный пайплайн выдачи конформа из Resolve",
             script_name="exr_delivery.py"
         )
         row3 = self.create_button_description_row(
-            button_name="Exr delivery_FD",
-            description_text="Автоматический рендер EXR для FilmDirection",
+            button_name="Conform delivery FD",
+            description_text="Пайплайн выдачи для FilmDirection",
             script_name="exr_delivery_fd.py"
         )
         row4 = self.create_button_description_row(
