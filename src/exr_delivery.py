@@ -474,9 +474,9 @@ class ExrDelivery(QWidget):
 
         self.res_group = QGroupBox("Resolution")
         self.res_group.setFixedHeight(70)
-        self.width_input = QLineEdit("1998")
+        self.width_input = QLineEdit("2048")
         self.width_input.setFixedWidth(60)
-        self.height_input = QLineEdit("1080")
+        self.height_input = QLineEdit("858")
         self.height_input.setFixedWidth(60)
 
         self.preset_combo = QComboBox()
