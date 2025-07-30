@@ -12,8 +12,6 @@ logger = get_logger(__file__)
 class EDLProcessorGUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-
-        self.pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)'
         self.setWindowTitle("EDL&Markers Creator")
         self.resize(620, 300)
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
@@ -236,9 +234,8 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             markers_list = []
             for timecode, name in self.timeline.GetMarkers().items():
                 name = name[marker_from].strip()
-                if name and re.search(self.pattern_short, name):
-                    timecode_marker = tc(self.fps_entry.text(), frames=timecode + timeline_start_timecode) + 1  
-                    markers_list.append((name, timecode_marker))
+                timecode_marker = tc(self.fps_entry.text(), frames=timecode + timeline_start_timecode) + 1  
+                markers_list.append((name, timecode_marker))
             return markers_list
         except Exception as e:
             QMessageBox.critical(f"Ошибка получения данных об объектах маркеров: {e}")
@@ -252,10 +249,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         try:
             clips = timeline.GetItemListInTrack('video', track_number)
             for clip in clips:
-                if re.search(self.pattern_short, clip.GetName()):
-                    clip_name = clip.GetName()
-                    clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - timeline.GetStartFrame()
-                    timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+                clip_name = clip.GetName()
+                clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - timeline.GetStartFrame()
+                timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
             logger.debug("Маркеры успешно созданы")
         except Exception as e:
             QMessageBox.critical(f"Ошибка создания маркеров: {e}")
