@@ -110,20 +110,17 @@ class DeliveryPipline:
         source_duration = end_frame - start_frame
 
         
-        # Если source duration врет на 1 фрейм то вычитаем его(баг Resolve).
+        # Если source duration врет на 1 фрейм то вычитаем или прибавляем его(баг Resolve).
         # Второе условие пропускает только ретаймы кратные 100(т.е 100, 200, 300 и тд)
-        # and (source_duration - 1 / duration * 100) % 100 == 0
+
         if source_duration % duration == 1 and ((source_duration - 1) / duration * 100) % 100 == 0.0:
-            print("minus")
             source_duration = source_duration - 1 
         elif duration % source_duration == 1 and ((source_duration + 1) / duration * 100) % 100 == 0.0:
-            print("plus")
             source_duration = source_duration + 1 
 
         retime_speed = source_duration / duration * 100
         excess = max(0, retime_speed - 100)
-        print(f"SOURCE DUR {source_duration}  DUR {duration}")
-        print(retime_speed)
+        logger.info(f"Retime speed - {retime_speed}")
         increment = math.ceil(excess / 33.34)
         handles = self.frame_handles + increment
 
