@@ -6,6 +6,7 @@ import DaVinciResolveScript as dvr
 import sys
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
+from dvr_tools.resolve_utils import ResolveObjects
 
 logger = get_logger(__file__)
 
@@ -169,7 +170,8 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         process_edl = self.edl_for_dailies_checkbox.isChecked() or self.offline_clips_checkbox.isChecked()
         locators_output_path = self.save_locators_path_entry.text()
         locator_from = self.locator_from_combo.currentText()
-        track_entry = self.track_entry.text()
+        resolve = ResolveObjects()
+        track_number = self.track_entry.text()
         offline_checkbox = self.offline_clips_checkbox.isChecked()
         dailies_checkbox = self.edl_for_dailies_checkbox.isChecked()
 
@@ -188,13 +190,17 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             QMessageBox.warning(self,"Ошибка", "FPS должен быть числом!")
             logger.warning("FPS должен быть числом!")
             return
-
-        track_number = self.track_entry.text()
+        
         try:
             track_number = int(track_number)
         except ValueError:
             QMessageBox.warning(self,"Ошибка", "Номер дорожки должен быть числом!")
             logger.warning("Номер дорожки должен быть числом!")
+            return
+        
+        if int(track_number) > resolve.timeline.GetTrackCount("video"):
+            QMessageBox.warning(self, "Ошибка", "Указан несуществующий трек")
+            logger.warning("Указан несуществующий трек")
             return
 
         try:
@@ -204,7 +210,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             self.timeline_start_tc = self.timeline.GetStartFrame()
 
             logger.debug("\n".join(("SetUp:", f"Project FPS: {fps}", f"Marker name from: {locator_from}", f"Set markers: {set_markers}",
-                                    f"From track: {track_entry}", f"Export locators to AVID: {export_loc}",
+                                    f"From track: {track_number}", f"Export locators to AVID: {export_loc}",
                                     f"Save created locators: {locators_output_path or None}", f"Offline EDL: {offline_checkbox}", 
                                     f"Dailies EDL: {dailies_checkbox}", f"Choose EDL-file: {edl_path or None}", 
                                     f"Save created EDL: {output_path or None}")))
