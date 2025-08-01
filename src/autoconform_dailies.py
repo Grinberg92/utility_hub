@@ -45,12 +45,16 @@ class EDLParser_v23:
         edl_record_out: str 
         retime: bool
 
-    def __init__(self, edl_path):
+    def __init__(self, edl_path, lines=None):
         self.edl_path = edl_path
-    def __iter__(self):
+        self._lines = lines
 
-        with open(self.edl_path, 'r') as edl_file:
-            lines = edl_file.readlines()
+    def __iter__(self):
+        if self._lines is not None:
+            lines = self._lines
+        else:    
+            with open(self.edl_path, 'r') as edl_file:
+                lines = edl_file.readlines()
 
             for line in lines:
                 if re.search(r'^\d+\s', line.strip()):
@@ -167,12 +171,16 @@ class EDLParser_v3:
         edl_record_out: str
         retime: bool  
 
-    def __init__(self, edl_path):
+    def __init__(self, edl_path=None, lines=None):
         self.edl_path = edl_path
+        self._lines = lines
 
     def __iter__(self):
-        with open(self.edl_path, 'r') as edl_file:
-            lines = edl_file.readlines()
+        if self._lines is not None:
+            lines = self._lines
+        else:    
+            with open(self.edl_path, 'r') as edl_file:
+                lines = edl_file.readlines()
 
         i = 0
         while i < len(lines):
@@ -593,8 +601,8 @@ class OTIOCreator:
         with open(edl_path, "r", encoding="utf-8") as f:
             for string in f:
                 if "*loc" in string.lower():
-                    return EDLParser_v3(edl_path)
-            return EDLParser_v23(edl_path)
+                    return EDLParser_v3(edl_path=edl_path)
+            return EDLParser_v23(edl_path=edl_path)
         
     def cut_slate(self, source_in_tc) -> int:
         """
@@ -1169,6 +1177,60 @@ class ConformCheckerMixin:
         except Exception as e:
             QMessageBox.warning(self, "Ошибка", str(e))
 
+    def get_shots_paths(self, path, extension) -> list:
+        """
+        Получем имена папок секвенций EXR, JPG (они же имена шотов)
+        или имена видеофайлов MOV, MP4.
+
+        :param path: Путь к шотам из GUI.
+
+        :param extension: Расширение из GUI.
+        """
+        paths = []
+        for root, folders, files in os.walk(path):
+                for folder in folders:
+                    for item in os.listdir(os.path.join(root, folder)):
+                        if item.endswith(f".{extension}".lower()):
+                            paths.append(folder)
+                            break
+        
+        return paths
+
+    def is_missing_shot(self, shots_root_path, edits_path, extension):
+        """
+        Проверяет есть ли каждый из шотов в shots_folder во всех монтажах из edits_path.
+
+        :param shots_root_path: Путь к шотам из GUI.
+
+        :param edits_path: Путь к .edl монтажам(или монтажу).
+
+        :return flag: 
+        """
+        shots_list = self.get_shots_paths(shots_root_path, extension)
+
+        united_edls = [line.strip() for file in edits_path.glob("*edl")
+        for line in file.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if line.strip()
+        ]
+
+        check_flag = False
+        triger_flag = False
+
+        parser = EDLParser_v3(lines=united_edls)
+        for shot_name in shots_list:
+            
+            for edl_line in parser:
+                if edl_line.edl_shot_name in shot_name:
+                    triger_flag = True
+            
+            if not triger_flag:
+                self.warning_signal.emit(f"🔴 Отсутствует шот {shot_name}")
+                check_flag = True
+            triger_flag = False
+
+        if not check_flag:
+            self.warning_signal.emit("🟢 Проверка пройдена успешно!")
+
 class ConfigValidator:
     """
     Класс собирает и валидирует пользовательские данные.
@@ -1225,11 +1287,15 @@ class ConfigValidator:
 
 
 class Autoconform(QWidget, ConformCheckerMixin):
+    warning_signal = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Autoconform Dailies")
         self.resize(640, 770)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
+
+        self.warning_signal.connect(self.appent_warning_field)
 
         self.frame_rate = 24
 
@@ -1421,6 +1487,11 @@ class Autoconform(QWidget, ConformCheckerMixin):
         otio_path_layout.addWidget(self.otio_button)
         main_layout.addLayout(otio_path_layout)
 
+        # Кнопка Check
+        self.button_check = QPushButton("PreCheck")
+        self.button_check.clicked.connect(self.precheck_shots)
+        main_layout.addWidget(self.button_check)
+
         # Кнопка Start
         self.button_create = QPushButton("Start")
         self.button_create.clicked.connect(self.start)
@@ -1459,6 +1530,27 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.update_ui_state()
         self.update_result_label()
         self.project_ui_state()
+
+    def precheck_shots(self):
+        """
+        Проверяем все ли шоты присутствуют в .edl монтажах.
+        """
+        shots_root_path = Path(self.shots_input.text().strip())
+        edits_path = Path(os.path.dirname(self.edl_input.text().strip()))
+
+        if str(edits_path) == ".":
+            QMessageBox.critical(self, "Ошибка", "Не указан путь к монтажам")
+            return 
+        
+        if str(shots_root_path) == ".":
+            QMessageBox.critical(self, "Ошибка", "Не указан путь к шотам")
+            return 
+        
+        extension = self.format_menu.currentText()
+
+        self.button_check.setEnabled(False)
+        self.is_missing_shot(shots_root_path, edits_path, extension)
+        self.button_check.setEnabled(True)
 
     def get_project_settings(self):
         """
