@@ -1151,7 +1151,7 @@ class ConformCheckerMixin:
                     triger_flag = True
             
             if not triger_flag:
-                self.warning_signal.emit(f"🔴 Отсутствует шот {shot_name}")
+                self.warning_signal.emit(f"🔴 Шот {shot_name} отсутствует в монтаже")
                 check_flag = True
             triger_flag = False
 
@@ -1195,10 +1195,16 @@ class ConfigValidator:
 
         if not user_config["edl_path"]:
             self.errors.append("Укажите путь к файлу EDL")
+        if not os.path.exists(user_config["edl_path"]):
+            self.errors.append("Указан несуществующий путь к EDL")
         if not user_config["shots_folder"]:
             self.errors.append("Укажите путь к папке с шотами")
+        if not os.path.exists(user_config["shots_folder"]):
+            self.errors.append("Указан несуществующий путь к шотам")
         if not user_config["otio_path"]:
             self.errors.append("Укажите путь к папке для сохранения OTIO")
+        if not os.path.exists(user_config["otio_path"]):
+            self.errors.append("Указан несуществующий путь к OTIO")
 
         try:
             int(user_config["track_in"])
@@ -1472,10 +1478,15 @@ class Autoconform(QWidget, ConformCheckerMixin):
         if str(edits_path) == ".":
             QMessageBox.critical(self, "Ошибка", "Не указан путь к монтажам")
             return 
-        
+        if not os.path.exists(Path(self.edl_input.text().strip())):
+            QMessageBox.critical(self,  "Ошибка", "Указан несуществующий путь к монтажам")
+            return
         if str(shots_root_path) == ".":
             QMessageBox.critical(self, "Ошибка", "Не указан путь к шотам")
             return 
+        if not os.path.exists(shots_root_path):
+            QMessageBox.critical(self,  "Ошибка", "Указан несуществующий путь к шотам")
+            return
         
         extension = self.format_menu.currentText()
 
