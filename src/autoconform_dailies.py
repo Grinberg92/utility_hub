@@ -77,79 +77,6 @@ class EDLParser_v23:
                     retime=False 
                     )
 
-class EDLParser_v3_old:
-    """
-    Класс-итератор. Итерирует EDL-файл, возвращая только те пары,
-    где есть строка данных (000xxx) и соответствующая *LOC строка.
-    """
-
-    @dataclass
-    class EDLEntry:
-        """
-        Класс-контейнер для данных из двух строк EDL
-        """
-        edl_record_id: str
-        edl_shot_name: str
-        edl_track_type: str
-        edl_transition: str
-        edl_source_in: str
-        edl_source_out: str
-        edl_record_in: str
-        edl_record_out: str
-
-    def __init__(self, edl_path):
-        self.edl_path = edl_path
-
-    def __iter__(self):
-        with open(self.edl_path, 'r') as edl_file:
-            lines = edl_file.readlines()
-
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-
-            # Ищем строку начинающуюся с цифр и пробел
-            if re.match(r'^\d+\s', line):
-                parts = line.split()
-                if len(parts) < 8:
-                    i += 1
-                    continue  # Пропускаем неполные строки
-
-                # Пытаемся найти LOC до следующей 000xxx строки
-                shot_name = None
-                j = i + 1
-                while j < len(lines):
-                    next_line = lines[j].strip()
-
-                    if re.match(r'^\d{6}\s', next_line):
-                        # Следующая запись — LOC не найден, игнорируем эту запись
-                        shot_name = None
-                        break
-
-                    loc_match = re.search(r'^\*LOC.*\s+(\S+)$', next_line)
-                    if loc_match:
-                        shot_name = loc_match.group(1)
-                        break
-
-                    j += 1
-
-                if shot_name:  # Только если LOC найден — создаём элемент
-                    yield self.EDLEntry(
-                        edl_record_id=parts[0],
-                        edl_shot_name=shot_name,
-                        edl_track_type=parts[2],
-                        edl_transition=parts[3],
-                        edl_source_in=parts[4],
-                        edl_source_out=parts[5],
-                        edl_record_in=parts[6],
-                        edl_record_out=parts[7],
-                    )
-                    i = j + 1  # Пропускаем LOC и двигаемся дальше
-                else:
-                    i += 1  # LOC не найден — пропускаем
-            else:
-                i += 1
-
 class EDLParser_v3:
     """
     Класс-итератор. Итерирует EDL-файл, возвращая только те пары,
@@ -523,7 +450,7 @@ class OTIOCreator:
                 # Иногда информация о фрейм рейте хранится в байтовом представлении. Учитываем это.
                 frame_fps = float(frame_fps.decode()) if isinstance(frame_fps, bytes) else float(frame_fps)
                 if int(self.frame_rate) != int(frame_fps):
-                    warning_message = f"🟡  FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}"
+                    warning_message = f"🟡  FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}."
                     self.send_warning(warning_message)
                     logger.warning(warning_message)
                     return False
@@ -720,8 +647,8 @@ class OTIOCreator:
 
             self.start_frame_logic(data)
     
-            self.send_warning(f"🟡  Шот {shot_name}. Нет пересечения диапазона")
-            logger.info(f"Шот {shot_name}. Нет пересечения диапазона")
+            self.send_warning(f"🟡  Шот {shot_name}. Нет пересечения диапазона.")
+            logger.info(f"Шот {shot_name}. Нет пересечения диапазона.")
 
 
         # Полное пересечение (EDL внутри исходника)
@@ -1254,7 +1181,7 @@ class ConfigValidator:
             "extension": self.gui.format_menu.currentText().lower(),
             "project": self.gui.project_menu.currentText(),
             "ignore_dublicates": self.gui.no_dublicates.isChecked(),
-            "frame_rate": self.gui.frame_rate,
+            "frame_rate": int(self.gui.frame_rate.text().strip()),
             "handles_logic": handles_logic,
             "start_frame_ui": int(self.gui.start_frame.text().strip()),
             "include_slate": self.gui.include_slate.isChecked()
@@ -1283,8 +1210,6 @@ class ConfigValidator:
 
     def get_errors(self) -> list:
         return self.errors
-        
-
 
 class Autoconform(QWidget, ConformCheckerMixin):
     warning_signal = pyqtSignal(str)
@@ -1292,12 +1217,15 @@ class Autoconform(QWidget, ConformCheckerMixin):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Autoconform Dailies")
-        self.resize(640, 770)
+        self.resize(710, 770)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
         self.warning_signal.connect(self.appent_warning_field)
 
         self.frame_rate = 24
+        self.frame_rate_label = QLabel("FPS:")
+        self.frame_rate = QLineEdit("24")
+        self.frame_rate.setMaximumWidth(30)
 
         self.selected_track_in = "8"
         self.selected_track_out = "8"
@@ -1436,10 +1364,13 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.include_slate = QCheckBox("Include slate")
         self.include_slate.setChecked(True)
         frame_hbox.addWidget(self.include_slate)
-        frame_hbox.addSpacing(50)
+        frame_hbox.addSpacing(20)
+        frame_hbox.addWidget(self.frame_rate_label)
+        frame_hbox.addWidget(self.frame_rate)
+        frame_hbox.addSpacing(15)
         frame_hbox.addWidget(QLabel("Start frame:"))
         self.start_frame = QLineEdit(self.select_frame)
-        self.start_frame.setFixedWidth(30)
+        self.start_frame.setMaximumWidth(30)
         frame_hbox.addWidget(self.start_frame)
 
         frame_hbox.addStretch()
