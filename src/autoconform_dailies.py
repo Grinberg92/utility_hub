@@ -450,7 +450,7 @@ class OTIOCreator:
                 # Иногда информация о фрейм рейте хранится в байтовом представлении. Учитываем это.
                 frame_fps = float(frame_fps.decode()) if isinstance(frame_fps, bytes) else float(frame_fps)
                 if int(self.frame_rate) != int(frame_fps):
-                    warning_message = f"🔴 FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}. Необходимо добавить шот вручную."
+                    warning_message = f"🔴  FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}. Необходимо добавить шот вручную."
                     self.send_warning(warning_message)
                     logger.warning(warning_message)
                     return  False
@@ -1156,12 +1156,12 @@ class ConformCheckerMixin:
                     triger_flag = True
             
             if not triger_flag:
-                self.warning_signal.emit(f"🔴 Шот {shot_name} отсутствует в монтаже")
+                self.warning_signal.emit(f"🔴  Шот {shot_name} отсутствует в монтаже")
                 check_flag = True
             triger_flag = False
 
         if not check_flag:
-            self.warning_signal.emit("🟢 Проверка пройдена успешно!")
+            self.warning_signal.emit("🟢  Проверка пройдена успешно!")
 
 class ConfigValidator:
     """
