@@ -1226,7 +1226,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Autoconform Dailies")
-        self.resize(710, 770)
+        self.resize(710, 820)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
         self.warning_signal.connect(self.appent_warning_field)
@@ -1267,6 +1267,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         # Поле предупреждений
         self.warning_field = QTextEdit()
         self.warning_field.setReadOnly(True)
+        self.warning_field.setMinimumHeight(250)
         self.warning_field.setPlainText("Здесь будут показаны предупреждения программы.\n")
         main_layout.addWidget(self.warning_field)
 
@@ -1597,6 +1598,8 @@ class Autoconform(QWidget, ConformCheckerMixin):
         """
         self.validator = ConfigValidator(self)
         self.user_config = self.validator.collect_config()
+
+        self.warning_signal.emit(f"\nМонтаж: {Path(os.path.basename(self.edl_input.text())).stem}\n")
 
         if self.no_dublicates.isChecked():
             self.resolve_shots_list = get_resolve_shot_list(
