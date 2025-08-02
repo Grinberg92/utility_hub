@@ -425,15 +425,15 @@ class OTIOCreator:
             self.video_tracks.append(otio.schema.Track(name=f'Video{num+1}', kind=otio.schema.TrackKind.Video))
             self.otio_timeline.tracks.append(self.video_tracks[num])
     
-    def is_correct_lenght(self, source_duration, timeline_duration, shot_name):
+    def is_correct_lenght(self, source_duration, timeline_duration, shot_name, message=""):
         """
-        Функция сравнивает фактическую длину шота по данным из сорса и из таймлайн диапазона.
+        Метод вычисляет фактическую длину шота по данным, полученным, из логики и сравнивает с таймлайн диапазоном полученным из EDL.
 
         :return: Метод ничего не возвращает.
         """
         if source_duration < timeline_duration:
             result = timeline_duration - source_duration
-            warning_message = f"🟡  Шот {shot_name} короче, чем его длина в EDL."
+            warning_message = f"🟡  Шот {shot_name} короче, чем его длина в EDL{message}."
             self.send_warning(warning_message)
             logger.warning(f'\n{warning_message}')
 
@@ -450,10 +450,10 @@ class OTIOCreator:
                 # Иногда информация о фрейм рейте хранится в байтовом представлении. Учитываем это.
                 frame_fps = float(frame_fps.decode()) if isinstance(frame_fps, bytes) else float(frame_fps)
                 if int(self.frame_rate) != int(frame_fps):
-                    warning_message = f"🟡  FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}."
+                    warning_message = f"🔴 FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}. Необходимо добавить шот вручную."
                     self.send_warning(warning_message)
                     logger.warning(warning_message)
-                    return False
+                    return  False
                 return True
             return True
                 
@@ -654,7 +654,6 @@ class OTIOCreator:
         # Полное пересечение (EDL внутри исходника)
         elif edl_source_in >= source_in and edl_source_out <= source_out:  
 
-            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
             data["source_in_tc"] = self.resolve_compensation_tc(source_in) 
             shot_start_frame = self.resolve_compensation_tc(edl_source_in)
             logger.debug("Полное пересечение (EDL внутри исходника)")
@@ -673,13 +672,15 @@ class OTIOCreator:
                 self.start_frame_logic(data)
                 return
 
-            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
-
             shot_start_frame = self.resolve_compensation_tc(edl_source_in)
             cutted_duration = edl_source_out - source_out
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
             data["source_in_tc"] = self.resolve_compensation_tc(source_in)
             logger.debug("Часть исходника ДО EDL, часть внутри")
+
+            # Рабочий диапазон исходника на таймлайне
+            working_source_range = source_out - edl_source_in
+            self.is_correct_lenght(working_source_range, timeline_duration, shot_name, " по концу")
 
             self.set_gap_obj(gap_duration, track_index)  
 
@@ -693,14 +694,16 @@ class OTIOCreator:
         # Часть исходника ПОСЛЕ EDL, часть внутри         
         elif edl_source_in < source_in and edl_source_out <= source_out:
 
-            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
-
             shot_start_frame = self.resolve_compensation_tc(source_in)
             cutted_duration = source_in - edl_source_in
             data["timeline_duration"] = data["timeline_duration"] - cutted_duration
             data["source_in_tc"] = self.resolve_compensation_tc(source_in)
             new_gap_duration = gap_duration + cutted_duration
             logger.debug("Часть исходника ПОСЛЕ EDL, часть внутри")
+            
+            # Рабочий диапазон исходника на таймлайне
+            working_source_range = edl_source_out - source_in
+            self.is_correct_lenght(working_source_range, timeline_duration, shot_name, " по началу")
 
             self.set_gap_obj(new_gap_duration, track_index)  
 
@@ -716,8 +719,6 @@ class OTIOCreator:
                 self.start_frame_logic(data)
                 return
 
-            self.is_correct_lenght(source_duration, timeline_duration, shot_name)
-
             shot_start_frame = self.resolve_compensation_tc(source_in) 
             cutted_duration_start = source_in - edl_source_in
             cutted_duration_end = edl_source_out - source_out
@@ -725,6 +726,10 @@ class OTIOCreator:
             data["source_in_tc"] = self.resolve_compensation_tc(source_in)
             gap_duration_start = gap_duration + cutted_duration_start
             logger.debug(f"Исходник полностью внутри EDL ")
+
+            # Рабочий диапазон исходника на таймлайне
+            working_source_range = source_out - source_in
+            self.is_correct_lenght(working_source_range, timeline_duration, shot_name, " по началу и концу")
 
             self.set_gap_obj(gap_duration_start, track_index)  
 
@@ -1203,8 +1208,6 @@ class ConfigValidator:
             self.errors.append("Указан несуществующий путь к шотам")
         if not user_config["otio_path"]:
             self.errors.append("Укажите путь к папке для сохранения OTIO")
-        if not os.path.exists(user_config["otio_path"]):
-            self.errors.append("Указан несуществующий путь к OTIO")
 
         try:
             int(user_config["track_in"])
