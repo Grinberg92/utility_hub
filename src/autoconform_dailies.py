@@ -14,7 +14,6 @@ from PyQt5.QtWidgets import (
     QGroupBox, QRadioButton, QButtonGroup
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-import DaVinciResolveScript as dvr
 from pymediainfo import MediaInfo
 from functools import cached_property
 from dvr_tools.logger_config import get_logger
