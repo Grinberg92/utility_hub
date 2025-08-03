@@ -112,7 +112,7 @@ class EDLParser_v3:
         while i < len(lines):
             line = lines[i].strip()
 
-            if re.match(r'^\d{6}\s', line):  # Найдена основная запись
+            if re.match(r'^\d+\s', line):  # Найдена основная запись
                 parts = line.split()
                 if len(parts) < 8:
                     i += 1
@@ -125,7 +125,7 @@ class EDLParser_v3:
                 while j < len(lines):
                     next_line = lines[j].strip()
 
-                    if re.match(r'^\d{6}\s', next_line):  # Следующий блок
+                    if re.match(r'^\d+\s', next_line):  # Следующий блок
                         break
 
                     if next_line.startswith("M2"):
