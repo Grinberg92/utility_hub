@@ -914,9 +914,12 @@ class ExrDelivery(QWidget):
         """
         Получаем список пресетов проекта Resolve.
         """
-        self.resolve = ResolveObjects()
-        self.project = self.resolve.project
-        return [preset["Name"] for ind, preset in self.project.GetPresets().items()]
+        try:
+            self.resolve = ResolveObjects()
+            self.project = self.resolve.project
+            return [preset["Name"] for ind, preset in self.project.GetPresets().items()]
+        except RuntimeError as re:
+            self.on_error_signal(str(re))
     
     def get_render_preset(self):
         """
@@ -978,11 +981,11 @@ class ExrDelivery(QWidget):
         QMessageBox.information(self, "Успех", message)
 
     def on_warning_signal(self, message):
-        QMessageBox.warning(self, "Успех", message)
+        QMessageBox.warning(self, "Предупреждение", message)
         logger.warning(message)
 
     def on_error_signal(self, message):
-        QMessageBox.warning(self, "Успех", message)
+        QMessageBox.critical(self, "Ошибка", message)
         logger.exception(message)
 
     def select_folder(self):
