@@ -375,6 +375,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             self.output_entry.setText(file_path)
 
     def update_fields_state(self):
+        """
+        Лок/анлок полей в UI.
+        """
         self.track_entry.setEnabled(self.set_markers_checkbox.isChecked())
 
         if not self.export_loc_checkbox.isChecked():
