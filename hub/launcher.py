@@ -111,7 +111,7 @@ class HubApp(QWidget):
 
         row20 = self.create_button_description_row(
             button_name="Project Folders Structure",
-            description_text="Установка структуры папок в системных дисках, resolve и avid",
+            description_text="Установка структуры папок в системных дисках, Resolve и Avid",
             script_name="project_structure.py"
         )
         row21 = self.create_button_description_row(
@@ -119,9 +119,14 @@ class HubApp(QWidget):
             description_text="Получение каждого n-ного кадра в секвенции",
             script_name="get_every_n_frame.py"
         )
-
+        row22 = self.create_button_description_row(
+            button_name="Excel data to locators",
+            description_text="Конвертация расшота из Excel в локаторы для Avid",
+            script_name="excel_to_locs.py"
+        )
         other_layout.addLayout(row20)
         other_layout.addLayout(row21)
+        other_layout.addLayout(row22)
 
         other_box.setLayout(other_layout)
         other_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
