@@ -47,7 +47,7 @@ class LogicProcessor:
                 clip_name = clip.GetName()
                 clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
                 self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
-            logger.debug("Маркеры успешно созданы")
+            logger.info("Маркеры успешно созданы")
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания маркеров")
             return False
@@ -64,7 +64,7 @@ class LogicProcessor:
                     # Используется спец табуляция для корректного импорта в AVID
                     output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
                     output.write(output_string + "\n")
-            logger.debug(f"Локаторы успешно экспортированы. Путь: {self.locators_output_path}")
+            logger.info(f"Локаторы успешно экспортированы. Путь: {self.locators_output_path}")
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка формирования локаторов")
             return False
@@ -103,7 +103,7 @@ class LogicProcessor:
                                 if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
                                     parts[1] = name
                             output.write(" ".join(parts) + '\n')
-                logger.debug(f"EDL для дейлизов успешно сформировано. Путь: {self.output_path}")
+                logger.info(f"EDL успешно сформирован. Путь: {self.output_path}")
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка формирования EDL")
             return False
@@ -389,7 +389,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.user_config = self.validator.collect_config()
 
         if not self.validator.validate(self.user_config):
-            QMessageBox.critical(self, "Ошибка", "\n".join(self.validator.get_errors()))
+            self.on_error_signal("\n".join(self.validator.get_errors()))
             return
 
         logger.info(f"\n\nSetUp:\n{pformat(self.user_config)}\n") 
