@@ -595,7 +595,7 @@ class DeliveryPipline:
 
         """
         xml_name = str(self.timeline.GetName())
-        path = (Path(self.render_path) / ".." / f'{xml_name}.xml').resolve()  
+        path = (Path(self.render_path) / f'{xml_name}.xml').resolve()  
         result = self.timeline.Export(str(path), self.resolve.EXPORT_FCP_7_XML)
         if result is None:
             self.signals.warning_signal.emit(f"Ошибка экспорта таймлайна {xml_name}")
