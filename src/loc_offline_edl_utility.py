@@ -1,15 +1,18 @@
 from pprint import pformat
 import re
+import math
 from timecode import Timecode as tc
 import DaVinciResolveScript as dvr
 import sys
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, 
+    QLineEdit, QComboBox, QGroupBox, QCheckBox, QPushButton, QSizePolicy, QApplication, QFileDialog)
 from dataclasses import dataclass
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_utils import ResolveObjects
+from common_tools.edl_parsers import EDLParser_v23
 
 logger = get_logger(__file__)
 
@@ -22,9 +25,9 @@ class LogicProcessor:
         self.user_config = user_config
         self.signals = signals
 
-    def get_markers(self): 
+    def get_markers(self) -> list: 
         '''
-        Получение маркеров для работы других функций
+        Получение маркеров для работы других методов.
         '''
         try:
             markers_list = []
@@ -37,9 +40,9 @@ class LogicProcessor:
             self.signals.error_signal.emit(f"Ошибка получения данных об объектах маркеров")
             return False
 
-    def set_markers(self):
+    def set_markers(self) -> bool:
         '''
-        Установка маркеров с номерами полученными из оффлайн клипов на текущем таймлайне 
+        Установка маркеров с номерами полученными из оффлайн клипов на текущем таймлайне.
         '''
         try:
             clips = self.timeline.GetItemListInTrack('video', self.track_number)
@@ -47,28 +50,82 @@ class LogicProcessor:
                 clip_name = clip.GetName()
                 clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
                 self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
-            logger.info("Маркеры успешно созданы")
+            logger.info("Маркеры успешно установлены.")
+            return True
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания маркеров")
             return False
 
-    def export_locators_to_avid(self):
+    def export_locators_to_avid(self) -> bool:
         '''
         Формирование строк и экспорт локаторов для AVID в .txt.
         '''
         try:
             markers_list = self.get_markers()
-            with open(self.locators_output_path, "a", encoding='utf8') as output:
+            with open(self.locator_output_path, "a", encoding='utf8') as output:
                 for name, timecode in markers_list:
                     # Используется спец табуляция для корректного импорта в AVID
                     output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
                     output.write(output_string + "\n")
-            logger.info(f"Локаторы успешно экспортированы. Путь: {self.locators_output_path}")
+            logger.info("Локаторы успешно созданы.")
+            return True
         except Exception as e:
-            self.signals.error_signal.emit(f"Ошибка формирования локаторов")
+            self.signals.error_signal.emit(f"Ошибка создания локаторов")
             return False
         
-    def process_edl(self):
+    def convert_timecode(self, timecode) -> str:
+        """
+        Метод изменяет формат таймкода под стандарт SRT. Извлекает фрейм из стандартного таймкода и конвертирует в милисекунды.
+        Пример: 01:08:43:18 --> 01:08:43,750.
+
+        :return: Таймкод в конвертированом формате 00:00:00,000
+        """
+        base = ":".join(str(timecode).split(":")[:3])
+        frames = str(timecode).split(":")[3]
+        frames_to_mmm = str(math.ceil(int(frames) * (1000 / 24)))
+        return ",".join([base, frames_to_mmm])
+    
+    def get_edl_data(self) -> list:
+        """
+        Получение и конвертация данных из EDL файла.
+
+        :return names: Список с данными по каждому шоту из EDL.
+        """
+        parser = EDLParser_v23(edl_path=self.edl_path)
+        items_data = []
+        for shot in parser:
+            name = shot.edl_shot_name
+            start_tc_frames = tc(24, shot.edl_record_in).frames - 1 # Вычитание 1 - компенсация лишней единицы при конвертации из таймода во фреймы 
+            end_tc_frames = tc(24, shot.edl_record_out).frames - 1 # Вычитание 1 - компенсация лишней единицы при конвертации из таймода во фреймы 
+            duration = (end_tc_frames - start_tc_frames) + 1 # +1 - компенсация для корректных значений
+            start_tc = self.convert_timecode(tc(24, frames=start_tc_frames + 1)) # +1 - компенсация для корректных значений
+            end_tc = self.convert_timecode(tc(24, frames=start_tc_frames + duration)) 
+            items_data.append((name, start_tc, end_tc))
+        
+        return items_data
+            
+    def create_srt(self) -> bool:
+        """
+        Создание SRT файла из данных, извлеченных из EDL файла.
+        """
+        try:
+            items_data = self.get_edl_data()
+            with open(self.output_path, "a" ,encoding="utf-8") as o:
+                for index, data in enumerate(items_data, start=1):
+                    name, start_tc, end_tc = data
+
+                    index_str = index
+                    timecode_str = f"{start_tc} --> {end_tc}"
+                    name_str = name
+
+                    o.write(f"{index_str}\n{timecode_str}\n{name_str}\n\n")
+            logger.info("SRT файл успешно создан.")
+            return True
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка создания SRT файла {e}")
+            return False
+        
+    def process_edl(self) -> bool:
         """
         Выводит EDL для дейлизов и EDL с оффлайн клипами.
         """
@@ -102,17 +159,18 @@ class LogicProcessor:
                                 if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
                                     parts[1] = name
                             output.write(" ".join(parts) + '\n')
-                logger.info(f"EDL успешно сформирован. Путь: {self.output_path}")
+            logger.info("EDL файл успешно создан.")
+            return True
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка формирования EDL")
             return False
 
-    def run(self):
+    def run(self) -> bool:
         self.timeline = ResolveObjects().timeline
         self.process_edl_logic = self.user_config["process_edl"]
-        self.edl_path = self.user_config["edl_path"]
         self.output_path = self.user_config["output_path"]
-        self.locators_output_path = self.user_config["locators_output_path"]
+        self.edl_path = self.user_config["edl_path"]
+        self.locator_output_path = self.user_config["locator_output_path"]
         self.export_loc_cb = self.user_config["export_loc"]
         self.fps = int(self.user_config["fps"])
         self.track_number = int(self.user_config["track_number"])
@@ -121,23 +179,30 @@ class LogicProcessor:
         self.timeline_start_tc = self.timeline.GetStartFrame()
         self.offline_edl = self.user_config["offline_checkbox"]
         self.dailies_edl = self.user_config["dailies_checkbox"]
-
+        self.srt_create_bool = self.user_config["create_srt_checkbox"]
 
         if self.process_edl_logic:
             process_edl_var = self.process_edl()
             if not process_edl_var:
-                return
+                return False
 
         if self.set_markers_cb:
             set_markers_var = self.set_markers()
             if not set_markers_var:
-                return
+                return False
 
         if self.export_loc_cb:
             export_loc_var = self.export_locators_to_avid()
             if not export_loc_var:
-                return
+                return False
+            
+        if self.srt_create_bool:
+            srt_create_var = self.create_srt()
+            if not srt_create_var:
+                return False
 
+        return True
+    
 class LogicWorker(QThread):
     """
     Класс работы с логикой в отдельном потоке.
@@ -153,8 +218,9 @@ class LogicWorker(QThread):
 
     def run(self):
         logic = LogicProcessor(self.user_config, self)
-        logic.run()
-        self.success_signal.emit("Обработка успешно завершена!")
+        success = logic.run()
+        if success:
+            self.success_signal.emit("Процесс успешно завершен!")
 
 class ConfigValidator:
     """
@@ -176,11 +242,12 @@ class ConfigValidator:
         "process_edl": (self.gui.offline_clips_checkbox.isChecked() 
                         or self.gui.edl_for_dailies_checkbox.isChecked()),
         "fps": self.gui.fps_entry.text(),
-        "locators_output_path": self.gui.save_locators_path_entry.text(),
+        "locator_output_path": self.gui.save_locators_path_entry.text(),
         "locator_from": self.gui.locator_from_combo.currentText(),
         "track_number": self.gui.track_entry.text(),
         "offline_checkbox": self.gui.offline_clips_checkbox.isChecked(),
-        "dailies_checkbox": self.gui.edl_for_dailies_checkbox.isChecked()
+        "dailies_checkbox": self.gui.edl_for_dailies_checkbox.isChecked(),
+        "create_srt_checkbox": self.gui.create_srt_cb.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -192,7 +259,7 @@ class ConfigValidator:
         process_edl = user_config["process_edl"]
         edl_path = user_config["edl_path"]
         output_path = user_config["output_path"]
-        locators_output_path = user_config["locators_output_path"]
+        locator_output_path = user_config["locator_output_path"]
         export_loc = user_config["export_loc"]
         fps = user_config["fps"]
         track_number = user_config["track_number"]
@@ -206,7 +273,7 @@ class ConfigValidator:
             self.errors.append("Выберите файлы EDL!")
             return
         
-        if not locators_output_path and export_loc:
+        if not locator_output_path and export_loc:
             self.errors.append("Введите путь для сохранения локаторов")
             return
 
@@ -244,20 +311,20 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.init_ui()
 
     def init_ui(self):
-        main_layout = QtWidgets.QVBoxLayout()
+        main_layout = QVBoxLayout()
         self.setLayout(main_layout)
 
         # FPS + Locator From (по центру, в одной строке)
-        fps_layout = QtWidgets.QHBoxLayout()
+        fps_layout = QHBoxLayout()
         fps_layout.addStretch()
         fps_layout.setAlignment(QtCore.Qt.AlignCenter)
 
-        fps_label = QtWidgets.QLabel("Project FPS:")
-        self.fps_entry = QtWidgets.QLineEdit("24")
+        fps_label = QLabel("Project FPS:")
+        self.fps_entry = QLineEdit("24")
         self.fps_entry.setFixedWidth(50)
 
-        locator_label = QtWidgets.QLabel("Marker name from:")
-        self.locator_from_combo = QtWidgets.QComboBox()
+        locator_label = QLabel("Marker name from:")
+        self.locator_from_combo = QComboBox()
         self.locator_from_combo.setFixedWidth(70)
         self.locator_from_combo.addItems(["name", "note"])
 
@@ -270,36 +337,37 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout.addLayout(fps_layout)
 
         # Locators / Track / Export Locators
-        block1_group = QtWidgets.QGroupBox("Markers Options")
-        block1_group_layout = QtWidgets.QVBoxLayout()
+        block1_group = QGroupBox("Markers Options")
+        block1_group_layout = QVBoxLayout()
+        block1_group_layout.addSpacing(15)
 
         # Checkboxes and track field
-        options_layout = QtWidgets.QHBoxLayout()
-        options_layout.setAlignment(QtCore.Qt.AlignLeft)
+        options_layout = QHBoxLayout()
+        options_layout.setAlignment(Qt.AlignLeft)
 
-        self.set_markers_checkbox = QtWidgets.QCheckBox("Set markers")
+        self.set_markers_checkbox = QCheckBox("Set markers")
         self.set_markers_checkbox.stateChanged.connect(self.update_fields_state)
         options_layout.addWidget(self.set_markers_checkbox)
         options_layout.addSpacing(20)
 
-        self.track_label = QtWidgets.QLabel("from track:")
-        self.track_entry = QtWidgets.QLineEdit("1")
+        self.track_label = QLabel("from track:")
+        self.track_entry = QLineEdit("1")
         self.track_entry.setFixedWidth(40)
         options_layout.addWidget(self.track_label)
         options_layout.addWidget(self.track_entry)
         options_layout.addSpacing(20)
 
-        self.export_loc_checkbox = QtWidgets.QCheckBox("Export locators to Avid")
+        self.export_loc_checkbox = QCheckBox("Export locators to Avid")
         self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
         options_layout.addWidget(self.export_loc_checkbox)
         options_layout.addStretch()
         block1_group_layout.addLayout(options_layout)
 
         # Save locators path
-        save_path_label = QtWidgets.QLabel("Save created locators:")
-        save_path_layout = QtWidgets.QHBoxLayout()
-        self.save_locators_path_entry = QtWidgets.QLineEdit()
-        self.save_path_btn = QtWidgets.QPushButton("Choose")
+        save_path_label = QLabel("Save locators:")
+        save_path_layout = QHBoxLayout()
+        self.save_locators_path_entry = QLineEdit()
+        self.save_path_btn = QPushButton("Choose")
         self.save_path_btn.clicked.connect(self.select_save_markers_file)
         save_path_layout.addWidget(self.save_locators_path_entry)
         save_path_layout.addWidget(self.save_path_btn)
@@ -312,26 +380,28 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout.addWidget(block1_group)
 
         # Offline/Dailies + Input/Output paths 
-        block2_group = QtWidgets.QGroupBox("EDL Options")
-        block2_group_layout = QtWidgets.QVBoxLayout()
+        block2_group = QGroupBox("Convertors")
+        block2_group_layout = QVBoxLayout()
+        block2_group_layout.addSpacing(20)
 
         # Checkboxes
-        checks_layout = QtWidgets.QHBoxLayout()
-        checks_layout.setAlignment(QtCore.Qt.AlignLeft)
-        self.offline_clips_checkbox = QtWidgets.QCheckBox("Offline EDL")
-        self.offline_clips_checkbox.stateChanged.connect(self.update_fields_state)
-        self.edl_for_dailies_checkbox = QtWidgets.QCheckBox("Dailies EDL")
-        self.edl_for_dailies_checkbox.stateChanged.connect(self.update_fields_state)
+        checks_layout = QHBoxLayout()
+        checks_layout.setAlignment(Qt.AlignLeft)
+        self.offline_clips_checkbox = QCheckBox("Offline EDL")
+        self.edl_for_dailies_checkbox = QCheckBox("Dailies EDL")
+        self.create_srt_cb = QCheckBox("EDL to SRT")
         checks_layout.addWidget(self.offline_clips_checkbox)
         checks_layout.addSpacing(60)
         checks_layout.addWidget(self.edl_for_dailies_checkbox)
+        checks_layout.addSpacing(60)
+        checks_layout.addWidget(self.create_srt_cb)
         block2_group_layout.addLayout(checks_layout)
 
         # Input path
-        input_label = QtWidgets.QLabel("Choose EDL-file:")
-        input_layout = QtWidgets.QHBoxLayout()
-        self.input_entry = QtWidgets.QLineEdit()
-        input_btn = QtWidgets.QPushButton("Choose")
+        input_label = QLabel("Choose input EDL:")
+        input_layout = QHBoxLayout()
+        self.input_entry = QLineEdit()
+        input_btn = QPushButton("Choose")
         input_btn.clicked.connect(self.select_input_file)
         input_layout.addWidget(self.input_entry)
         input_layout.addWidget(input_btn)
@@ -339,10 +409,10 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         block2_group_layout.addLayout(input_layout)
 
         # Output path
-        output_label = QtWidgets.QLabel("Save created EDL:")
-        output_layout = QtWidgets.QHBoxLayout()
-        self.output_entry = QtWidgets.QLineEdit()
-        output_btn = QtWidgets.QPushButton("Choose")
+        output_label = QLabel("Save output result:")
+        output_layout = QHBoxLayout()
+        self.output_entry = QLineEdit()
+        output_btn = QPushButton("Choose")
         output_btn.clicked.connect(self.select_output_file)
         output_layout.addWidget(self.output_entry)
         output_layout.addWidget(output_btn)
@@ -353,23 +423,23 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout.addWidget(block2_group)
 
         # Start Button
-        self.run_button = QtWidgets.QPushButton("Start")
-        self.run_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.run_button = QPushButton("Start")
+        self.run_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_button.clicked.connect(self.run_script)
         main_layout.addWidget(self.run_button)
 
     def select_input_file(self):
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select EDL file", "", "EDL files (*.edl)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select EDL file", "", "EDL files (*.edl)")
         if file_path:
             self.input_entry.setText(file_path)
 
     def select_save_markers_file(self):
-        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Markers File", "", "Text Files (*.txt);;All Files (*)")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Markers File", "", "Text Files (*.txt);;All Files (*)")
         if file_path:
             self.save_locators_path_entry.setText(file_path)
 
     def select_output_file(self):
-        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save As", "", "EDL files (*.edl));;All Files (*)")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save As", "", "SRT files (*.srt);;EDL files (*.edl));;All Files (*)")
         if file_path:
             self.output_entry.setText(file_path)
 
@@ -423,7 +493,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         logger.info(message)
 
 if __name__ == '__main__':
-    app = QtWidgets.QApplication(sys.argv)
+    app = QApplication(sys.argv)
     apply_style(app)
     window = EDLProcessorGUI()
     window.show()
