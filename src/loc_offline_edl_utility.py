@@ -95,11 +95,11 @@ class LogicProcessor:
         items_data = []
         for shot in parser:
             name = shot.edl_shot_name
-            start_tc_frames = tc(24, shot.edl_record_in).frames - 1 # Вычитание 1 - компенсация лишней единицы при конвертации из таймода во фреймы 
-            end_tc_frames = tc(24, shot.edl_record_out).frames - 1 # Вычитание 1 - компенсация лишней единицы при конвертации из таймода во фреймы 
+            start_tc_frames = tc(self.fps, shot.edl_record_in).frames - 1 # Вычитание 1 - компенсация лишней единицы при конвертации из таймода во фреймы 
+            end_tc_frames = tc(self.fps, shot.edl_record_out).frames - 1 # Вычитание 1 - компенсация лишней единицы при конвертации из таймода во фреймы 
             duration = (end_tc_frames - start_tc_frames) + 1 # +1 - компенсация для корректных значений
-            start_tc = self.convert_timecode(tc(24, frames=start_tc_frames + 1)) # +1 - компенсация для корректных значений
-            end_tc = self.convert_timecode(tc(24, frames=start_tc_frames + duration)) 
+            start_tc = self.convert_timecode(tc(self.fps, frames=start_tc_frames + 1)) # +1 - компенсация для корректных значений
+            end_tc = self.convert_timecode(tc(self.fps, frames=start_tc_frames + duration)) 
             items_data.append((name, start_tc, end_tc))
         
         return items_data
