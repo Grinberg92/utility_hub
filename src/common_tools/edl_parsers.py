@@ -129,3 +129,15 @@ class EDLParser_v3:
                 i = j  # Продвигаемся к следующему блоку
             else:
                 i += 1
+
+def detect_edl_parser(edl_path):
+    """
+    Определяем тип EDL файла по содержимому файла.
+
+    :return: Класс EDL парсера
+    """
+    with open(edl_path, "r", encoding="utf-8") as f:
+        for string in f:
+            if "*loc" in string.lower():
+                return EDLParser_v3(edl_path=edl_path)
+        return EDLParser_v23(edl_path=edl_path)
