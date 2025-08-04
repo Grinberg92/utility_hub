@@ -56,7 +56,6 @@ class LogicProcessor:
         '''
         Формирование строк и экспорт локаторов для AVID в .txt.
         '''
-        print(self.output_path)
         try:
             markers_list = self.get_markers()
             with open(self.locators_output_path, "a", encoding='utf8') as output:
