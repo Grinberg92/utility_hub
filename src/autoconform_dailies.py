@@ -1479,16 +1479,16 @@ class Autoconform(QWidget, ConformCheckerMixin):
         edits_path = Path(os.path.dirname(self.edl_input.text().strip()))
 
         if str(edits_path) == ".":
-            QMessageBox.critical(self, "Ошибка", "Не указан путь к монтажам")
+            self.on_warning_signal("Не указан путь к монтажам")
             return 
         if not os.path.exists(Path(self.edl_input.text().strip())):
-            QMessageBox.critical(self,  "Ошибка", "Указан несуществующий путь к монтажам")
+            self.on_warning_signal("Указан несуществующий путь к монтажам")
             return
         if str(shots_root_path) == ".":
-            QMessageBox.critical(self, "Ошибка", "Не указан путь к шотам")
+            self.on_warning_signal("Не указан путь к шотам")
             return 
         if not os.path.exists(shots_root_path):
-            QMessageBox.critical(self,  "Ошибка", "Указан несуществующий путь к шотам")
+            self.on_warning_signal("Указан несуществующий путь к шотам")
             return
         
         extension = self.format_menu.currentText()
@@ -1610,7 +1610,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
             self.resolve_shots_list = None
 
         if not self.validator.validate(self.user_config):
-            QMessageBox.critical(self, "Validation error", "\n".join(self.validator.get_errors()))
+            self.on_error_signal("\n".join(self.validator.get_errors()))
             return
         
         logger.info(f"\n\nSetUp:\n{pformat(self.user_config)}\n")
@@ -1663,7 +1663,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
             else: 
                 subprocess.Popen(['open', log_file_path])
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Ошибка при открытии файла логов: {e}")
+            self.on_error_signal(self, "Error", f"Ошибка при открытии файла логов: {e}")
 
     def reset_counter(self):
         """

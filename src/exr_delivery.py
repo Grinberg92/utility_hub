@@ -423,9 +423,8 @@ class RenderWorker(QThread):
         try:
             logic = DeliveryPipline(self.user_config, self)
             success = logic.run()
-
         except Exception as e:
-            print(f"Ошибка программы {e}")
+            self.error_signal.emit(f"Ошибка программы {e}")
 
 class ConfigValidator:
     """
@@ -614,7 +613,7 @@ class ExrDelivery(QWidget):
         self.user_config = self.validator.collect_config()
 
         if not self.validator.validate(self.user_config):
-            QMessageBox.critical(self, "Ошибка валидации", "\n".join(self.validator.get_errors()))
+            self.on_error_signal("\n".join(self.validator.get_errors()))
             return
    
         logger.info(f"\n\n{pformat(self.user_config)}\n")
