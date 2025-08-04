@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_utils import ResolveObjects
-from common_tools.edl_parsers import EDLParser_v23
+from common_tools.edl_parsers import EDLParser_v23, EDLParser_v3, detect_edl_parser
 
 logger = get_logger(__file__)
 
@@ -91,7 +91,7 @@ class LogicProcessor:
 
         :return names: Список с данными по каждому шоту из EDL.
         """
-        parser = EDLParser_v23(edl_path=self.edl_path)
+        parser = detect_edl_parser(self.edl_path)
         items_data = []
         for shot in parser:
             name = shot.edl_shot_name
@@ -271,31 +271,25 @@ class ConfigValidator:
 
         if process_edl and (not edl_path or not output_path):
             self.errors.append("Выберите файлы EDL!")
-            return
         
         if not locator_output_path and export_loc:
             self.errors.append("Введите путь для сохранения локаторов")
-            return
 
         try:
             fps = int(fps)
         except ValueError:
             self.errors.append("FPS должен быть числом!")
-            return
         
         try:
             track_number = int(track_number)
         except ValueError:
             self.errors.append("Номер дорожки должен быть числом!")
-            return
         
         if  resolve.timeline is None:
             self.errors.append("Неудалось получить таймлайн")
-            return
 
         if int(track_number) > resolve.timeline.GetTrackCount("video"):
             self.errors.append("Указан несуществующий трек")
-            return
         
         return not self.errors
 
