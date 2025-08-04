@@ -21,7 +21,7 @@ from dvr_tools.resolve_utils import ResolveObjects, get_resolve_shot_list
 from config.config_loader import load_config
 from config.config import get_config
 from config.global_config import GLOBAL_CONFIG
-from common_tools.edl_parsers import EDLParser_v3, EDLParser_v23
+from common_tools.edl_parsers import EDLParser_v3, EDLParser_v23, detect_edl_parser
 
 logger = get_logger(__file__)
 
@@ -390,18 +390,6 @@ class OTIOCreator:
             self.send_warning(f'🔴  Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
             return []
         
-    def detect_edl_parser(self, edl_path):
-        """
-        Определяем тип EDL файла по содержимому файла.
-
-        :return: Класс EDL парсера
-        """
-        with open(edl_path, "r", encoding="utf-8") as f:
-            for string in f:
-                if "*loc" in string.lower():
-                    return EDLParser_v3(edl_path=edl_path)
-            return EDLParser_v23(edl_path=edl_path)
-        
     def cut_slate(self, source_in_tc) -> int:
         """
         Метод отрезает 1 кадр слейта в .mov дейлизах, оставляя его в захлесте
@@ -505,7 +493,6 @@ class OTIOCreator:
         edl_source_out = self.resolve_compensation_edl(self.timecode_to_frame(data["edl_source_out"]))
         gap_duration = data["gap_duration"]
         track_index = data["track_index"]
-        source_duration = data["source_duration"]
         timeline_duration = data["timeline_duration"]
         edl_record_in = data["edl_record_in"]
         edl_record_out = data["edl_record_out"]
@@ -632,7 +619,7 @@ class OTIOCreator:
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
 
-        edl_data = self.detect_edl_parser(self.edl_path)
+        edl_data = detect_edl_parser(self.edl_path)
 
         try:
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
