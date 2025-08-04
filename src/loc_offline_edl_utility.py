@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_utils import ResolveObjects
+from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
 from common_tools.edl_parsers import EDLParser_v23, EDLParser_v3, detect_edl_parser
 
 logger = get_logger(__file__)
@@ -37,7 +38,7 @@ class LogicProcessor:
                 markers_list.append((name, timecode_marker))
             return markers_list
         except Exception as e:
-            self.signals.error_signal.emit(f"Ошибка получения данных об объектах маркеров")
+            self.signals.error_signal.emit(f"Ошибка получения данных об объектах маркеров: {e}")
             return False
 
     def set_markers(self) -> bool:
@@ -53,7 +54,7 @@ class LogicProcessor:
             logger.info("Маркеры успешно установлены.")
             return True
         except Exception as e:
-            self.signals.error_signal.emit(f"Ошибка создания маркеров")
+            self.signals.error_signal.emit(f"Ошибка создания маркеров: {e}")
             return False
 
     def export_locators_to_avid(self) -> bool:
@@ -70,7 +71,7 @@ class LogicProcessor:
             logger.info("Локаторы успешно созданы.")
             return True
         except Exception as e:
-            self.signals.error_signal.emit(f"Ошибка создания локаторов")
+            self.signals.error_signal.emit(f"Ошибка создания локаторов: {e}")
             return False
         
     def convert_timecode(self, timecode) -> str:
@@ -162,8 +163,45 @@ class LogicProcessor:
             logger.info("EDL файл успешно создан.")
             return True
         except Exception as e:
-            self.signals.error_signal.emit(f"Ошибка формирования EDL")
+            self.signals.error_signal.emit(f"Ошибка формирования EDL: {e}")
             return False
+        
+    def set_name(self):
+        """
+        Метод устанавливает имя полученное из маркеров или оффлайн клипов на таймлайне Resolve 
+        и применяет его в атрибут Versions на все итемы по двум принципам.
+        В случае получения имен из оффлайн клипов - имена применяются на все итемы лежащие ниже оффлайн клипа.
+        Стартовый таймкод оффлайн клипа должен пересекаться со стартовыми таймкодами итемов, лежащими под ним.
+        В случае получения имен из маркеров - имена применяются на все клипы, которые лежат ниже маркера. 
+        Таймкод маркера должен быть внутри таймкода такого клипа.
+        """
+        try:
+            extractor = ResolveTimelineItemExtractor()
+            max_cout_track = self.timeline.GetTrackCount('video')
+            if self.name_from_markers:
+
+                markers = self.get_markers()
+                items = extractor.get_timeline_items(1, max_cout_track)
+                for name, timecode in markers:
+                    for item in items:
+                        if item.GetStart() <= timecode <= (item.GetStart() + item.GetDuration()):
+                            item.AddVersion(name, 0)
+
+            elif self.name_from_track:
+                items = extractor.get_timeline_items(1, max_cout_track)
+                offline_clips = extractor.get_timeline_items(1,max_cout_track)
+                for clip in offline_clips:
+                    clipName = clip.GetName()
+
+                    for item in items:
+                        if item.GetStart() == clip.GetStart():
+                            item.AddVersion(clipName, 0)
+
+            logger.info("Имена успешно применены на клипы.")
+            return True
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
+            return False     
 
     def run(self) -> bool:
         self.timeline = ResolveObjects().timeline
@@ -180,6 +218,9 @@ class LogicProcessor:
         self.offline_edl = self.user_config["offline_checkbox"]
         self.dailies_edl = self.user_config["dailies_checkbox"]
         self.srt_create_bool = self.user_config["create_srt_checkbox"]
+        self.name_from_track = self.user_config["set_name_from_track"]
+        self.name_from_markers = self.user_config["set_name_from_markers"]
+        self.offline_track = self.user_config["offline_track_number"]
 
         if self.process_edl_logic:
             process_edl_var = self.process_edl()
@@ -200,8 +241,11 @@ class LogicProcessor:
             srt_create_var = self.create_srt()
             if not srt_create_var:
                 return False
-
-        return True
+            
+        if self.name_from_markers or self.name_from_track:
+            set_name_var = self.set_name()
+            if not set_name_var:
+                return False
     
 class LogicWorker(QThread):
     """
@@ -244,10 +288,13 @@ class ConfigValidator:
         "fps": self.gui.fps_entry.text(),
         "locator_output_path": self.gui.save_locators_path_entry.text(),
         "locator_from": self.gui.locator_from_combo.currentText(),
-        "track_number": self.gui.track_entry.text(),
+        "track_number": self.gui.track_entry.text().strip(),
         "offline_checkbox": self.gui.offline_clips_checkbox.isChecked(),
         "dailies_checkbox": self.gui.edl_for_dailies_checkbox.isChecked(),
-        "create_srt_checkbox": self.gui.create_srt_cb.isChecked()
+        "create_srt_checkbox": self.gui.create_srt_cb.isChecked(),
+        "set_name_from_track": self.gui.from_track_cb.isChecked(),
+        "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
+        "offline_track_number": self.gui.from_track_edit.text().strip()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -260,9 +307,21 @@ class ConfigValidator:
         edl_path = user_config["edl_path"]
         output_path = user_config["output_path"]
         locator_output_path = user_config["locator_output_path"]
-        export_loc = user_config["export_loc"]
+        export_loc_cb = user_config["export_loc"]
         fps = user_config["fps"]
         track_number = user_config["track_number"]
+        offline_track_number = user_config["offline_track_number"]
+        name_from_track = user_config["set_name_from_track"]
+        name_from_markers = user_config["set_name_from_markers"]
+        offline_edl_cb = user_config["offline_checkbox"]
+        dailies_edl_cb = user_config["dailies_checkbox"]
+        create_srt_cb = user_config["create_srt_checkbox"]
+        set_markers_cb = user_config["set_markers"]
+
+        if not any([name_from_track, name_from_markers, offline_edl_cb, 
+                    dailies_edl_cb, create_srt_cb, export_loc_cb, set_markers_cb]):
+            self.errors.append("Не выбрана ни одна опция!")
+            return
 
         try:
             resolve = ResolveObjects()
@@ -272,25 +331,34 @@ class ConfigValidator:
         if process_edl and (not edl_path or not output_path):
             self.errors.append("Выберите файлы EDL!")
         
-        if not locator_output_path and export_loc:
-            self.errors.append("Введите путь для сохранения локаторов")
+        if not locator_output_path and export_loc_cb:
+            self.errors.append("Введите путь для сохранения локаторов!")
 
         try:
             fps = int(fps)
         except ValueError:
             self.errors.append("FPS должен быть числом!")
         
+        if  resolve.timeline is None:
+            self.errors.append("Неудалось получить таймлайн!")
+
+        if not any([name_from_track, name_from_markers]):
+            self.errors.append("Выберите логику установки имени!")
+
         try:
             track_number = int(track_number)
+            if track_number > resolve.timeline.GetTrackCount("video"):
+                self.errors.append("Указан несуществующий трек")
         except ValueError:
             self.errors.append("Номер дорожки должен быть числом!")
-        
-        if  resolve.timeline is None:
-            self.errors.append("Неудалось получить таймлайн")
 
-        if int(track_number) > resolve.timeline.GetTrackCount("video"):
-            self.errors.append("Указан несуществующий трек")
-        
+        try:
+            offline_track_number = int(offline_track_number)
+            if offline_track_number > resolve.timeline.GetTrackCount("video"):
+                self.errors.append("Указан несуществующий трек")
+        except ValueError:
+            self.errors.append("Номер дорожки должен быть числом!")        
+
         return not self.errors
 
     def get_errors(self) -> list:
@@ -342,14 +410,13 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.set_markers_checkbox = QCheckBox("Set markers")
         self.set_markers_checkbox.stateChanged.connect(self.update_fields_state)
         options_layout.addWidget(self.set_markers_checkbox)
-        options_layout.addSpacing(20)
 
         self.track_label = QLabel("from track:")
         self.track_entry = QLineEdit("1")
         self.track_entry.setFixedWidth(40)
         options_layout.addWidget(self.track_label)
         options_layout.addWidget(self.track_entry)
-        options_layout.addSpacing(20)
+        options_layout.addSpacing(60)
 
         self.export_loc_checkbox = QCheckBox("Export locators to Avid")
         self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
@@ -415,6 +482,25 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         block2_group.setLayout(block2_group_layout)
         main_layout.addWidget(block2_group)
+
+        # Set Name group
+        set_name_group = QGroupBox("Set Name")
+        set_name_group.setMinimumHeight(80)
+        set_name_layout = QHBoxLayout()
+        set_name_layout.addSpacing(20)
+        self.from_track_label = QLabel("")
+        self.from_track_cb = QCheckBox("from track:")
+        self.from_track_edit = QLineEdit("1")
+        self.from_track_edit.setMaximumWidth(40)
+        self.from_markers_cb = QCheckBox("from timeline markers")
+        set_name_layout.addWidget(self.from_track_cb)
+        set_name_layout.addWidget(self.from_track_edit)
+        set_name_layout.addSpacing(60)
+        set_name_layout.addWidget(self.from_markers_cb)
+        set_name_layout.addStretch()
+        set_name_group.setLayout(set_name_layout)
+        main_layout.addWidget(set_name_group)
+
 
         # Start Button
         self.run_button = QPushButton("Start")
