@@ -16,6 +16,7 @@ class ResolveObjects:
         self.resolve_project = self.resolve_project_manager.GetCurrentProject()
         self.resolve_mediapool = self.resolve_project.GetMediaPool()
         self.resolve_timeline = self.resolve_project.GetCurrentTimeline()
+        self.resolve_root_folder = self.resolve_mediapool.GetRootFolder()  
         self.resolve_mediapool_current_folder = self.resolve_mediapool.GetCurrentFolder()
 
     @property
@@ -33,6 +34,10 @@ class ResolveObjects:
     @property
     def project_manager(self):
         return self.resolve_project_manager
+
+    @property
+    def root_folder(self):
+        return self.resolve_root_folder
     
     @property
     def mediapool_current_folder(self):
