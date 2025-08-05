@@ -246,6 +246,8 @@ class LogicProcessor:
             set_name_var = self.set_name()
             if not set_name_var:
                 return False
+            
+        return True
     
 class LogicWorker(QThread):
     """
@@ -326,7 +328,8 @@ class ConfigValidator:
         try:
             resolve = ResolveObjects()
         except RuntimeError as re:
-            self.errors.append(re)
+            self.errors.append(str(re))
+            return
 
         if process_edl and (not edl_path or not output_path):
             self.errors.append("Выберите файлы EDL!")
@@ -341,9 +344,6 @@ class ConfigValidator:
         
         if  resolve.timeline is None:
             self.errors.append("Неудалось получить таймлайн!")
-
-        if not any([name_from_track, name_from_markers]):
-            self.errors.append("Выберите логику установки имени!")
 
         try:
             track_number = int(track_number)
