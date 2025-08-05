@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
+from dvr_tools.resolve_utils import ResolveObjects
 
 
 logger = get_logger(__file__)
@@ -125,7 +126,7 @@ class MainWindow(QWidget):
 
         # Mode selection
         mode_layout = QHBoxLayout()
-        mode_layout.addStretch()  # ← добавляем пустое пространство слева
+        mode_layout.addStretch() 
 
         self.explorer_radio = QRadioButton("Explorer")
         self.resolve_radio = QRadioButton("Resolve")
@@ -133,12 +134,12 @@ class MainWindow(QWidget):
         self.explorer_radio.setChecked(True)
 
         mode_layout.addWidget(self.explorer_radio)
-        mode_layout.addSpacing(60)  # ← расстояние между кнопками
+        mode_layout.addSpacing(60)  
         mode_layout.addWidget(self.resolve_radio)
-        mode_layout.addSpacing(60)  # ← расстояние между кнопками
+        mode_layout.addSpacing(60)  
         mode_layout.addWidget(self.avid_radio)
 
-        mode_layout.addStretch()  # ← добавляем пустое пространство справа
+        mode_layout.addStretch() 
 
         layout.addLayout(mode_layout)
 
@@ -236,7 +237,7 @@ class MainWindow(QWidget):
         self.explorer_radio.toggled.connect(self.update_ui)
         self.resolve_radio.toggled.connect(self.update_ui)
         self.avid_path_button.clicked.connect(self.select_avid_path)
-        self.type_selector.currentTextChanged.connect(self.update_reel_input)
+        self.type_selector.currentTextChanged.connect(self.update_ui)
         self.create_button.clicked.connect(self.run_logic)
 
     def update_ui(self):
@@ -247,51 +248,65 @@ class MainWindow(QWidget):
         self.explorer_group.setEnabled(is_explorer)
         self.resolve_group.setEnabled(is_resolve)
         self.avid_group.setEnabled(is_avid)
-        self.update_reel_input()
 
-    def update_reel_input(self):
         is_reel = self.type_selector.currentText() == "REEL"
         self.reels_input.setEnabled(is_reel)
 
-    def run_logic(self):
+    def on_error_signal(self, message):
+        QMessageBox.critical(self, "Ошибка", message)
+        logger.exception(message)
+        return
+    
+    def on_warning_signal(self, message):
+        QMessageBox.warning(self, "Предупреждение", message)
+        logger.warning(message)
+        return
 
-        logger.debug("Запуск скрипта")
-        
+    def on_success_signal(self, message):
+        QMessageBox.information(self, "Успех", message)
+        logger.info(message)
+
+    def on_information_signal(self):
+        ...
+
+    def run_logic(self):
+   
         if self.explorer_radio.isChecked():
             disk = self.disk_selector.currentText()
             project_name = self.explorer_project_name.text().strip()
             if not project_name:
-                QMessageBox.warning(self, "Ошибка", "Пожалуйста, укажите имя проекта для Explorer.")
-                logger.warning("Пожалуйста, укажите имя проекта для Explorer.")
+                self.on_warning_signal("Пожалуйста, укажите имя проекта для Explorer.")
                 return
+
             if disk == "J":
                 for folder in J_SRTUCTURE:
                     self.create_project(project_name, folder)
-                QMessageBox.information(self, "Успех", "Структура папок на диске J:/ успешно создана")
-                logger.info("Структура папок на диске J:/ успешно создана")
+                self.on_success_signal("Структура папок на диске J:/ успешно создана")
             else:
                 self.create_project(project_name, R_STRUCTURE)
-                QMessageBox.information(self, "Успех", "Структура папок на диске R:/ успешно создана")
-                logger.info("Структура папок на диске R:/ успешно создана")
+                self.on_success_signal("Структура папок на диске R:/ успешно создана")
 
         elif self.resolve_radio.isChecked():
+
             type_proj = self.type_selector.currentText()
             project_name = self.resolve_project_name.text().strip()
+
             if not project_name:
-                QMessageBox.warning(self, "Ошибка", "Пожалуйста, укажите имя проекта для Resolve.")
-                logger.warning("Пожалуйста, укажите имя проекта для Resolve.")
+                self.on_warning_signal("Пожалуйста, укажите имя проекта для Resolve.")
                 return
+
             reels = self.reels_input.value()
             self.create_resolve_structure(project_name, type_proj, reels)
-            QMessageBox.information(self, "Успех", "Структура папок в Resolve успешно создана")
-            logger.info("Структура папок в Resolve успешно создана")
+            self.on_success_signal("Структура папок в Resolve успешно создана")
+
 
         elif self.avid_radio.isChecked():
             if not hasattr(self, 'avid_selected_path') or not self.avid_selected_path:
-                QMessageBox.warning(self, "Ошибка", "Пожалуйста, выберите путь для Avid структуры.")
-                logger.warning("Пожалуйста, выберите путь для Avid структуры.")
+                self.on_warning_signal("Пожалуйста, выберите путь для Avid структуры.")
                 return
+
             self.create_avid_structure(self.avid_selected_path)
+            self.on_success_signal("Структура папок в Avid успешно создана")
 
     # Методы исполняющие создание фолдеров
     def create_folder_structure(self, structure, base_path):
@@ -302,9 +317,7 @@ class MainWindow(QWidget):
                 if subfolders:
                     self.create_folder_structure(subfolders, folder_path)
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось создать структуру папок {base_path}")
-            logger.exception(f"Не удалось создать структуру папок {base_path}")
-            return
+            self.on_error_signal(f"Не удалось создать структуру папок {base_path}")
 
     def create_avid_structure(self, base_path):
         os.makedirs(base_path, exist_ok=True)
@@ -321,9 +334,7 @@ class MainWindow(QWidget):
             if base_path == "R:/":
                 self.create_folder_structure(R_FOLDER_STRUCTURE, project_path)
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Путь {base_path} не найден")
-            logger.exception(f"Путь {base_path} не найден")
-            return
+            self.on_error_signal(f"Путь {base_path} не найден")
 
     def recursive_resolve(self, media_pool, parent_folder, structure):
         for name, subfolders in structure.items():
@@ -337,9 +348,7 @@ class MainWindow(QWidget):
                 resolve = dvr.scriptapp("Resolve")
                 project = resolve.GetProjectManager()
             except Exception:
-                QMessageBox.critical(self, "Ошибка", "Пожалуйста, откройте Resolve")
-                logger.exception("Пожалуйста, откройте Resolve")
-                return
+                self.on_error_signal("Пожалуйста, откройте Resolve")
 
             if type_project_resolve == "OCF":
                 reels_folder = f"{project_name.upper()}"
@@ -365,9 +374,7 @@ class MainWindow(QWidget):
                     self.recursive_resolve(media_pool, root_folder, RESOLVE_REEL_FOLDER)
 
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось создать структуру папок в Resolve: {e}")
-            logger.exception(f"Не удалось создать структуру папок в Resolve: {e}")
-            return
+            self.on_error_signal(f"Не удалось создать структуру папок в Resolve: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
