@@ -5,7 +5,7 @@ import DaVinciResolveScript as dvr
 from datetime import date
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel,
-    QComboBox, QLineEdit, QPushButton, QSpinBox, QGroupBox,
+    QComboBox, QLineEdit, QPushButton, QSpinBox, QGroupBox, QCheckBox,
     QMessageBox, QFileDialog
 )
 from PyQt5.QtCore import Qt
@@ -13,8 +13,9 @@ from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveObjects
 
-
 logger = get_logger(__file__)
+
+REEL_PRESET = "reel_settings_preset"
 
 J_SRTUCTURE = [
     "J:/001_sources",
@@ -178,6 +179,10 @@ class MainWindow(QWidget):
         self.type_selector.addItems(["OCF", "REEL"])
         self.type_selector.setMinimumWidth(100)
         type_row.addWidget(self.type_selector)
+        type_row.addSpacing(30)
+        self.add_proj_folder = QCheckBox("Add project folder")
+        self.add_proj_folder.setChecked(True)
+        type_row.addWidget(self.add_proj_folder)
         resolve_layout.addLayout(type_row)
 
         reels_row = QHBoxLayout()
@@ -224,7 +229,6 @@ class MainWindow(QWidget):
         self.setup_connections()
         self.update_ui()
 
-
     def select_avid_path(self):
         path = QFileDialog.getExistingDirectory(self, "Выберите папку для Avid проекта")
         if path:
@@ -238,7 +242,7 @@ class MainWindow(QWidget):
         self.resolve_radio.toggled.connect(self.update_ui)
         self.avid_path_button.clicked.connect(self.select_avid_path)
         self.type_selector.currentTextChanged.connect(self.update_ui)
-        self.create_button.clicked.connect(self.run_logic)
+        self.create_button.clicked.connect(self.run)
 
     def update_ui(self):
         is_explorer = self.explorer_radio.isChecked()
@@ -266,11 +270,10 @@ class MainWindow(QWidget):
         QMessageBox.information(self, "Успех", message)
         logger.info(message)
 
-    def on_information_signal(self):
-        ...
-
-    def run_logic(self):
-   
+    def run(self):
+        """
+        Метод запуска целевой логики.
+        """
         if self.explorer_radio.isChecked():
             disk = self.disk_selector.currentText()
             project_name = self.explorer_project_name.text().strip()
@@ -280,10 +283,10 @@ class MainWindow(QWidget):
 
             if disk == "J":
                 for folder in J_SRTUCTURE:
-                    self.create_project(project_name, folder)
+                    self.set_creation_logic(project_name, folder)
                 self.on_success_signal("Структура папок на диске J:/ успешно создана")
             else:
-                self.create_project(project_name, R_STRUCTURE)
+                self.set_creation_logic(project_name, R_STRUCTURE)
                 self.on_success_signal("Структура папок на диске R:/ успешно создана")
 
         elif self.resolve_radio.isChecked():
@@ -299,7 +302,6 @@ class MainWindow(QWidget):
             self.create_resolve_structure(project_name, type_proj, reels)
             self.on_success_signal("Структура папок в Resolve успешно создана")
 
-
         elif self.avid_radio.isChecked():
             if not hasattr(self, 'avid_selected_path') or not self.avid_selected_path:
                 self.on_warning_signal("Пожалуйста, выберите путь для Avid структуры.")
@@ -310,6 +312,11 @@ class MainWindow(QWidget):
 
     # Методы исполняющие создание фолдеров
     def create_folder_structure(self, structure, base_path):
+        """
+        Метод рекурсивно создает папки из дерева structure в проекте Resolve.
+
+        :param structure: Структура вложенных папок представленная в виде словаря. 
+        """
         try:
             for folder, subfolders in structure.items():
                 folder_path = os.path.join(base_path, folder)
@@ -320,19 +327,30 @@ class MainWindow(QWidget):
             self.on_error_signal(f"Не удалось создать структуру папок {base_path}")
 
     def create_avid_structure(self, base_path):
+        """
+        Создание структуры папок для Avid проекта.
+        """
         os.makedirs(base_path, exist_ok=True)
+
         self.create_folder_structure(AVID_FOLDER_STRUCTURE, base_path)
 
-    def create_project(self, project_name, base_path):
+    def set_creation_logic(self, project_name, base_path):
+        """
+        Выбирает логику для создания структуры в проводнике/файндере.
+        """
         try:
             project_path = os.path.join(base_path, f"CC_{project_name.upper()}" if base_path == "R:/" else project_name)
             os.makedirs(project_path, exist_ok=True)
+
             if "001_sources" in base_path:
                 self.create_folder_structure(STRUCTURE_001_FOLDER, project_path)
+
             elif "004_masters" in base_path:
                 self.create_folder_structure(STRUCTURE_004_MASTERS, project_path)
+
             if base_path == "R:/":
                 self.create_folder_structure(R_FOLDER_STRUCTURE, project_path)
+
         except Exception as e:
             self.on_error_signal(f"Путь {base_path} не найден")
 
@@ -342,36 +360,56 @@ class MainWindow(QWidget):
             if subfolders:
                 self.recursive_resolve(media_pool, new_folder, subfolders)
 
+    def set_resolve_preset(self, project):
+        """
+        Установка настроек для проектов Reel через пресет Resolve.
+        """
+        if project.SetPreset(REEL_PRESET):
+            logger.info(f"Применен пресет проекта: {REEL_PRESET}")
+        else:
+            logger.critical(f"Ошибка: Не удалось применить пресет проекта {REEL_PRESET}")
+
     def create_resolve_structure(self, project_name, type_project_resolve, reels_number):
+        """
+        Создание структуры для проектов Resolve.
+        """
         try:
             try:
-                resolve = dvr.scriptapp("Resolve")
-                project = resolve.GetProjectManager()
+                resolve = ResolveObjects()
+                project_manager = resolve.project_manager
             except Exception:
                 self.on_error_signal("Пожалуйста, откройте Resolve")
 
+            # Логика создания OCF структуры
             if type_project_resolve == "OCF":
-                reels_folder = f"{project_name.upper()}"
-                project.CreateFolder(reels_folder)
-                project.OpenFolder(reels_folder)
 
-                new_project = project.CreateProject(f"{project_name.upper()}_OCF")
-                current_project = resolve.GetProjectManager().GetCurrentProject()
-                media_pool = current_project.GetMediaPool()
-                root_folder = media_pool.GetRootFolder()
+                if self.add_proj_folder.isChecked():
+                    reels_folder = f"{project_name.upper()}"
+                    project_manager.CreateFolder(reels_folder)
+                    project_manager.OpenFolder(reels_folder)
+
+                project_manager.CreateProject(f"{project_name.upper()}_OCF")
+                resolve = ResolveObjects()
+                media_pool = resolve.mediapool
+                root_folder = resolve.root_folder
                 self.recursive_resolve(media_pool, root_folder, RESOLVE_OCF_FOLDER)
 
+            # Логика создания Reel структуры
             elif type_project_resolve == "REEL":
-                reels_folder = f"{project_name.upper()}_CC"
-                project.CreateFolder(reels_folder)
-                project.OpenFolder(reels_folder)
+
+                if self.add_proj_folder.isChecked():
+                    reels_folder = f"{project_name.upper()}_CC"
+                    project_manager.CreateFolder(reels_folder)
+                    project_manager.OpenFolder(reels_folder)
 
                 for i in range(1, reels_number + 1):
-                    new_project = project.CreateProject(f"{project_name.upper()}_CC_REEL_0{i}_{date.today().strftime('%Y%m%d')}")
-                    current_project = resolve.GetProjectManager().GetCurrentProject()
-                    media_pool = current_project.GetMediaPool()
-                    root_folder = media_pool.GetRootFolder()
+                    project_manager.CreateProject(f"{project_name.upper()}_CC_REEL_0{i}_{date.today().strftime('%Y%m%d')}")
+                    resolve = ResolveObjects()
+                    project = resolve.project
+                    media_pool = resolve.mediapool
+                    root_folder = resolve.root_folder
                     self.recursive_resolve(media_pool, root_folder, RESOLVE_REEL_FOLDER)
+                    self.set_resolve_preset(project)
 
         except Exception as e:
             self.on_error_signal(f"Не удалось создать структуру папок в Resolve: {e}")
