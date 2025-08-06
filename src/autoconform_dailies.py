@@ -1016,7 +1016,7 @@ class ConformCheckerMixin:
         check_flag = False
         triger_flag = False
 
-        parser = EDLParser_v3(fps, lines=united_edls)
+        parser = detect_edl_parser(fps, lines=united_edls)
         for shot_name in shots_list:
             
             for edl_line in parser:
