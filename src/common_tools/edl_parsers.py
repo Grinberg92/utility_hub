@@ -2,10 +2,9 @@ import re
 from dataclasses import dataclass
 from timecode import Timecode as tc
 
-
 class EDLParser_v23:
     """
-    Класс-итератор. Итерируется по EDL файлу.
+    Класс-итератор. Итерируется по EDL файлу, обрабатывая строки с ретаймом (M2).
     """
     @dataclass
     class EDLEntry:
@@ -22,9 +21,33 @@ class EDLParser_v23:
         edl_record_out: str 
         retime: bool
 
-    def __init__(self, edl_path, lines=None):
+    def __init__(self, fps, edl_path=None, lines=None):
         self.edl_path = edl_path
         self._lines = lines
+        self.fps = fps
+
+    def convert(self, source_in, record_in, record_out) -> str:
+        """
+        Высчитывает на основе входящих таймкодов end source timecode для шотов с ретаймом.
+        """
+        record_duration = tc(self.fps, record_out).frames - tc(self.fps, record_in).frames 
+        end_source_tc_frames = (tc(self.fps, source_in).frames) + record_duration
+        end_source_tc_timecode = tc(self.fps, frames=end_source_tc_frames)
+
+        return str(end_source_tc_timecode)
+    
+    def is_retime(self, data) -> bool:
+        """
+        Метод определения ретайма.
+        На случай, если в EDL нет маркера ретайма "M2".
+        """
+        edl_source_in=tc(self.fps, data[4]).frames
+        edl_source_out=tc(self.fps, data[5]).frames
+        edl_record_in=tc(self.fps, data[6]).frames
+        edl_record_out=tc(self.fps, data[7]).frames
+
+        if edl_record_out - edl_record_in != edl_source_out - edl_source_in:
+            return True
 
     def __iter__(self):
         if self._lines is not None:
@@ -33,26 +56,46 @@ class EDLParser_v23:
             with open(self.edl_path, 'r') as edl_file:
                 lines = edl_file.readlines()
 
-            for line in lines:
-                if re.search(r'^\d+\s', line.strip()):
-                    yield self.parse_line(line)  # Паттерн ищет значения 001, 0001 и т.д. по началу строки
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
 
-    def parse_line(self, line):
-        """
-        Метод парсит строку на значения через класс EDLEntry.
-        """
-        parts = line.split()
-        return self.EDLEntry(
+            if re.match(r'^\d+\s', line):
+                parts = line.split()
+                if len(parts) < 8:
+                    i += 1
+                    continue
+
+                retime_val = False
+                j = i + 1
+
+                while j < len(lines):
+                    next_line = lines[j].strip()
+                    if re.match(r'^\d+\s', next_line): 
+                        break
+                    if next_line.startswith("M2"):
+                        retime_val = True
+                    j += 1
+
+                if retime_val or self.is_retime(parts):
+                    parts[5] = self.convert(parts[4], parts[6], parts[7])
+                    retime_val = True
+
+                yield self.EDLEntry(
                     edl_record_id=parts[0],
-                    edl_record_in=parts[6],
-                    edl_record_out=parts[7],
+                    edl_shot_name=parts[1],
                     edl_track_type=parts[2],
                     edl_transition=parts[3],
-                    edl_shot_name=parts[1],
-                    edl_source_out=parts[5],
                     edl_source_in=parts[4],
-                    retime=False 
-                    )
+                    edl_source_out=parts[5],
+                    edl_record_in=parts[6],
+                    edl_record_out=parts[7],
+                    retime=retime_val
+                )
+                i = j
+            else:
+                i += 1
+
 
 class EDLParser_v3:
     """
@@ -93,7 +136,7 @@ class EDLParser_v3:
     def is_retime(self, data) -> bool:
         """
         Метод определения ретайма.
-        На случай, если в EDL нет маркера ретайма.
+        На случай, если в EDL нет маркера ретайма "M2".
         """
         edl_source_in=tc(self.fps, data[4]).frames
         edl_source_out=tc(self.fps, data[5]).frames
@@ -159,14 +202,22 @@ class EDLParser_v3:
             else:
                 i += 1
 
-def detect_edl_parser(fps, edl_path):
+def detect_edl_parser(fps, edl_path=None, lines=None):
     """
     Определяем тип EDL файла по содержимому файла.
-
+    
+    :param lines: Список со строками из EDL.
     :return: Класс EDL парсера
     """
-    with open(edl_path, "r", encoding="utf-8") as f:
-        for string in f:
+    if lines is not None:
+        for string in lines:
             if "*loc" in string.lower():
-                return EDLParser_v3(fps, edl_path=edl_path)
-        return EDLParser_v23(fps, edl_path=edl_path)
+                return EDLParser_v3(fps, lines=lines)
+        return EDLParser_v23(fps, lines=lines)
+        
+    elif edl_path is not None:
+        with open(edl_path, "r", encoding="utf-8") as f:
+            for string in f:
+                if "*loc" in string.lower():
+                    return EDLParser_v3(fps, edl_path=edl_path)
+            return EDLParser_v23(fps, edl_path=edl_path)
