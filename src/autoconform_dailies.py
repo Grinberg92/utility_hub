@@ -984,7 +984,7 @@ class ConformCheckerMixin:
         
         return paths
 
-    def is_missing_shot(self, shots_root_path, edits_path, extension):
+    def is_missing_shot(self, fps, shots_root_path, edits_path, extension):
         """
         Проверяет есть ли каждый из шотов в shots_folder во всех монтажах из edits_path.
 
@@ -1004,7 +1004,7 @@ class ConformCheckerMixin:
         check_flag = False
         triger_flag = False
 
-        parser = EDLParser_v3(lines=united_edls)
+        parser = EDLParser_v3(fps, lines=united_edls)
         for shot_name in shots_list:
             
             for edl_line in parser:
@@ -1347,11 +1347,16 @@ class Autoconform(QWidget, ConformCheckerMixin):
         if not os.path.exists(shots_root_path):
             self.on_warning_signal("Указан несуществующий путь к шотам")
             return
+        try:
+            fps = int(self.frame_rate.text())
+        except:
+            self.on_warning_signal("Значение дожно быть целым числом")
+            return
         
         extension = self.format_menu.currentText()
 
         self.button_check.setEnabled(False)
-        self.is_missing_shot(shots_root_path, edits_path, extension)
+        self.is_missing_shot(fps, shots_root_path, edits_path, extension)
         self.button_check.setEnabled(True)
 
     def get_project_settings(self):
