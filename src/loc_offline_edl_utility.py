@@ -92,7 +92,7 @@ class LogicProcessor:
 
         :return names: Список с данными по каждому шоту из EDL.
         """
-        parser = detect_edl_parser(self.edl_path)
+        parser = detect_edl_parser(self.fps, self.edl_path)
         items_data = []
         for shot in parser:
             name = shot.edl_shot_name
