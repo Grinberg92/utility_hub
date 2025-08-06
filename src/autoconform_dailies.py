@@ -965,7 +965,7 @@ class ConformCheckerMixin:
         except Exception as e:
             QMessageBox.warning(self, "Ошибка", str(e))
 
-    def get_shots_paths(self, path, extension) -> list:
+    def get_shots_names(self, path, extension) -> list:
         """
         Получем имена папок секвенций EXR, JPG (они же имена шотов)
         или имена видеофайлов MOV, MP4.
@@ -974,15 +974,27 @@ class ConformCheckerMixin:
 
         :param extension: Расширение из GUI.
         """
-        paths = []
+        names = []
         for root, folders, files in os.walk(path):
-                for folder in folders:
-                    for item in os.listdir(os.path.join(root, folder)):
-                        if item.endswith(f".{extension}".lower()):
-                            paths.append(folder)
-                            break
-        
-        return paths
+                
+                if extension.lower() == "mov":
+                    for file in files:
+                            if file.lower().endswith(".mov"):
+                                names.append(file)
+
+                elif extension.lower() == "mp4":
+                    for file in files:
+                            if file.lower().endswith(".mp4"):
+                                names.append(file)
+
+                else:
+                    for folder in folders:
+                        for item in os.listdir(os.path.join(root, folder)):
+                            if item.lower().endswith(f".{extension}".lower()):
+                                names.append(folder)
+                                break
+
+        return names
 
     def is_missing_shot(self, fps, shots_root_path, edits_path, extension):
         """
@@ -994,7 +1006,7 @@ class ConformCheckerMixin:
 
         :return flag: 
         """
-        shots_list = self.get_shots_paths(shots_root_path, extension)
+        shots_list = self.get_shots_names(shots_root_path, extension)
 
         united_edls = [line.strip() for file in edits_path.glob("*edl")
         for line in file.read_text(encoding="utf-8", errors="ignore").splitlines()
