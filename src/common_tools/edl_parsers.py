@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from timecode import Timecode as tc
 
 
 class EDLParser_v23:
@@ -74,9 +75,33 @@ class EDLParser_v3:
         edl_record_out: str
         retime: bool  
 
-    def __init__(self, edl_path=None, lines=None):
+    def __init__(self, fps, edl_path=None, lines=None):
         self.edl_path = edl_path
         self._lines = lines
+        self.fps = fps
+
+    def convert(self, source_in, record_in, record_out) -> str:
+        """
+        Высчитывает на основе входящих таймкодов end source timecode для шотов с ретаймом.
+        """
+        record_duration = tc(self.fps, record_out).frames - tc(self.fps, record_in).frames 
+        end_source_tc_frames = (tc(self.fps, source_in).frames) + record_duration
+        end_source_tc_timecode = tc(self.fps, frames=end_source_tc_frames)
+
+        return str(end_source_tc_timecode)
+    
+    def is_retime(self, data) -> bool:
+        """
+        Метод определения ретайма.
+        На случай, если в EDL нет маркера ретайма.
+        """
+        edl_source_in=tc(self.fps, data[4]).frames
+        edl_source_out=tc(self.fps, data[5]).frames
+        edl_record_in=tc(self.fps, data[6]).frames
+        edl_record_out=tc(self.fps, data[7]).frames
+
+        if edl_record_out - edl_record_in != edl_source_out - edl_source_in:
+            return True
 
     def __iter__(self):
         if self._lines is not None:
@@ -115,6 +140,10 @@ class EDLParser_v3:
                     j += 1
 
                 if shot_name:
+                    if retime_val or self.is_retime(parts):
+                        parts[5] = self.convert(parts[4], parts[6], parts[7])
+                        retime_val = True
+
                     yield self.EDLEntry(
                         edl_record_id=parts[0],
                         edl_shot_name=shot_name,
@@ -130,7 +159,7 @@ class EDLParser_v3:
             else:
                 i += 1
 
-def detect_edl_parser(edl_path):
+def detect_edl_parser(fps, edl_path):
     """
     Определяем тип EDL файла по содержимому файла.
 
@@ -139,5 +168,5 @@ def detect_edl_parser(edl_path):
     with open(edl_path, "r", encoding="utf-8") as f:
         for string in f:
             if "*loc" in string.lower():
-                return EDLParser_v3(edl_path=edl_path)
-        return EDLParser_v23(edl_path=edl_path)
+                return EDLParser_v3(fps, edl_path=edl_path)
+        return EDLParser_v23(fps, edl_path=edl_path)
