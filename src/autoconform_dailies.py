@@ -471,12 +471,12 @@ class OTIOCreator:
             self.set_timeline_obj_clip(data, shot_start_frame, track_index)
 
         logger.info("\n".join(( "\n",
-                                f'Source in (frame): {source_in}', f'Source out (frame): {source_out}', 
+                                f'Source in (frame): {data["source_in_tc"]}', f'Source out (frame): {source_out}', 
                                 f'Shot start frame: {shot_start_frame}'
                                 f'EDL record in: {edl_record_in}', f'EDL record out: {edl_record_out}',
                                 f'EDL source in (frame): {edl_source_in}', f'EDL source out (frame): {edl_source_out}', 
                                 f'Timeline duration: {timeline_duration}', "\n\n\n")))
-    
+
     def full_conform_logic(self, data):
         """
         Логика конформа шотов, учитывающая все сценарии пересечения тайкодов исходника,
@@ -527,8 +527,7 @@ class OTIOCreator:
         elif edl_source_in >= source_in and edl_source_out > source_out:
 
             if retime_bool:
-                self.start_frame_logic(data)
-                return
+                logger.info(f"Шот {shot_name} имеет ретайм")
 
             shot_start_frame = self.resolve_compensation_tc(edl_source_in)
             cutted_duration = edl_source_out - source_out
@@ -574,8 +573,7 @@ class OTIOCreator:
         elif edl_source_in < source_in and edl_source_out > source_out:
 
             if retime_bool:
-                self.start_frame_logic(data)
-                return
+                logger.info(f"Шот {shot_name} имеет ретайм")
 
             shot_start_frame = self.resolve_compensation_tc(source_in) 
             cutted_duration_start = source_in - edl_source_in
@@ -599,11 +597,11 @@ class OTIOCreator:
             self.set_gap_obj(cutted_duration_end, track_index)
 
         logger.info("\n".join(( "\n",
-                                f'Source in (frame): {source_in}', f'Source out (frame): {source_out}', 
+                                f'Source in (frame): {data["source_in_tc"]}', f'Source out (frame): {source_out}', 
                                 f'Shot start frame: {shot_start_frame}'
                                 f'EDL record in: {edl_record_in}', f'EDL record out: {edl_record_out}',
                                 f'EDL source in (frame): {edl_source_in}', f'EDL source out (frame): {edl_source_out}', 
-                                f'Timeline duration: {timeline_duration}', "\n\n\n")))
+                                f'Timeline duration: {data["timeline_duration"]}', "\n\n\n")))
 
     def run(self):
         """
@@ -619,7 +617,7 @@ class OTIOCreator:
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
 
-        edl_data = detect_edl_parser(self.edl_path)
+        edl_data = detect_edl_parser(self.frame_rate, self.edl_path)
 
         try:
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
