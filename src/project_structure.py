@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import shutil
 import DaVinciResolveScript as dvr
 from datetime import date
 from PyQt5.QtWidgets import (
@@ -16,6 +17,22 @@ from dvr_tools.resolve_utils import ResolveObjects
 logger = get_logger(__file__)
 
 REEL_PRESET = "reel_settings_preset"
+
+FILE_COPY_SOURCE = r"\\stor-di-2\arch\000_FOR_EDITORS\Patterns\AVID\AVID_PROJ\bins_to_AVID_PROJ"
+
+FILE_COPY_MAP = {
+    "_edit_CURRENT.avb": "04_EDIT",
+    "01_takes_for_VFX.avb": "02_CG",
+    "02_Animatic.avb": "02_CG",
+    "03_ANIMA.avb": "02_CG",
+    "04_COMP.avb": "02_CG",
+    "05_ALL_VFX_Conform.avb": "02_CG",
+    "Preview_202508.avb": "07_PREVIEW_ROOM",
+    "skv_Mclp.avb": os.path.join("01_DI", "002_SKV"),
+    "skv_Sublclp.avb": os.path.join("01_DI", "002_SKV"),
+    "T1_edit.avb": os.path.join("05_TRAILERS", "T1"),
+    "T2_edit.avb": os.path.join("05_TRAILERS", "T2"),
+}
 
 J_SRTUCTURE = [
     "J:/001_sources",
@@ -87,8 +104,12 @@ AVID_FOLDER_STRUCTURE = {
         "004_Editor_CUT": {},
         "005_Producer_CUT": {}
     },
-    "05_TRAILERS": {},
-    "06_MASTER": {}
+    "05_TRAILERS": {
+        "T1": {},
+        "T2": {}
+    },
+    "06_MASTER": {},
+    "07_PREVIEW_ROOM": {}
 }
 
 RESOLVE_OCF_FOLDER = {
@@ -326,6 +347,36 @@ class MainWindow(QWidget):
         except Exception as e:
             self.on_error_signal(f"Не удалось создать структуру папок {base_path}")
 
+    def copy_files(self, mapping, base_path, source_path):
+        """
+        Копирует .avb файлы в целевые папки.
+        
+        :param mapping: словарь {имя .avb файла: относительный_путь_в_AVID_STRUCTURE}
+        :param source_path: Корневая папка с копируемыми .avb
+        """
+        for filename, target_rel_path in mapping.items():
+            src_file = os.path.join(source_path, filename)
+            dst_dir = os.path.join(base_path, target_rel_path)
+            
+            if not os.path.exists(src_file):
+                self.on_warning_signal(f"Файл {src_file} не найден. Пропуск...")
+                continue
+
+            os.makedirs(dst_dir, exist_ok=True)
+            dst_file = os.path.join(dst_dir, os.path.basename(src_file))
+            
+            try:
+                if os.path.isdir(src_file):
+                    # копируем папку
+                    if os.path.exists(dst_file):
+                        shutil.rmtree(dst_file)
+                    shutil.copytree(src_file, dst_file)
+                else:
+                    # копируем файл
+                    shutil.copy2(src_file, dst_file)
+            except Exception as e:
+                self.on_error_signal(f"Ошибка при копировании {src_file} → {dst_dir}: {str(e)}")
+
     def create_avid_structure(self, base_path):
         """
         Создание структуры папок для Avid проекта.
@@ -333,6 +384,8 @@ class MainWindow(QWidget):
         os.makedirs(base_path, exist_ok=True)
 
         self.create_folder_structure(AVID_FOLDER_STRUCTURE, base_path)
+
+        self.copy_files(FILE_COPY_MAP, base_path, FILE_COPY_SOURCE)
 
     def set_creation_logic(self, project_name, base_path):
         """
