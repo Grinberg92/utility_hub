@@ -483,7 +483,7 @@ class ExrDelivery(QWidget):
         self.height_input.setFixedWidth(60)
 
         self.preset_combo = QComboBox()
-        self.preset_combo.addItems(["aces1.2_smoother_preset"])
+        self.preset_combo.addItems(["aces1.2_smoother_preset", "yrgb_smoother_preset"])
         self.preset_combo.setCurrentText("aces1.2_smoother_preset")
         self.preset_combo.setMinimumWidth(180)
         self.export_cb = QCheckBox("Export .xml")
