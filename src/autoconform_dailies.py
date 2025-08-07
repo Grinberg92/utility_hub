@@ -710,7 +710,7 @@ class MovieObject:
                     duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
 
                     # Переводим в целое количество кадров
-                    duration = int(duration_frames) - 1  # -1 для корректного восприятия в Davinci Resolve
+                    duration = int(duration_frames)
                     return duration
                 
         except Exception as e:
@@ -730,7 +730,7 @@ class MovieObject:
                     # Длительность видео в секундах
                     duration_seconds = track.duration / 1000  # переводим из миллисекунд в секунды
                     duration_frames = duration_seconds * frame_rate  # умножаем на частоту кадров
-                    duration = int(duration_frames) - 1  # -1 для корректного восприятия в Davinci Resolve
+                    duration = int(duration_frames)
 
                     # Извлекаем начальный таймкод
                     if track.other_delay:
