@@ -961,6 +961,7 @@ class ConformCheckerMixin:
             if timeline is None:
                 QMessageBox.warning(self, "Ошибка", "Ошибка импорта таймлайна")
             
+            self.set_attributes()
                     
         except Exception as e:
             QMessageBox.warning(self, "Ошибка", str(e))
