@@ -75,7 +75,7 @@ class OTIOCreator:
 
             # Проверяем текущий файл
             if frame_size < size_threshold:
-                warning_messege = f"🟡  Маленький размер файла {frame} в секвенции {shot_name}. Вес: {frame_size} байт."
+                warning_messege = f"🟠  Маленький размер файла {frame} в секвенции {shot_name}. Вес: {frame_size} байт."
                 self.send_warning(warning_messege)
                 logger.warning(f"\n{warning_messege}")
                 break
@@ -897,17 +897,19 @@ class ConformCheckerMixin:
     """
     def count_otio_clips(self, otio_path) -> int:
         """
-        Читает OTIO и получает количество видео-объектов(шотов) на таймлайне(не учитывая версии шотов)
+        Читает OTIO и получает количество уникальных видео-объектов (шотов) на таймлайне,
+        игнорируя версии шотов и исключая элементы типа Gap.
         """
         try:
             timeline = otio.adapters.read_from_file(otio_path)
-            total_clips = 0 
+            unique_names = set()
 
-            for _, track in enumerate(timeline.tracks):
-                clip_count = sum(1 for item in track if isinstance(item, otio.schema.Clip))
-                total_clips += clip_count
+            for track in timeline.tracks:
+                for item in track:
+                    if isinstance(item, otio.schema.Clip):
+                        unique_names.add(item.name)
 
-            return total_clips
+            return len(unique_names)
 
         except Exception as e:
             logger.warning(f"Ошибка при чтении OTIO: {e}")
