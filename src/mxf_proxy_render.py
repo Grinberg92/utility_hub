@@ -17,9 +17,7 @@ from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
 logger = get_logger(__file__)
 
 class CheckableComboBox(QComboBox):
-
-    """Кастомный класс для создания выпадающего списка с чекбоксами"""
-
+    """ Кастомный класс для создания выпадающего списка с чекбоксами"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setModel(QStandardItemModel(self))
@@ -64,7 +62,7 @@ class CheckableComboBox(QComboBox):
 class RenderThread(QtCore.QThread):
 
     """Класс пускает исполнение process_render через отдельный поток"""
-    
+
     error_signal = QtCore.pyqtSignal(str)
     success_signal = QtCore.pyqtSignal()
     warning_signal = QtCore.pyqtSignal(str)
@@ -118,10 +116,14 @@ class ResolveGUI(QtWidgets.QWidget):
         self.project_fps_value = QtWidgets.QLineEdit("24")
         self.project_fps_value.setFixedWidth(50)
 
+        self.label_ocf = QtWidgets.QLabel("Choose Shoot Date:")
+        self.label_root = QtWidgets.QLabel("Choose Root Folder:")
         self.set_burn_in_checkbox = QtWidgets.QCheckBox("Set Burn-in")
-        self.add_mov_mp4 = QtWidgets.QCheckBox("Add .mov, .mp4, .jpg")
+        self.add_mov_mp4 = QtWidgets.QCheckBox("Use All Extensions")
         self.auto_sync_checkbox = QtWidgets.QCheckBox("Sync Audio")
-        self.create_sound_folder = QtWidgets.QCheckBox("Create 'SOUND' folder")
+        self.create_sound_folder = QtWidgets.QCheckBox("Create 'SOUND' Folder")
+        self.source_folder = QtWidgets.QLineEdit("001_OCF")
+
 
         self.burn_in_list = CheckableComboBox()
 
@@ -235,28 +237,36 @@ class ResolveGUI(QtWidgets.QWidget):
         layout.addWidget(fps_group)
 
         # Advanced
-        adv_group = QtWidgets.QGroupBox("Advanced Group")
-        adv_group.setFixedHeight(100)
-        adv_main_layout = QtWidgets.QVBoxLayout()
+        adv_group = QtWidgets.QGroupBox("Advanced Settings")
+        adv_main_layout = QtWidgets.QHBoxLayout() 
 
-        row1_layout = QtWidgets.QHBoxLayout()
+        # Левая колонка
+        left_layout = QtWidgets.QVBoxLayout()
+        left_layout.setAlignment(QtCore.Qt.AlignLeft)
+        left_layout.addWidget(self.label_ocf)
+        left_layout.addWidget(self.ocf_folders_list)
         self.set_burn_in_checkbox.setChecked(True)
-        row1_layout.addWidget(self.set_burn_in_checkbox)
-        row1_layout.addSpacing(40)
-        row1_layout.addWidget(self.add_mov_mp4)
-        row1_layout.addSpacing(40)
-        row1_layout.addWidget(self.ocf_folders_list)
-        row1_layout.addStretch()
-
-        row2_layout = QtWidgets.QHBoxLayout()
+        left_layout.addWidget(self.set_burn_in_checkbox)
+        left_layout.addSpacing(10)
         self.auto_sync_checkbox.setChecked(False)
-        row2_layout.addWidget(self.auto_sync_checkbox)
-        row2_layout.addSpacing(40)
-        row2_layout.addWidget(self.create_sound_folder)
-        row2_layout.addStretch()
+        left_layout.addWidget(self.auto_sync_checkbox)
+        left_layout.addStretch()
 
-        adv_main_layout.addLayout(row1_layout)
-        adv_main_layout.addLayout(row2_layout)
+        # Правая колонка 
+        right_layout = QtWidgets.QVBoxLayout()
+        right_layout.setAlignment(QtCore.Qt.AlignRight)
+        right_layout.addWidget(self.label_root)
+        self.source_folder.setFixedWidth(180)
+        self.source_folder.editingFinished.connect(self.load_ocf_subfolders)
+        right_layout.addWidget(self.source_folder)
+        right_layout.addWidget(self.add_mov_mp4)
+        right_layout.addSpacing(10)
+        right_layout.addWidget(self.create_sound_folder)
+        right_layout.addStretch()
+
+        adv_main_layout.addLayout(left_layout)
+        adv_main_layout.addLayout(right_layout)
+
         adv_group.setLayout(adv_main_layout)
         layout.addWidget(adv_group)
 
@@ -342,16 +352,16 @@ class ResolveGUI(QtWidgets.QWidget):
 
         self.burn_in_list._update_display_text()
 
-
     def load_ocf_subfolders(self):
 
-        """Метод загружает сабфолдеры из папки '001_OCF' в CheckableComboBox"""
+        """Метод загружает сабфолдеры из папки 'source_folder' в CheckableComboBox"""
 
         root_folder = self.media_pool.GetRootFolder()
-        ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == "001_OCF"), None)
+        source_folder = self.source_folder.text()
+        ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == source_folder), None)
 
         if not ocf_folder:
-            QtWidgets.QMessageBox.critical(self, "Ошибка", "Папка '001_OCF' не найдена")
+            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Папка '{source_folder}' не найдена")
             return
 
         self.ocf_folders_list.clear_items()
@@ -429,6 +439,7 @@ class ResolveGUI(QtWidgets.QWidget):
         self.thread.info_signal.connect(self.on_info_signal)
         self.thread.start()
     
+    
     def on_error_signal(self, message):
         QtWidgets.QMessageBox.critical(self, "Ошибка", message)
         logger.exception(f"{message}")
@@ -447,24 +458,22 @@ class ResolveGUI(QtWidgets.QWidget):
 
     def process_render(self, glob_width, glob_height, output_folder, project_preset, render_preset):
 
-        """Метод основной исполняемой логики"""
-
         logger.debug("Запуск скрипта")
 
         def copy_filtered_clips_to_ocf_folder(current_source_folder):
-
             """
             Ищет .mov, .mp4, .jpg клипы в current_source_folder и перемещает их в
-            001_OCF/Excepted clips/{current_source_folder}.
+            source_folder/Excepted clips/{current_source_folder}.
             """
 
             valid_extensions = ['.mov', '.mp4', '.jpg', '.MOV', '.MP4', '.JPG']
             root_folder = self.media_pool.GetRootFolder()
+            source_folder = self.source_folder.text()
 
-            # --- Найти или создать папку 001_OCF ---
-            ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == "001_OCF"), None)
+            # --- Найти папку source_folder ---
+            ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == source_folder), None)
             if not ocf_folder:
-                self.thread.error_signal.emit("Папка '001_OCF' не найдена")
+                self.thread.error_signal.emit(f"Папка '{source_folder}' не найдена")
                 return None
 
             # --- Найти или создать папку mov_mp4_jpg ---
@@ -474,12 +483,10 @@ class ResolveGUI(QtWidgets.QWidget):
                 if not base_folder:
                     self.thread.error_signal.emit("Не удалось создать папку 'Excepted clips'.")
                     return None
-
-            # --- Сбор клипов с подходящими расширениями ---
+                
             def collect_valid_clips(folder):
 
                 "Функция формирует список 'отбракованных mov, mp4, jpg'"
-
                 collected = []
                 for clip in folder.GetClipList():
                     name = clip.GetName().lower()
@@ -504,7 +511,7 @@ class ResolveGUI(QtWidgets.QWidget):
                 if not target_folder:
                     target_folder = self.media_pool.AddSubFolder(base_folder, source_folder_name)
                     if not target_folder:
-                        self.thread.error_signal.emit(f"Не удалось создать папку '{source_folder_name}' внутри 'Excepted clips'.")
+                        self.thread.error_signal.emit(f"Не удалось создать папку '{source_folder_name}' внутри 'mov_mp4_jpg'.")
                         return None
                     
             # Переключаемся в нужный подбин
@@ -570,7 +577,7 @@ class ResolveGUI(QtWidgets.QWidget):
             logger.debug(f"Получен список mediapool объектов в фолдере {curr_source_folder.GetName()}")
             return cur_bin_items_list, curr_source_folder
         
-        def turn_on_burn_in(aspect)-> None:
+        def turn_on_burn_in(aspect):
 
             "Функция устанавливает пресет burn in"
 
@@ -578,19 +585,17 @@ class ResolveGUI(QtWidgets.QWidget):
                 preset_list = [preset[1] for preset in self.burn_in_list.checked_items()]
 
                 if not self.set_burn_in_checkbox.isChecked():
-                    if self.project.LoadBurnInPreset("python_no_burn_in"):
-                        logger.debug("Применен пресет burn-in: python_no_burn_in") 
-                    else:
-                        logger.warning("Пресет 'python_no_burn_in' отсутствует") 
+                    self.project.LoadBurnInPreset("python_no_burn_in")
+                    logger.debug("Применен пресет burn in: python_no_burn_in")    
                 else:
                     for preset in preset_list:
                         if re.search(aspect, preset):
                             self.project.LoadBurnInPreset(preset)
-                            logger.debug(f"Применен пресет burn-in: {preset}") 
+                            logger.debug(f"Применен пресет burn in: {preset}") 
             except Exception as e:
                 self.thread.error_signal.emit("Ошибка применения пресета burn-in")
 
-        def set_project_preset()-> None:
+        def set_project_preset():
 
             "Функция устанавливает пресет проекта"
 
@@ -599,12 +604,12 @@ class ResolveGUI(QtWidgets.QWidget):
             else:
                 logger.debug(f"Ошибка: Не удалось применить пресет проекта {project_preset}")
 
-        def get_sep_resolution_list(cur_bin_items_list, extentions=None)-> dict:
+        def get_sep_resolution_list(cur_bin_items_list, extentions=None):
 
             "Функция создает словать с парами ключ(разрешение): значение(список соответствующих клипов)"
 
             if extentions is None:
-                extentions = (".mxf", ".braw", ".arri", ".r3d", ".dng")
+                extentions = (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine")          
 
             logger.debug(f"Используются расширения {extentions}")
             clips_dict = {}
@@ -625,10 +630,8 @@ class ResolveGUI(QtWidgets.QWidget):
                             clips_dict.setdefault(resolution, []).append(clip)
             return clips_dict
         
-        def split_by_arri(clip_list)-> list:
-
+        def split_by_arri(clip_list):
             """Разделяет клипы на ARRI и не-ARRI"""
-
             arri_clips = []
             non_arri_clips = []
             for clip in clip_list:
@@ -641,11 +644,9 @@ class ResolveGUI(QtWidgets.QWidget):
             return arri_clips, non_arri_clips
 
 
-        def get_timelines(clips_dict)-> list:
-
+        def get_timelines(clips_dict):
             """Функция создает таймлайны"""
-
-            new_timelines = [] 
+            new_timelines = []  
 
             for res, items in clips_dict.items():
                 arri_clips, non_arri_clips = split_by_arri(items)
@@ -660,7 +661,7 @@ class ResolveGUI(QtWidgets.QWidget):
                         timeline = self.media_pool.ImportTimelineFromFile(self.timeline_preset_path)
                             
                         if not timeline:
-                            logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {self.timeline_preset_path}")
+                            logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {self.timeline_preset_path_posix}")
                             return None
                         
                         # Установка разрешения на таймлайн (таймлайн импортируется без привязки к проектному разрешению)
@@ -670,12 +671,13 @@ class ResolveGUI(QtWidgets.QWidget):
                         timeline.SetSetting("timelineResolutionWidth", width)
 
                         timeline.SetName(timeline_name)
-                        self.media_pool.AppendToTimeline(clips)
 
                         # Удаляем заглушку присутсвующую при импорте шаблона(видео + аудио) в медиапуле и таймлайне
                         mp_obj = ResolveTimelineItemExtractor(timeline)
                         self.media_pool.DeleteClips([mp_obj.get_timeline_items(1, 1)[0].GetMediaPoolItem()])
                         timeline.DeleteClips([mp_obj.get_timeline_items(1, 1)[0],mp_obj.get_timeline_items(1, 1, track_type='audio')[0]], True)
+
+                        self.media_pool.AppendToTimeline(clips)
                     else:
                         timeline = self.media_pool.CreateEmptyTimeline(timeline_name)
                         self.project.SetCurrentTimeline(timeline)
@@ -690,14 +692,12 @@ class ResolveGUI(QtWidgets.QWidget):
                 # Один общий ARRI таймлайн
                 if arri_clips:
                     make_timeline(arri_clips, is_arri=True)
-                    
                 # Один таймлайн для прочих клипов
                 if non_arri_clips:
                     make_timeline(non_arri_clips, is_arri=False)
 
             if not new_timelines:
-                return None
-            
+                logger.debug("Не удалось создать ни одного таймлайна.")
             return new_timelines
 
         def set_lut()-> None:
@@ -761,7 +761,7 @@ class ResolveGUI(QtWidgets.QWidget):
             except Exception as e:
                 self.thread.error_signal.emit(f"Ошибка создания списка с рендер задачами: {e}")
                 return None
-
+        
         def rendering_in_progress()-> bool:
 
             "Функция проверяеет есть ли активный рендер"
@@ -802,7 +802,6 @@ class ResolveGUI(QtWidgets.QWidget):
 
             return True 
 
-                
         # Основной блок 
         selected_folders = self.ocf_folders_list.checked_items()
 
@@ -879,4 +878,3 @@ if __name__ == "__main__":
     gui = ResolveGUI()
     gui.show()
     sys.exit(app.exec_())
-
