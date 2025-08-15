@@ -202,10 +202,110 @@ class EDLParser_v3:
             else:
                 i += 1
 
+class EDLParser_Hiero:
+    """
+    Итерирует EDL, возвращая пары:
+    - основная строка с таймкодами
+    - строка '*FROM CLIP NAME:' с именем шота
+    """
+
+    @dataclass
+    class EDLEntry:
+        edl_record_id: str
+        edl_shot_name: str
+        edl_track_type: str
+        edl_transition: str
+        edl_source_in: str
+        edl_source_out: str
+        edl_record_in: str
+        edl_record_out: str
+        retime: bool
+
+    def __init__(self, fps, edl_path=None, lines=None):
+        self.edl_path = edl_path
+        self._lines = lines
+        self.fps = fps
+
+    def convert(self, source_in, record_in, record_out) -> str:
+        """
+        Высчитывает на основе входящих таймкодов end source timecode для шотов с ретаймом.
+        """
+        record_duration = tc(self.fps, record_out).frames - tc(self.fps, record_in).frames
+        end_source_tc_frames = tc(self.fps, source_in).frames + record_duration
+        end_source_tc_timecode = tc(self.fps, frames=end_source_tc_frames)
+        return str(end_source_tc_timecode)
+
+    def is_retime(self, data) -> bool:
+        """
+        Метод определения ретайма.
+        На случай, если в EDL нет маркера ретайма "M2".
+        """
+        edl_source_in = tc(self.fps, data[4]).frames
+        edl_source_out = tc(self.fps, data[5]).frames
+        edl_record_in = tc(self.fps, data[6]).frames
+        edl_record_out = tc(self.fps, data[7]).frames
+        return (edl_record_out - edl_record_in) != (edl_source_out - edl_source_in)
+
+    def __iter__(self):
+        if self._lines is not None:
+            lines = self._lines
+        else:
+            with open(self.edl_path, 'r', encoding="utf-8") as edl_file:
+                lines = edl_file.readlines()
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+
+            if re.match(r'^\d+\s', line):
+                parts = line.split()
+                if len(parts) < 8:
+                    i += 1
+                    continue
+
+                shot_name = None
+                retime_val = False
+                j = i + 1
+                while j < len(lines):
+                    next_line = lines[j].strip()
+
+                    if re.match(r'^\d+\s', next_line):
+                        break
+
+                    if next_line.startswith("M2"):
+                        retime_val = True
+
+                    clip_match = re.search(r'^\*FROM CLIP NAME:\s+(\S+)$', next_line, re.IGNORECASE)
+                    if clip_match:
+                        shot_name = clip_match.group(1)
+
+                    j += 1
+
+                if shot_name:
+                    if retime_val or self.is_retime(parts):
+                        parts[5] = self.convert(parts[4], parts[6], parts[7])
+                        retime_val = True
+
+                    yield self.EDLEntry(
+                        edl_record_id=parts[0],
+                        edl_shot_name=shot_name,
+                        edl_track_type=parts[2],
+                        edl_transition=parts[3],
+                        edl_source_in=parts[4],
+                        edl_source_out=parts[5],
+                        edl_record_in=parts[6],
+                        edl_record_out=parts[7],
+                        retime=retime_val,
+                    )
+                i = j
+            else:
+                i += 1
+
+
 def detect_edl_parser(fps, edl_path=None, lines=None):
     """
     Определяем тип EDL файла по содержимому файла.
-    
+
     :param lines: Список со строками из EDL.
     :return: Класс EDL парсера
     """
@@ -213,6 +313,8 @@ def detect_edl_parser(fps, edl_path=None, lines=None):
         for string in lines:
             if "*loc" in string.lower():
                 return EDLParser_v3(fps, lines=lines)
+            if "*from clip name" in string.lower():
+                return EDLParser_Hiero(fps, lines=lines)
         return EDLParser_v23(fps, lines=lines)
         
     elif edl_path is not None:
@@ -220,4 +322,6 @@ def detect_edl_parser(fps, edl_path=None, lines=None):
             for string in f:
                 if "*loc" in string.lower():
                     return EDLParser_v3(fps, edl_path=edl_path)
+                if "*from clip name" in string.lower():
+                    return EDLParser_Hiero(fps, edl_path=edl_path)
             return EDLParser_v23(fps, edl_path=edl_path)
