@@ -528,6 +528,8 @@ class OTIOCreator:
 
             if retime_bool:
                 logger.info(f"Шот {shot_name} имеет ретайм")
+                self.start_frame_logic(data)
+                return
 
             shot_start_frame = self.resolve_compensation_tc(edl_source_in)
             cutted_duration = edl_source_out - source_out
@@ -574,6 +576,8 @@ class OTIOCreator:
 
             if retime_bool:
                 logger.info(f"Шот {shot_name} имеет ретайм")
+                self.start_frame_logic(data)
+                return
 
             shot_start_frame = self.resolve_compensation_tc(source_in) 
             cutted_duration_start = source_in - edl_source_in
@@ -920,18 +924,21 @@ class ConformCheckerMixin:
         Сканирует папку на хранилище с шотами (секвенциями или видеофайлами), 
         участвующими в сборке OTIO, и получает их количество.
         """
-        count = 0 
+        unique_names = set()
+
         for dirpath, _, files in os.walk(shots_folder):
             # Проверяем секвенцию. Если есть хотя бы 1 фрейм - плюсуем счетчик
             if extension.lower() not in ("mov", "mp4") and any(file.lower().endswith(f'.{extension.lower()}') for file in files):
-                    count += 1  
-                    continue
+                unique_names.add(os.path.basename(dirpath))  
+                continue
             # Проверяем видеофайлы
             else:  
                 for file in files:
                     if file.lower().endswith(f'.{extension.lower()}'):
-                        count += 1  
-        return count
+                        unique_names.add(file)
+
+        return len(unique_names)
+
     
     def set_attributes(self):
         """
