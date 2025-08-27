@@ -19,7 +19,7 @@ from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
 logger = get_logger(__file__)
 
 COLORS = ["Orange", "Yellow", "Lime", "Violet", "Blue"]
-EXTENTIONS = (".mxf", ".braw", ".arri", ".r3d", ".dng")
+EXTENTIONS = (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine")
 
 class DvrTimelineObject():
     """
@@ -119,8 +119,9 @@ class DeliveryPipline:
             source_duration = source_duration + 1 
 
         retime_speed = source_duration / duration * 100
-        excess = max(0, retime_speed - 100)
-        logger.info(f"Retime speed - {retime_speed}")
+        abs_speed = abs(retime_speed)
+        excess = max(0, abs_speed - 100)
+        logger.info(f"Retime speed - {abs_speed}")
         increment = math.ceil(excess / 33.34)
         handles = self.frame_handles + increment
 
@@ -238,7 +239,7 @@ class DeliveryPipline:
         def rendering_in_progress():
             return self.project.IsRenderingInProgress()
         while rendering_in_progress():
-            time.sleep(1)
+            time.sleep(0.1)
 
     def set_render_preset(self, handles_value) -> bool:
         '''
