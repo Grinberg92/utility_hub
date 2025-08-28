@@ -4,6 +4,8 @@ import math
 from timecode import Timecode as tc
 import DaVinciResolveScript as dvr
 import sys
+import os
+from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -126,42 +128,68 @@ class LogicProcessor:
             self.signals.error_signal.emit(f"Ошибка создания SRT файла {e}")
             return False
         
+    def create_temp_edl(self, output_path) -> None:
+        """
+        Создает промежуточный EDL для offline edl и dailies edl.
+        """
+        tmp_path = str(Path(__file__).resolve().parent.parent / "temp_edl.edl")
+        result = self.timeline.Export(tmp_path, self.resolve.EXPORT_EDL)
+        if result:
+            return tmp_path
+        else:
+            self.signals.error_signal.emit(f"Ошибка создания промежуточного EDL файла.")
+            return False
+        
+    def kill_tmp_edl(self, edl_file):
+        """
+        Удаляет промежуточный EDL для offline edl и dailies edl.
+        """
+        os.remove(edl_file)
+
     def process_edl(self) -> bool:
         """
         Выводит EDL для дейлизов и EDL с оффлайн клипами.
         """
         try:
             markers_list = self.get_markers()
-            with open(self.edl_path, "r", encoding='utf8') as edl_file:
-                title = [next(edl_file) for _ in range(2)]
-                lines = edl_file.readlines()
+            
+            edl_path = self.create_temp_edl(self.output_path)
+            if edl_path:
 
-            with open(self.output_path, "w", encoding='utf8') as output:
-                output.write("".join(title) + "\n")
-                for line in lines:
-                    if re.search(r'^\d+\s', line.strip()):  
-                        parts = line.split()
-                        edl_timeline_start_tc = parts[6]
-                        edl_timeline_end_tc = parts[7]
+                with open(edl_path, "r", encoding='utf8') as edl_file:
+                    title = [next(edl_file) for _ in range(2)]
+                    lines = edl_file.readlines()
 
-                        # Логика для offline_clips
-                        if self.offline_edl:
-                            marker_name = None
-                            for name, timecode in markers_list:
-                                if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
-                                    marker_name = name
-                            if marker_name is not None:
+                with open(self.output_path, "w", encoding='utf8') as output:
+                    output.write("".join(title) + "\n")
+                    for line in lines:
+                        if re.search(r'^\d+\s', line.strip()):  
+                            parts = line.split()
+                            edl_timeline_start_tc = parts[6]
+                            edl_timeline_end_tc = parts[7]
+
+                            # Логика для offline_clips
+                            if self.offline_edl:
+                                marker_name = None
+                                for name, timecode in markers_list:
+                                    if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
+                                        marker_name = name
+                                if marker_name is not None:
+                                    output.write(" ".join(parts) + '\n')
+                                    output.write(f'* FROM CLIP NAME: {marker_name}\n\n')
+
+                            # Логика для edl_for_dailies
+                            elif self.dailies_edl:
+                                for name, timecode in markers_list:
+                                    if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
+                                        parts[1] = name
                                 output.write(" ".join(parts) + '\n')
-                                output.write(f'* FROM CLIP NAME: {marker_name}\n\n')
-
-                        # Логика для edl_for_dailies
-                        elif self.dailies_edl:
-                            for name, timecode in markers_list:
-                                if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
-                                    parts[1] = name
-                            output.write(" ".join(parts) + '\n')
-            logger.info("EDL файл успешно создан.")
-            return True
+                logger.info("EDL файл успешно создан.")
+                self.kill_tmp_edl(edl_path)
+                return True
+            else:
+                return False
+            
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка формирования EDL: {e}")
             return False
@@ -205,6 +233,7 @@ class LogicProcessor:
 
     def run(self) -> bool:
         self.timeline = ResolveObjects().timeline
+        self.resolve = ResolveObjects().resolve
         self.process_edl_logic = self.user_config["process_edl"]
         self.output_path = self.user_config["output_path"]
         self.edl_path = self.user_config["edl_path"]
@@ -331,8 +360,11 @@ class ConfigValidator:
             self.errors.append(str(re))
             return
 
-        if process_edl and (not edl_path or not output_path):
-            self.errors.append("Выберите файлы EDL!")
+        if process_edl and not output_path:
+            self.errors.append("Выберите путь для сохранения EDL!")
+
+        if create_srt_cb and (not output_path or not edl_path):
+            self.errors.append("Укажите входной и выходной путь для EDL!")
         
         if not locator_output_path and export_loc_cb:
             self.errors.append("Введите путь для сохранения локаторов!")
@@ -344,13 +376,14 @@ class ConfigValidator:
         
         if  resolve.timeline is None:
             self.errors.append("Неудалось получить таймлайн!")
-
-        try:
-            track_number = int(track_number)
-            if track_number > resolve.timeline.GetTrackCount("video"):
-                self.errors.append("Указан несуществующий трек")
-        except ValueError:
-            self.errors.append("Номер дорожки должен быть числом!")
+        
+        if set_markers_cb:
+            try:
+                track_number = int(track_number)
+                if track_number > resolve.timeline.GetTrackCount("video"):
+                    self.errors.append("Указан несуществующий трек")
+            except ValueError:
+                self.errors.append("Номер дорожки должен быть числом!")
 
         try:
             offline_track_number = int(offline_track_number)
@@ -451,6 +484,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.offline_clips_checkbox = QCheckBox("Offline EDL")
         self.edl_for_dailies_checkbox = QCheckBox("Dailies EDL")
         self.create_srt_cb = QCheckBox("EDL to SRT")
+        self.create_srt_cb.stateChanged.connect(self.update_fields_state)
         checks_layout.addWidget(self.offline_clips_checkbox)
         checks_layout.addSpacing(60)
         checks_layout.addWidget(self.edl_for_dailies_checkbox)
@@ -462,10 +496,11 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         input_label = QLabel("Choose input EDL:")
         input_layout = QHBoxLayout()
         self.input_entry = QLineEdit()
-        input_btn = QPushButton("Choose")
-        input_btn.clicked.connect(self.select_input_file)
+        self.input_entry.setEnabled(False)
+        self.input_btn = QPushButton("Choose")
+        self.input_btn.clicked.connect(self.select_input_file)
         input_layout.addWidget(self.input_entry)
-        input_layout.addWidget(input_btn)
+        input_layout.addWidget(self.input_btn)
         block2_group_layout.addWidget(input_label)
         block2_group_layout.addLayout(input_layout)
 
@@ -473,10 +508,10 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         output_label = QLabel("Save output result:")
         output_layout = QHBoxLayout()
         self.output_entry = QLineEdit()
-        output_btn = QPushButton("Choose")
-        output_btn.clicked.connect(self.select_output_file)
+        self.output_btn = QPushButton("Choose")
+        self.output_btn.clicked.connect(self.select_output_file)
         output_layout.addWidget(self.output_entry)
-        output_layout.addWidget(output_btn)
+        output_layout.addWidget(self.output_btn)
         block2_group_layout.addWidget(output_label)
         block2_group_layout.addLayout(output_layout)
 
@@ -535,6 +570,13 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         else:
             self.save_locators_path_entry.setEnabled(True)
             self.save_path_btn.setEnabled(True)
+
+        if self.create_srt_cb.isChecked():
+            self.input_entry.setEnabled(True)
+            self.input_btn.setEnabled(True)
+        else:
+            self.input_entry.setEnabled(False)
+            self.input_btn.setEnabled(False)
 
     def run_script(self):
         self.validator = ConfigValidator(self)
