@@ -20,6 +20,10 @@ class ResolveObjects:
         self.resolve_mediapool_current_folder = self.resolve_mediapool.GetCurrentFolder()
 
     @property
+    def resolve_obj(self):
+        return self.resolve
+
+    @property
     def timeline(self):
         return self.resolve_timeline
     
