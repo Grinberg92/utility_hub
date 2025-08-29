@@ -498,6 +498,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.input_entry = QLineEdit()
         self.input_entry.setEnabled(False)
         self.input_btn = QPushButton("Choose")
+        self.input_btn.setEnabled(False)
         self.input_btn.clicked.connect(self.select_input_file)
         input_layout.addWidget(self.input_entry)
         input_layout.addWidget(self.input_btn)
