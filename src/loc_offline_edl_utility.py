@@ -65,7 +65,8 @@ class LogicProcessor:
         '''
         try:
             markers_list = self.get_markers()
-            with open(self.locator_output_path, "a", encoding='utf8') as output:
+            path = Path(self.locator_output_path) / f"{self.timeline.GetName()}.txt"
+            with open(path, "a", encoding='utf8') as output:
                 for name, timecode in markers_list:
                     # Используется спец табуляция для корректного импорта в AVID
                     output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
@@ -550,7 +551,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             self.input_entry.setText(file_path)
 
     def select_save_markers_file(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Markers File", "", "Text Files (*.txt);;All Files (*)")
+        file_path = QFileDialog.getExistingDirectory(self, 
+                                                "Choose Shots Folder",
+                                                )
         if file_path:
             self.save_locators_path_entry.setText(file_path)
 
