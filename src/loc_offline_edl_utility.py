@@ -19,6 +19,9 @@ from common_tools.edl_parsers import EDLParser_v23, EDLParser_v3, detect_edl_par
 
 logger = get_logger(__file__)
 
+SETTINGS = {
+    "shot_name": r"^(?:[A-Za-z]{3,4}_)?[A-Za-z0-9]{3,4}_[A-Za-z0-9]{3,4}$"
+}
 
 class LogicProcessor:
     """
@@ -68,9 +71,16 @@ class LogicProcessor:
             path = Path(self.locator_output_path) / f"{self.timeline.GetName()}.txt"
             with open(path, "a", encoding='utf8') as output:
                 for name, timecode in markers_list:
-                    # Используется спец табуляция для корректного импорта в AVID
-                    output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
-                    output.write(output_string + "\n")
+
+                    if self.shot_filter:
+                        if re.match(SETTINGS["shot_name"], name, re.IGNORECASE):
+                            # Используется спец табуляция для корректного импорта в AVID
+                            output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
+                            output.write(output_string + "\n")
+                    else:
+                        # Используется спец табуляция для корректного импорта в AVID
+                        output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
+                        output.write(output_string + "\n")
             logger.info("Локаторы успешно созданы.")
             return True
         except Exception as e:
@@ -251,6 +261,7 @@ class LogicProcessor:
         self.name_from_track = self.user_config["set_name_from_track"]
         self.name_from_markers = self.user_config["set_name_from_markers"]
         self.offline_track = self.user_config["offline_track_number"]
+        self.shot_filter = self.user_config["shot_filter"]
 
         if self.process_edl_logic:
             process_edl_var = self.process_edl()
@@ -326,7 +337,8 @@ class ConfigValidator:
         "create_srt_checkbox": self.gui.create_srt_cb.isChecked(),
         "set_name_from_track": self.gui.from_track_cb.isChecked(),
         "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
-        "offline_track_number": self.gui.from_track_edit.text().strip()
+        "offline_track_number": self.gui.from_track_edit.text().strip(),
+        "shot_filter": self.gui.filter_shot.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -450,11 +462,15 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.track_entry.setFixedWidth(40)
         options_layout.addWidget(self.track_label)
         options_layout.addWidget(self.track_entry)
-        options_layout.addSpacing(60)
+        options_layout.addSpacing(30)
 
         self.export_loc_checkbox = QCheckBox("Export locators to Avid")
         self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
         options_layout.addWidget(self.export_loc_checkbox)
+        options_layout.addSpacing(30)
+
+        self.filter_shot = QCheckBox("Shot filter")
+        options_layout.addWidget(self.filter_shot)
         options_layout.addStretch()
         block1_group_layout.addLayout(options_layout)
 
