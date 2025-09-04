@@ -187,4 +187,31 @@ def apply_style(app):
             color: #777;
             border: 1px solid #444;
         }}
+        QTabWidget::pane {{
+            border: 1px solid #444;
+            background: #2b2b2b;
+            border-radius: 4px;
+        }}
+
+        QTabBar::tab {{
+            background: #3c3f41;
+            color: #dcdcdc;
+            padding: 6px 12px;
+            margin-right: 2px;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }}
+
+        QTabBar::tab:selected {{
+            background: #007acc;
+            color: white;
+        }}
+
+        QTabBar::tab:hover {{
+            background: #2899e0;
+        }}
+
+        QTabBar::tab:!selected {{
+            background: #3c3f41;
+        }}
     """)
