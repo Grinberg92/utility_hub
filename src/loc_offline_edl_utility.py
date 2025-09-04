@@ -20,7 +20,8 @@ from common_tools.edl_parsers import EDLParser_v23, EDLParser_v3, detect_edl_par
 logger = get_logger(__file__)
 
 SETTINGS = {
-    "shot_name": r"^(?:[A-Za-z]{3,4}_)?[A-Za-z0-9]{3,4}_[A-Za-z0-9]{3,4}$"
+    "shot_name": r"^(?:[A-Za-z]{3,4}_)?[A-Za-z0-9]{3,4}_[A-Za-z0-9]{3,4}$",
+    "exceptions": ["RETIME WARNING"]
 }
 
 class LogicProcessor:
@@ -70,10 +71,10 @@ class LogicProcessor:
             markers_list = self.get_markers()
             path = Path(self.locator_output_path) / f"{self.timeline.GetName()}.txt"
             with open(path, "a", encoding='utf8') as output:
-                for name, timecode in markers_list:
 
+                for name, timecode in markers_list:
                     if self.shot_filter:
-                        if re.match(SETTINGS["shot_name"], name, re.IGNORECASE):
+                        if re.match(SETTINGS["shot_name"], name, re.IGNORECASE) or name in SETTINGS["exceptions"]:
                             # Используется спец табуляция для корректного импорта в AVID
                             output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
                             output.write(output_string + "\n")
@@ -83,6 +84,7 @@ class LogicProcessor:
                         output.write(output_string + "\n")
             logger.info("Локаторы успешно созданы.")
             return True
+        
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания локаторов: {e}")
             return False
