@@ -320,6 +320,7 @@ class EDLParser_Resolve:
         edl_record_in: str
         edl_record_out: str
         retime: bool
+        edl_edit_name: str
 
     def __init__(self, fps, edl_path=None, lines=None):
         self.edl_path = edl_path
@@ -343,6 +344,8 @@ class EDLParser_Resolve:
         else:
             with open(self.edl_path, 'r', encoding="utf-8") as edl_file:
                 lines = edl_file.readlines()
+
+        edit_name = lines[0].strip().split(":")[1].strip() # Отрезаем слово 'TITLE'
 
         i = 0
         while i < len(lines):
@@ -388,6 +391,7 @@ class EDLParser_Resolve:
                     edl_record_in=parts[6].strip(),
                     edl_record_out=parts[7].strip(),
                     retime=retime_val,
+                    edl_edit_name=edit_name,
                 )
 
                 i = j  # переходим к следующей основной строке
