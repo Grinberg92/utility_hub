@@ -657,8 +657,9 @@ class ConfigValidator:
         if not user_config["output_folder"]:
             self.errors.append("Укажите путь для рендера")
 
-        if not user_config["burnin_list"]:
-            self.errors.append("Укажите хотя бы один пресет burn-in")
+        if user_config["set_burnin"]:
+            if not user_config["burnin_list"]:
+                self.errors.append("Укажите хотя бы один пресет burn-in")
 
         if not user_config["subfolders_list"]:
             self.errors.append("Укажите хотя бы один фолдер")
