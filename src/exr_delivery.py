@@ -25,7 +25,7 @@ class DvrTimelineObject():
     """
     Объект с атрибутами итема на таймлайне.
     """
-    def __init__(self, mp_item, track_type_ind, clip_start_tmln, source_start, source_end, clip_dur, clip_color):
+    def __init__(self, mp_item, track_type_ind, clip_start_tmln, source_start, source_end, clip_dur, clip_color, timeline_item):
         self.mp_item = mp_item
         self.track_type_ind = track_type_ind
         self.clip_start = clip_start_tmln
@@ -34,6 +34,7 @@ class DvrTimelineObject():
         self.source_start = source_start
         self.source_end = source_end
         self.clip_color = clip_color
+        self.timeline_item = timeline_item
 
 class DeliveryPipline:
     """
@@ -65,7 +66,7 @@ class DeliveryPipline:
             filtred_items.append(DvrTimelineObject(item.GetMediaPoolItem(), item.GetTrackTypeAndIndex()[1],
                                 item.GetStart(), item.GetSourceStartFrame(),
                                 item.GetSourceEndFrame(), item.GetDuration(),
-                                item.GetClipColor()))
+                                item.GetClipColor(), item))
         return filtred_items
     
     def get_tracks(self, start_track=2, track_type="video") -> list:
@@ -109,6 +110,8 @@ class DeliveryPipline:
         duration = timeline_item.clip_duration
         source_duration = end_frame - start_frame
 
+        if self.frame_handles == 0:
+            return f"EXR_{self.frame_handles}hndl"
         
         # Если source duration врет на 1 фрейм то вычитаем или прибавляем его(баг Resolve).
         # Второе условие пропускает только ретаймы кратные 100(т.е 100, 200, 300 и тд)
@@ -141,6 +144,8 @@ class DeliveryPipline:
             aspect = clip.GetClipProperty('PAR')
             width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            if calculate_width == "2500":
+                calculate_width = "2498"
             resolution = "x".join([calculate_width, self.height_res_glob])
             return resolution
         
@@ -334,6 +339,24 @@ class DeliveryPipline:
         for track_number in range(1, self.max_track + 1):
             
             self.timeline.SetTrackEnable("video", track_number, True)
+
+    def remove_transform(self, item):
+        """
+        Удаляет трансформы и кроппинг с таймлайн итема.
+        """
+        item.SetProperty("Pan", 0.000)
+        item.SetProperty("Tilt", 0.000)
+        item.SetProperty("ZoomX", 1.000)
+        item.SetProperty("ZoomY", 1.000)
+        item.SetProperty("Pitch", 0.000)
+        item.SetProperty("Yaw", 0.000)
+        item.SetProperty("RotationAngle", 0.000)
+        item.SetProperty("CropLeft", 0.000)
+        item.SetProperty("CropRight", 0.000)
+        item.SetProperty("CropTop", 0.000)
+        item.SetProperty("CropBottom", 0.000)
+        item.SetProperty("Opacity", 100)
+        item.SetProperty("CropSoftness", 0.000)
 
     def run(self):
         """
