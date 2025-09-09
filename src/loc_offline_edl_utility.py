@@ -21,7 +21,8 @@ logger = get_logger(__file__)
 
 SETTINGS = {
     "shot_name": r"^(?:[A-Za-z]{3,4}_)?[A-Za-z0-9]{3,4}_[A-Za-z0-9]{3,4}$",
-    "exceptions": ["RETIME WARNING"]
+    "exceptions": ["RETIME WARNING"],
+    "plate_suffix": '_VT',
 }
 
 class LogicProcessor:
@@ -217,26 +218,36 @@ class LogicProcessor:
         Таймкод маркера должен быть внутри таймкода такого клипа.
         """
         try:
-            extractor = ResolveTimelineItemExtractor()
-            max_cout_track = self.timeline.GetTrackCount('video')
-            if self.name_from_markers:
+            items = self.timeline.GetItemListInTrack('video', int(self.offline_track))
+            self.count_of_tracks = self.timeline.GetTrackCount('video')
 
+            if self.name_from_markers:
                 markers = self.get_markers()
-                items = extractor.get_timeline_items(1, max_cout_track)
                 for name, timecode in markers:
-                    for item in items:
-                        if item.GetStart() <= timecode <= (item.GetStart() + item.GetDuration()):
-                            item.AddVersion(name, 0)
+                    for track_index in range(2, self.count_of_tracks):
+                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
+                        for clip_under in clips_under:
+                            if clip_under.GetStart() <= timecode <= (clip_under.GetStart() + clip_under.GetDuration()):
+                                # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
+                                name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
+                                clip_under.AddVersion(name_new, 0)
+                                logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
 
             elif self.name_from_track:
-                items = extractor.get_timeline_items(1, max_cout_track)
-                offline_clips = extractor.get_timeline_items(1,max_cout_track)
-                for clip in offline_clips:
-                    clipName = clip.GetName()
+                for item in items:
+                    clipName = item.GetName()
 
-                    for item in items:
-                        if item.GetStart() == clip.GetStart():
-                            item.AddVersion(clipName, 0)
+                    for track_index in range(2, self.count_of_tracks):
+                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
+                        if clips_under:
+                            
+                            for clip_under in clips_under:
+
+                                if clip_under.GetStart() == item.GetStart():
+                                    # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
+                                    name = clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
+                                    clip_under.AddVersion(name, 0)
+                                    logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
 
             logger.info("Имена успешно применены на клипы.")
             return True
