@@ -304,8 +304,12 @@ class DeliveryPipline:
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
             aspect = clip.GetClipProperty('PAR')
             width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            resolution = "x".join([str(int(int(calculate_height) * 1.5)), str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
+            calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            width_1_5 = str(int(int(calculate_width) * 1.5))
+            if self.boe_fix:
+                if width_1_5 == "3750":
+                        width_1_5 = "3748"
+            resolution = "x".join([width_1_5, str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
             return resolution
         else:
             aspect = clip.GetClipProperty('PAR')
@@ -323,8 +327,8 @@ class DeliveryPipline:
         if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
             aspect = clip.GetClipProperty('PAR')
             width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            resolution = "x".join([str(int(int(calculate_height) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
+            calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            resolution = "x".join([str(int(int(calculate_width) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
             return resolution
         else:
             aspect = clip.GetClipProperty('PAR')
