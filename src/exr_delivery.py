@@ -4,10 +4,10 @@ import math
 import time
 from pprint import pformat
 from pathlib import Path
-
+from timecode import Timecode as tc
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox
+    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox, QTextEdit
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
@@ -18,8 +18,12 @@ from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
 
 logger = get_logger(__file__)
 
-COLORS = ["Orange", "Yellow", "Lime", "Violet", "Blue"]
-EXTENTIONS = (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine")
+SETTINGS = {
+    "plate_suffix": '_VT',
+    "colors": ["Orange", "Yellow", "Lime", "Violet", "Blue"],
+    "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
+    "false_extentions": (".mov", ".mp4", ".jpg")
+}
 
 class DvrTimelineObject():
     """
@@ -35,6 +39,132 @@ class DvrTimelineObject():
         self.source_end = source_end
         self.clip_color = clip_color
         self.timeline_item = timeline_item
+
+class NameSetter:
+    """
+    Класс логики, устанавливающий имена шотов из оффлайн клипов, на все итемы,
+    находящиеся ниже по таймлайну. 
+    """
+    def __init__(self, user_config, signals):
+        self.signals = signals
+        self.user_config = user_config
+
+    def get_api_resolve(self) -> ResolveObjects:
+        """
+        Проверка подключения к API Resolve и получение основного объекта Resolve.
+        """
+        try:
+            resolve = ResolveObjects().resolve
+            return ResolveObjects()
+        except RuntimeError as re:
+            raise
+
+    def set_markers(self, item, clip_name):
+        """
+        Установка маркера посередине клипа на таймлайне.
+        """
+        clip_start = int((item.GetStart() + (item.GetStart() + item.GetDuration())) / 2) - self.timeline_start_tc
+        self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+
+    def get_markers(self) -> list: 
+        '''
+        Получение маркеров для работы других методов.
+        '''
+        try:
+            markers_list = []
+            for timecode, name in self.timeline.GetMarkers().items():
+                name = name[self.marker_from].strip()
+                timecode_marker = tc(self.fps, frames=timecode + self.timeline_start_tc) + 1  
+                markers_list.append((name, timecode_marker))
+            return markers_list
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка получения данных об объектах маркеров: {e}")
+            return False
+
+    def is_effect(self, track, track_type="video"):
+        """
+        Проверка на предмет наличия дорожки с эффектами.
+        """
+        for item in self.timeline.GetItemListInTrack(track_type, track):
+            if item.GetName() == "Text+":
+                return True
+
+    def set_name(self, items):
+        """
+        Метод устанавливает имя полученное из маркеров или оффлайн клипов на таймлайне Resolve 
+        и применяет его в атрибут Versions на все итемы по двум принципам.
+        В случае получения имен из оффлайн клипов - имена применяются на все итемы лежащие ниже оффлайн клипа.
+        Стартовый таймкод оффлайн клипа должен пересекаться со стартовыми таймкодами итемов, лежащими под ним.
+        В случае получения имен из маркеров - имена применяются на все клипы, которые лежат ниже маркера. 
+        Таймкод маркера должен быть внутри таймкода такого клипа.
+        """
+        try:
+            items = self.timeline.GetItemListInTrack('video', int(self.track_number))
+            self.count_of_tracks = self.timeline.GetTrackCount('video')
+
+            if self.name_from_markers:
+                markers = self.get_markers()
+                for name, timecode in markers:
+                    for track_index in range(2, self.count_of_tracks):
+                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
+                        for clip_under in clips_under:
+                            if clip_under.GetStart() <= timecode <= (clip_under.GetStart() + clip_under.GetDuration()):
+                                # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
+                                name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
+                                clip_under.AddVersion(name_new, 0)
+                                logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
+
+            elif self.name_from_track:
+                for item in items:
+                    clipName = item.GetName()
+
+                    for track_index in range(2, self.count_of_tracks):
+                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
+                        if clips_under:
+                            
+                            for clip_under in clips_under:
+
+                                if clip_under.GetStart() == item.GetStart():
+                                    # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
+                                    name = clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
+                                    clip_under.AddVersion(name, 0)
+                                    logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
+
+            logger.info("Имена успешно применены на клипы.")
+            return True
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
+            return False    
+
+    def run(self):
+        """
+        Основная логика.
+        """
+        resolve = self.get_api_resolve()
+        self.timeline = resolve.timeline
+        self.media_pool = resolve.mediapool
+        self.timeline_start_tc = self.timeline.GetStartFrame()
+
+        self.track_number = int(self.user_config["track_number"])
+        self.name_from_track = self.user_config["set_name_from_track"]
+        self.name_from_markers = self.user_config["set_name_from_markers"]
+        self.fps = int(self.user_config["fps"])
+        self.marker_from = self.user_config["locator_from"]
+
+        self.count_of_tracks = self.timeline.GetTrackCount('video')
+
+        items = self.timeline.GetItemListInTrack('video', self.track_number)
+
+        if items is None:
+            self.signals.warning_signal.emit(f"Дорожка {self.track_number} не существует.")
+            return
+        if items == []:
+            self.signals.warning_signal.emit(f"На дорожке {self.track_number} отсутствуют объекты.")
+            return
+        
+        self.set_name(items)
+
+        self.signals.success_signal.emit("Имена из оффлайн клипов успешно применены")
 
 class DeliveryPipline:
     """
@@ -101,7 +231,7 @@ class DeliveryPipline:
             self.timeline.SetTrackEnable("video", track_number, track_number == current_track_number)
         logger.info(f"Начало работы с {current_track_number} треком")
 
-    def get_handles(self, timeline_item) -> str:
+    def get_handles(self, timeline_item, hide_log=False) -> str:
         '''
         Получаем значения захлестов.
         '''
@@ -122,9 +252,16 @@ class DeliveryPipline:
             source_duration = source_duration + 1 
 
         retime_speed = source_duration / duration * 100
+
+        if retime_speed > 1000:
+            raise ValueError
+        
         abs_speed = abs(retime_speed)
         excess = max(0, abs_speed - 100)
-        logger.info(f"Retime speed - {abs_speed}")
+
+        if hide_log:
+            logger.info(f"Retime speed - {abs_speed}")
+
         increment = math.ceil(excess / 33.34)
         handles = self.frame_handles + increment
 
@@ -144,7 +281,7 @@ class DeliveryPipline:
             aspect = clip.GetClipProperty('PAR')
             width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            if calculate_width == "2500":
+            if self.boe_fix:
                 calculate_width = "2498"
             resolution = "x".join([calculate_width, self.height_res_glob])
             return resolution
@@ -221,18 +358,19 @@ class DeliveryPipline:
         clip = timeline_item.mp_item
         clip_color = timeline_item.clip_color
 
-        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[0]:
+        # Стандартное разрешение от final delivery res
+        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][0]:
             resolution = self.standart_resolution(clip)
-
-        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[1]:
+        # 1.5-кратное увеличение разрешение от стандартного
+        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][1]:
             resolution = self.scale_1_5_resolution(clip)
         
         # 2-кратное увеличение разрешение от стандартного(условный 4К)
-        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[2]:
+        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][2]:
             resolution = self.scale_2_resolution(clip)
             
         # Полное съемочное разрешение
-        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS) and clip_color == COLORS[3]:
+        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][3]:
             resolution = self.full_resolution(clip)
 
         return resolution
@@ -308,7 +446,7 @@ class DeliveryPipline:
         Пропускает итем, для последующей обработки вручную, при условии,
         что у клипа установлен дефолтный цвет 'Blue'.
         """
-        if item.clip_color == COLORS[4]:
+        if item.clip_color == SETTINGS["colors"][4]:
             return True
 
     def start_render(self, render_job) -> bool:
@@ -340,7 +478,7 @@ class DeliveryPipline:
             
             self.timeline.SetTrackEnable("video", track_number, True)
 
-    def remove_transform(self, item):
+    def remove_transform(self, item) -> None:
         """
         Удаляет трансформы и кроппинг с таймлайн итема.
         """
@@ -358,6 +496,33 @@ class DeliveryPipline:
         item.SetProperty("Opacity", 100)
         item.SetProperty("CropSoftness", 0.000)
 
+    def validate(self, video_tracks) -> bool:
+        """
+        Валидирует итемы сразу на всей дорожке.
+        """
+        warnings = []
+        for track in video_tracks:
+
+            track_items = self.get_mediapoolitems(start_track=track, end_track=track)
+            for item in track_items:
+
+                clip = item.mp_item
+                if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
+                    warnings.append(f"Обнаружено расширение mov/mp4/jpg у клипа '{clip.GetName()}'")
+                try:
+                    if not item.clip_color == SETTINGS["colors"][4]:
+                        self.get_handles(item, hide_log=True)
+                except ZeroDivisionError:
+                    warnings.append(f"Фриз-фрейм или однокадровый клип {clip.GetName()} рендерятся без захлестов")
+                except ValueError:
+                    warnings.append(f"У клипа {clip.GetName()} ретайм свыше 1000%")
+
+        if warnings:
+            self.signals.warning_signal.emit("\n".join(warnings))
+            return False
+        
+        return True
+            
     def run(self):
         """
         Логика конвеера рендера.
@@ -373,6 +538,7 @@ class DeliveryPipline:
         self.width_res_glob = self.user_config["resolution_width"]
         self.render_path = self.user_config["render_path"]
         self.export_bool = self.user_config["export_xml"]
+        self.boe_fix = self.user_config["boe_fix"]
 
         video_tracks = self.get_tracks()
         if video_tracks == []:
@@ -381,6 +547,9 @@ class DeliveryPipline:
 
         project_preset_var = self.set_project_preset()
         if not project_preset_var:
+            return False
+        
+        if not self.validate(video_tracks):
             return False
 
         # Цикл по дорожкам(по основному и допплейтам, если таковые имеются).
@@ -431,7 +600,7 @@ class DeliveryPipline:
             self.export_timeline()
         self.signals.success_signal.emit(f"Рендер успешно завершен!")
 
-class RenderWorker(QThread):
+class ThreadWorker(QThread):
     """
     Запуск логики из отдельного потока.
     """
@@ -439,37 +608,48 @@ class RenderWorker(QThread):
     warning_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, parent, user_config):
+    def __init__(self, parent, logic_class, user_config):
         super().__init__(parent)
         self.user_config = user_config
+        self.logic_class = logic_class
 
     def run(self):
         try:
-            logic = DeliveryPipline(self.user_config, self)
+            logic = self.logic_class(self.user_config, self)
             success = logic.run()
+
         except Exception as e:
-            self.error_signal.emit(f"Ошибка программы {e}")
+            self.error_signal(f"Ошибка программы {e}")
 
 class ConfigValidator:
     """
     Класс собирает и валидирует пользовательские данные.
     """
-    def __init__(self, gui):
+    def __init__(self, gui, mode="conform"):
         self.gui = gui
+        self.mode = mode
         self.errors = []
 
     def collect_config(self) -> dict:
         """
         Собирает пользовательские данные из GUI.
         """
-        return {
-            "resolution_height": self.gui.height_input.text().strip(),
-            "resolution_width": self.gui.width_input.text().strip(),
-            "project_preset": self.gui.preset_combo.currentText().strip(),
-            "handles": self.gui.handle_input.text().strip(),
-            "render_path": self.gui.render_path.text().strip(),
-            "export_xml": self.gui.export_cb.isChecked()
-        }
+        if self.mode == "conform":
+            return {
+                "resolution_height": self.gui.height_input.text().strip(),
+                "resolution_width": self.gui.width_input.text().strip(),
+                "project_preset": self.gui.preset_combo.currentText().strip(),
+                "handles": self.gui.handle_input.text().strip(),
+                "render_path": self.gui.render_path.text().strip(),
+                "export_xml": self.gui.export_cb.isChecked(),
+                "boe_fix": self.gui.boe_fix_cb.isChecked()
+            }
+        if self.mode == "names":
+            return {"track_number": self.gui.from_track_qline.text().strip(),
+                    "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
+                    "set_name_from_track": self.gui.from_track_cb.isChecked(),
+                    "fps": self.gui.fps_entry.text(),
+                    "locator_from": self.gui.locator_from_combo.currentText()}
     
     def validate(self, user_config: dict) -> bool:
         """
@@ -477,16 +657,25 @@ class ConfigValidator:
         """
         self.errors.clear()
 
-        if not user_config["render_path"]:
-            self.errors.append("Укажите путь для рендера")
+        if self.mode == "conform":
+            if not user_config["render_path"]:
+                self.errors.append("Укажите путь для рендера")
 
-        try:
-            int(user_config["resolution_height"])
-            int(user_config["resolution_width"])
-            int(user_config["handles"])
-        except ValueError:
-            self.errors.append("Значения должны быть целыми числами")
-        return not self.errors
+            try:
+                int(user_config["resolution_height"])
+                int(user_config["resolution_width"])
+                int(user_config["handles"])
+            except ValueError:
+                self.errors.append("Значения должны быть целыми числами")
+            return not self.errors
+
+        if self.mode == "names":
+            try:
+                int(user_config["track_number"])
+                int(user_config["fps"])
+            except ValueError:
+                self.errors.append("Значения должны быть целыми числами")
+            return not self.errors    
 
     def get_errors(self) -> list:
         return self.errors
@@ -496,8 +685,24 @@ class ExrDelivery(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EXR Delivery")
-        self.resize(600, 200)
+        self.resize(650, 200)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+
+        self.fps_label = QLabel("FPS:")
+        self.fps_entry = QLineEdit("24")
+        self.fps_entry.setFixedWidth(50)
+
+        self.locator_label = QLabel("name from:")
+        self.locator_from_combo = QComboBox()
+        self.locator_from_combo.setFixedWidth(70)
+        self.locator_from_combo.addItems(["name", "note"])
+
+        self.from_track_cb = QCheckBox("from track:")
+        self.from_track_qline = QLineEdit("1")
+        self.from_track_qline.setMaximumWidth(40)
+        self.from_markers_cb = QCheckBox("from markers")
+        self.set_names_btn = QPushButton("Set Names")
+        self.set_names_btn.clicked.connect(lambda: self.run(NameSetter, mode="names", button=self.set_names_btn))
 
         self.res_group = QGroupBox("Resolution")
         self.res_group.setFixedHeight(70)
@@ -513,6 +718,7 @@ class ExrDelivery(QWidget):
         self.export_cb = QCheckBox("Export .xml")
         self.handle_input = QLineEdit("3")
         self.handle_input.setFixedWidth(40)
+        self.boe_fix_cb = QCheckBox("BOE Fix")
 
         self.render_path = QLineEdit()
         self.browse_btn = QPushButton("Choose")
@@ -522,6 +728,29 @@ class ExrDelivery(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
+
+        # -- Группа установки имен клипов
+        step2_group = QGroupBox("Clip Name")
+        step2_group.setMinimumHeight(120)
+        names_layout = QVBoxLayout()
+        input_track_layout = QHBoxLayout()
+        btn_layout = QHBoxLayout()
+        input_track_layout.addWidget(self.from_track_cb)
+        input_track_layout.addWidget(self.from_track_qline)
+        input_track_layout.addSpacing(40)
+        input_track_layout.addWidget(self.from_markers_cb)
+        input_track_layout.addSpacing(20)
+        input_track_layout.addWidget(self.locator_label)
+        input_track_layout.addWidget(self.locator_from_combo)
+        input_track_layout.addSpacing(20)
+        input_track_layout.addWidget(self.fps_label)
+        input_track_layout.addWidget(self.fps_entry)
+        input_track_layout.addStretch()
+        btn_layout.addWidget(self.set_names_btn)
+        names_layout.addLayout(input_track_layout)
+        names_layout.addLayout(btn_layout)
+        step2_group.setLayout(names_layout)
+        layout.addWidget(step2_group)
 
         # --- Разрешение ---
         res_layout = QHBoxLayout()
@@ -542,6 +771,8 @@ class ExrDelivery(QWidget):
         preset_layout.addWidget(self.handle_input)
         preset_layout.addSpacing(20)
         preset_layout.addWidget(self.export_cb)
+        preset_layout.addSpacing(20)
+        preset_layout.addWidget(self.boe_fix_cb)
         
         preset_layout.addStretch()
         layout.addLayout(preset_layout)
@@ -556,7 +787,7 @@ class ExrDelivery(QWidget):
 
         # --- Кнопка запуска ---
         self.run_button = QPushButton("Start")
-        self.run_button.clicked.connect(self.run_render)
+        self.run_button.clicked.connect(lambda: self.run(DeliveryPipline, mode="conform", button=self.run_button))
         layout.addWidget(self.run_button)
 
         palette_widget = self.create_color_palette()
@@ -631,23 +862,30 @@ class ExrDelivery(QWidget):
         if folder:
             self.render_path.setText(folder)
 
-    def run_render(self):
+    def run(self, logic_class, mode, button=None):
+        """
+        :param logic_class: Класс логики, который будет запущен.
 
-        self.validator = ConfigValidator(self)
+        :param mode: Мод логики. Используется при валидации.
+
+        :param button: Кнопка, которая была запущена в GUI.
+        """
+        self.validator = ConfigValidator(self, mode=mode)
         self.user_config = self.validator.collect_config()
-
         if not self.validator.validate(self.user_config):
             self.on_error_signal("\n".join(self.validator.get_errors()))
             return
    
         logger.info(f"\n\n{pformat(self.user_config)}\n")
-        self.render_thread = RenderWorker(self, self.user_config)
-        self.run_button.setEnabled(False)
-        self.render_thread.finished.connect(lambda: self.run_button.setEnabled(True))
-        self.render_thread.success_signal.connect(self.on_success_signal)
-        self.render_thread.warning_signal.connect(self.on_warning_signal)
-        self.render_thread.error_signal.connect(self.on_error_signal)
-        self.render_thread.start()
+        thread = ThreadWorker(self, logic_class, self.user_config)
+        thread.success_signal.connect(self.on_success_signal)
+        thread.warning_signal.connect(self.on_warning_signal)
+        thread.error_signal.connect(self.on_error_signal)
+
+        if button:
+            button.setEnabled(False)
+            thread.finished.connect(lambda: button.setEnabled(True))
+        thread.start()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
