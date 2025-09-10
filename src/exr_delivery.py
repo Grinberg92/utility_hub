@@ -282,7 +282,8 @@ class DeliveryPipline:
             width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
             if self.boe_fix:
-                calculate_width = "2498"
+                if calculate_width == "2500":
+                    calculate_width = "2498"
             resolution = "x".join([calculate_width, self.height_res_glob])
             return resolution
         
@@ -501,21 +502,29 @@ class DeliveryPipline:
         Валидирует итемы сразу на всей дорожке.
         """
         warnings = []
-        for track in video_tracks:
+        no_select = True
+        for track_num, track in enumerate(video_tracks, start=2):
 
             track_items = self.get_mediapoolitems(start_track=track, end_track=track)
             for item in track_items:
 
                 clip = item.mp_item
                 if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
-                    warnings.append(f"Обнаружено расширение mov/mp4/jpg у клипа '{clip.GetName()}'")
+                    warnings.append(f"Обнаружено расширение mov/mp4/jpg у клипа '{clip.GetName()}' на треке {track_num}")
+
+                if not item.clip_color == SETTINGS["colors"][4]:
+                    no_select = False
+
                 try:
                     if not item.clip_color == SETTINGS["colors"][4]:
                         self.get_handles(item, hide_log=True)
                 except ZeroDivisionError:
-                    warnings.append(f"Фриз-фрейм или однокадровый клип {clip.GetName()} рендерятся без захлестов")
+                    warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} рендерится с захлестами")
                 except ValueError:
-                    warnings.append(f"У клипа {clip.GetName()} ретайм свыше 1000%")
+                    warnings.append(f"У клипа '{clip.GetName()}' на треке {track_num} ретайм свыше 1000%")
+
+        if no_select:
+            warnings.append("Не выбран ни один клип на таймлайне")
 
         if warnings:
             self.signals.warning_signal.emit("\n".join(warnings))
@@ -542,7 +551,7 @@ class DeliveryPipline:
 
         video_tracks = self.get_tracks()
         if video_tracks == []:
-            self.signals.warning_signal.emit("Отсутствуют клипы для обработки.")
+            self.signals.warning_signal.emit("Отсутствуют клипы для обработки")
             return False
 
         project_preset_var = self.set_project_preset()
