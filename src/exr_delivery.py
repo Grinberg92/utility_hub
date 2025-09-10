@@ -281,6 +281,7 @@ class DeliveryPipline:
             aspect = clip.GetClipProperty('PAR')
             width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            # Временный фикс
             if self.boe_fix:
                 if calculate_width == "2500":
                     calculate_width = "2498"
@@ -305,6 +306,7 @@ class DeliveryPipline:
             aspect = clip.GetClipProperty('PAR')
             width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+            # Временный фикс
             width_1_5 = str(int(int(calculate_width) * 1.5))
             if self.boe_fix:
                 if width_1_5 == "3750":
