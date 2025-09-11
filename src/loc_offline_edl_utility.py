@@ -56,8 +56,9 @@ class LogicProcessor:
             clips = self.timeline.GetItemListInTrack('video', self.track_number)
             for clip in clips:
                 clip_name = clip.GetName()
-                clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
-                self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+                if re.search(SETTINGS["shot_name"], clip_name):
+                    clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
+                    self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
             logger.info("Маркеры успешно установлены.")
             return True
         except Exception as e:
