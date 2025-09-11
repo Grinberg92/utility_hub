@@ -74,7 +74,7 @@ class NameSetter:
             markers_list = []
             for timecode, name in self.timeline.GetMarkers().items():
                 name = name[self.marker_from].strip()
-                timecode_marker = tc(self.fps, frames=timecode + self.timeline_start_tc) + 1  
+                timecode_marker = tc(self.fps, frames=timecode + self.timeline_start_tc)   
                 markers_list.append((name, timecode_marker))
             return markers_list
         except Exception as e:
@@ -88,6 +88,45 @@ class NameSetter:
         for item in self.timeline.GetItemListInTrack(track_type, track):
             if item.GetName() == "Text+":
                 return True
+            
+    def from_markers(self) -> None:
+        """
+        Присвоение имен из маркеров.
+        """
+        markers = self.get_markers()
+
+        for track_index in range(2, self.count_of_tracks):
+            clips_under = self.timeline.GetItemListInTrack('video', track_index)
+            for clip_under in clips_under:
+                applied = False  # было ли имя присвоено этому текущему clip_under
+                for name, timecode in markers:
+                    if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
+                        # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
+                        name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        clip_under.AddVersion(name_new, 0)
+                        logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
+                        applied = True
+
+                if not applied:
+                    self.warnings.append(f"Для клипа {clip_under.GetName()} не было установлено имя")
+
+    def from_offline(self, items) -> None:
+        """
+        Присвоение имен из оффлайн клипов.
+        """
+        for item in items:
+            clipName = item.GetName()
+
+            for track_index in range(2, self.count_of_tracks):
+                clips_under = self.timeline.GetItemListInTrack('video', track_index)
+                if clips_under:
+                    for clip_under in clips_under:
+                        
+                        if clip_under.GetStart() == item.GetStart():
+                            # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
+                            name = clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
+                            clip_under.AddVersion(name, 0)
+                            logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
 
     def set_name(self, items):
         """
@@ -98,40 +137,22 @@ class NameSetter:
         В случае получения имен из маркеров - имена применяются на все клипы, которые лежат ниже маркера. 
         Таймкод маркера должен быть внутри таймкода такого клипа.
         """
-        try:
-            items = self.timeline.GetItemListInTrack('video', int(self.track_number))
-            self.count_of_tracks = self.timeline.GetTrackCount('video')
+        self.warnings = []
 
+        try:
             if self.name_from_markers:
-                markers = self.get_markers()
-                for name, timecode in markers:
-                    for track_index in range(2, self.count_of_tracks):
-                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
-                        for clip_under in clips_under:
-                            if clip_under.GetStart() <= timecode <= (clip_under.GetStart() + clip_under.GetDuration()):
-                                # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
-                                name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
-                                clip_under.AddVersion(name_new, 0)
-                                logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
+                self.from_markers()
 
             elif self.name_from_track:
-                for item in items:
-                    clipName = item.GetName()
+                self.from_offline(items)
 
-                    for track_index in range(2, self.count_of_tracks):
-                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
-                        if clips_under:
-                            
-                            for clip_under in clips_under:
-
-                                if clip_under.GetStart() == item.GetStart():
-                                    # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
-                                    name = clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
-                                    clip_under.AddVersion(name, 0)
-                                    logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
-
-            logger.info("Имена успешно применены на клипы.")
+            if self.warnings:
+                self.signals.warning_signal.emit("\n".join(self.warnings))
+                return False
+            else:
+                logger.info("Имена успешно применены на клипы.")
             return True
+        
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
             return False    
@@ -162,9 +183,10 @@ class NameSetter:
             self.signals.warning_signal.emit(f"На дорожке {self.track_number} отсутствуют объекты.")
             return
         
-        self.set_name(items)
+        if not self.set_name(items):
+            return
 
-        self.signals.success_signal.emit("Имена из оффлайн клипов успешно применены")
+        self.signals.success_signal.emit("Имена успешно применены!")
 
 class DeliveryPipline:
     """
@@ -516,7 +538,7 @@ class DeliveryPipline:
 
                 clip = item.mp_item
                 if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
-                    warnings.append(f"Обнаружено расширение mov/mp4/jpg у клипа '{clip.GetName()}' на треке {track_num}")
+                    warnings.append(f"Обнаружено расширение {SETTINGS['false_extentions']} у клипа '{clip.GetName()}' на треке {track_num}")
 
                 if not item.clip_color == SETTINGS["colors"][4]:
                     no_select = False
@@ -525,7 +547,7 @@ class DeliveryPipline:
                     if not item.clip_color == SETTINGS["colors"][4]:
                         self.get_handles(item, hide_log=True)
                 except ZeroDivisionError:
-                    warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} рендерится с захлестами")
+                    warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен идти на рендер без захлестов")
                 except ValueError:
                     warnings.append(f"У клипа '{clip.GetName()}' на треке {track_num} ретайм свыше 1000%")
 
@@ -694,7 +716,6 @@ class ConfigValidator:
 
     def get_errors(self) -> list:
         return self.errors
-        
 
 class ExrDelivery(QWidget):
     def __init__(self):
@@ -716,7 +737,7 @@ class ExrDelivery(QWidget):
         self.from_track_qline = QLineEdit("1")
         self.from_track_qline.setMaximumWidth(40)
         self.from_markers_cb = QCheckBox("from markers")
-        self.set_names_btn = QPushButton("Set Names")
+        self.set_names_btn = QPushButton("Start")
         self.set_names_btn.clicked.connect(lambda: self.run(NameSetter, mode="names", button=self.set_names_btn))
 
         self.res_group = QGroupBox("Resolution")
@@ -745,7 +766,7 @@ class ExrDelivery(QWidget):
         layout = QVBoxLayout()
 
         # -- Группа установки имен клипов
-        step2_group = QGroupBox("Clip Name")
+        step2_group = QGroupBox("Set Name")
         step2_group.setMinimumHeight(120)
         names_layout = QVBoxLayout()
         input_track_layout = QHBoxLayout()
@@ -861,8 +882,8 @@ class ExrDelivery(QWidget):
         palette_group.setLayout(main_layout)
         return palette_group
 
-    def on_success_signal(self):
-        QMessageBox.information(self, "Успех", "Рендер успешно завершен")
+    def on_success_signal(self, message):
+        QMessageBox.information(self, "Успех", message)
 
     def on_warning_signal(self, message):
         QMessageBox.warning(self, "Предупреждение", message)
