@@ -8,6 +8,7 @@ import sys
 import os
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
+from dvr_tools.resolve_utils import ResolveObjects
 
 logger = get_logger(__file__)
 
@@ -25,13 +26,16 @@ class TransferWorker(QThread):
         self.lut_name = lut_name
 
     def run(self):
+        """
+        Основная логика.
+        """
         try:
-            project = self.parent.project_manager.GetCurrentProject()
+            project = self.parent.project
             if not project:
                 self.error.emit("Проект не найден.")
                 return
 
-            timeline = project.GetCurrentTimeline()
+            timeline = self.parent.timeline
             if not timeline:
                 self.error.emit("Таймлайн не найден.")
                 return
@@ -41,13 +45,6 @@ class TransferWorker(QThread):
 
             if not target_clips:
                 self.error.emit("На целевой дорожке нет клипов.")
-                return
-            
-            # Проверка на отсутствие ЦК в target_clips
-            if (any(map(lambda x: x > 1, [clip.GetNumNodes() for clip in target_clips])) or 
-                any(filter(lambda x: x is not None,  [clip.GetNodeGraph(1).GetToolsInNode(1) for clip in target_clips]))):
-
-                self.error.emit("На выбранной дорожке присутствует ЦК.")
                 return
 
             def find_clip_on_track(track_clips, start_timecode):
@@ -146,16 +143,35 @@ class ColorGradeApplyApp(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def refresh_timeline_data(self):
-        self.project = self.project_manager.GetCurrentProject()
+        try:
+            resolve = ResolveObjects()
+        except RuntimeError:
+            self.show_error("Нет подключения к API Resolve.")
+
+        self.project = resolve.project
+        self.timeline = resolve.timeline
+
         if not self.project:
             self.show_error("Ошибка", "Проект не найден.")
             return
 
-        self.timeline = self.project.GetCurrentTimeline()
         if not self.timeline:
             self.show_error("Ошибка", "Таймлайн не найден.")
             return
+        
+    def is_cc(self, target_track) -> bool:
+        """
+        Проверка на отсутствие ЦК в target_clips.
+        """
+        target_clips = self.timeline.GetItemListInTrack("video", target_track)
+        # Больше одной ноды
+        has_nodes = any(clip.GetNumNodes() > 1 for clip in target_clips)
+        # Есть ЦК в ноде
+        has_tools = any(bool(clip.GetNodeGraph(1).GetToolsInNode(1)) for clip in target_clips)
 
+        return has_nodes or has_tools
+
+    
     def start_transfer(self):
 
         logger.debug("Запуск скрипта")
@@ -169,6 +185,18 @@ class ColorGradeApplyApp(QMainWindow):
 
         selected_lut = self.lut_combobox.currentText()
 
+        if self.is_cc(target_track):
+            reply = QMessageBox.question(
+                self,
+                "Подтверждение",
+                "На выбранной дорожке присутствует ЦК.\nВы уверены, что хотите продолжить?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply == QMessageBox.No:
+                return  
+
         logger.debug("\n".join(("SetUp:", f"Source Track: {source_track}", f"Target Track: {target_track}", f"Select LUT: {selected_lut}")))
         self.worker = TransferWorker(self, source_track, target_track, selected_lut)
         self.worker.error.connect(lambda msg: self.show_error("Ошибка", msg))
@@ -178,12 +206,10 @@ class ColorGradeApplyApp(QMainWindow):
     def show_error(self, title, message):
         QMessageBox.critical(self, title, message)
         logger.exception(message)
-        
 
     def show_info(self, title, message):
         QMessageBox.information(self, title, message)
         logger.debug(message)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
