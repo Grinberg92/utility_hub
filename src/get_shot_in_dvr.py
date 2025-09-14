@@ -14,6 +14,9 @@ from dvr_tools.css_style import apply_style
 
 logger = get_logger(__file__)
 
+SETTINGS = {
+    "extentions": (".exr", ".jpg", ".tif", ".tiff", ".png")
+}
 
 class WorkerThread(QThread):
     finished_signal = pyqtSignal()
@@ -244,7 +247,7 @@ class GetShotDvr(QWidget):
             all_files = []
             for root, _, files in os.walk(seq_path):
                 for file in files:
-                    if file.endswith((".exr", ".jpg")):
+                    if file.lower().endswith(SETTINGS['extentions']):
                         all_files.append((root, file))
 
             total = len(all_files)
