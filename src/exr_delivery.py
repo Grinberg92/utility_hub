@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox, QTextEdit
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QEventLoop
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveObjects
@@ -253,7 +253,7 @@ class DeliveryPipline:
             self.timeline.SetTrackEnable("video", track_number, track_number == current_track_number)
         logger.info(f"Начало работы с {current_track_number} треком")
 
-    def get_handles(self, timeline_item, hide_log=False) -> str:
+    def get_handles(self, timeline_item, hide_log=True) -> str:
         '''
         Получаем значения захлестов.
         '''
@@ -525,11 +525,33 @@ class DeliveryPipline:
         item.SetProperty("Opacity", 100)
         item.SetProperty("CropSoftness", 0.000)
 
+    def is_question_items(self, warnings) -> bool:
+        """
+        Обрабатываем false_extentions через диалоговое окно потока gui.
+        """
+        text = "\n".join([f"• '{name}' на треке {track}" for name, track in warnings])
+        message = f"Обнаружены проблемные клипы:\n{text}\n\nХотите продолжить?"
+
+        loop = QEventLoop()
+        user_choice = {}
+
+        def callback(result):
+            user_choice["answer"] = result
+            loop.quit()
+
+        self.signals.warning_question_signal.emit(message, callback)
+
+        loop.exec_()  
+
+        if user_choice["answer"] == QMessageBox.No:
+            return True
+
     def validate(self, video_tracks) -> bool:
         """
         Валидирует итемы сразу на всей дорожке.
         """
         warnings = []
+        warnings_question = []
         no_select = True
         for track_num, track in enumerate(video_tracks, start=2):
 
@@ -538,14 +560,14 @@ class DeliveryPipline:
 
                 clip = item.mp_item
                 if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
-                    warnings.append(f"Обнаружено расширение {SETTINGS['false_extentions']} у клипа '{clip.GetName()}' на треке {track_num}")
+                    warnings_question.append((clip.GetName(), track_num))
 
                 if not item.clip_color == SETTINGS["colors"][4]:
                     no_select = False
 
                 try:
                     if not item.clip_color == SETTINGS["colors"][4]:
-                        self.get_handles(item, hide_log=True)
+                        self.get_handles(item, hide_log=False)
                 except ZeroDivisionError:
                     warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен идти на рендер без захлестов")
                 except ValueError:
@@ -553,6 +575,10 @@ class DeliveryPipline:
 
         if no_select:
             warnings.append("Не выбран ни один клип на таймлайне")
+
+        if warnings_question:
+            if self.is_question_items(warnings_question):
+                return False
 
         if warnings:
             self.signals.warning_signal.emit("\n".join(warnings))
@@ -644,6 +670,7 @@ class ThreadWorker(QThread):
     success_signal = pyqtSignal(str)
     warning_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
+    warning_question_signal = pyqtSignal(str, object)
 
     def __init__(self, parent, logic_class, user_config):
         super().__init__(parent)
@@ -884,6 +911,7 @@ class ExrDelivery(QWidget):
 
     def on_success_signal(self, message):
         QMessageBox.information(self, "Успех", message)
+        logger.info(message)
 
     def on_warning_signal(self, message):
         QMessageBox.warning(self, "Предупреждение", message)
@@ -892,6 +920,17 @@ class ExrDelivery(QWidget):
     def on_error_signal(self, message):
         QMessageBox.critical(self, "Ошибка", message)
         logger.exception(message)
+
+    def on_question_signal(self, message, callback):
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        logger.warning(message)
+        callback(reply)
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Выбор папки")
@@ -917,6 +956,7 @@ class ExrDelivery(QWidget):
         thread.success_signal.connect(self.on_success_signal)
         thread.warning_signal.connect(self.on_warning_signal)
         thread.error_signal.connect(self.on_error_signal)
+        thread.warning_question_signal.connect(self.on_question_signal)
 
         if button:
             button.setEnabled(False)
