@@ -95,7 +95,7 @@ class NameSetter:
         """
         markers = self.get_markers()
 
-        for track_index in range(2, self.count_of_tracks):
+        for track_index in range(2, self.count_of_tracks + 1):
             clips_under = self.timeline.GetItemListInTrack('video', track_index)
             for clip_under in clips_under:
                 applied = False  # было ли имя присвоено этому текущему clip_under
@@ -117,7 +117,7 @@ class NameSetter:
         for item in items:
             clipName = item.GetName()
 
-            for track_index in range(2, self.count_of_tracks):
+            for track_index in range(2, self.count_of_tracks + 1):
                 clips_under = self.timeline.GetItemListInTrack('video', track_index)
                 if clips_under:
                     for clip_under in clips_under:
