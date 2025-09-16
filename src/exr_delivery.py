@@ -464,6 +464,7 @@ class DeliveryPipline:
         render_job = self.project.AddRenderJob()
 
         if set_render is not None and render_job is not None:
+            self.rj_to_clear.append(render_job)
             logger.info(f"Запустился рендер клипа {clip.mp_item.GetName()} с разрешением {width}x{height}")
             return True, render_job
         else:
@@ -585,7 +586,14 @@ class DeliveryPipline:
             return False
         
         return True
-            
+    
+    def clear_render_jobs(self, render_jobs) -> None:
+        """
+        Очищаем render queue от всех созданных render jobs в процессе работы.
+        """
+        for job in render_jobs:
+            self.project.DeleteRenderJob(job)
+
     def run(self):
         """
         Логика конвеера рендера.
@@ -602,6 +610,8 @@ class DeliveryPipline:
         self.render_path = self.user_config["render_path"]
         self.export_bool = self.user_config["export_xml"]
         self.boe_fix = self.user_config["boe_fix"]
+
+        self.rj_to_clear = []
 
         video_tracks = self.get_tracks()
         if video_tracks == []:
@@ -658,6 +668,7 @@ class DeliveryPipline:
             self.stop_process()
             self.resolve.OpenPage("edit")
 
+        self.clear_render_jobs(self.rj_to_clear)
         self.set_enabled()
         if self.export_bool:    
             self.export_timeline()
