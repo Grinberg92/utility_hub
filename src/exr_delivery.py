@@ -59,7 +59,7 @@ class NameSetter:
         except RuntimeError as re:
             raise
 
-    def set_markers(self, item, clip_name):
+    def set_markers(self, item, clip_name) -> None:
         """
         Установка маркера посередине клипа на таймлайне.
         """
@@ -120,7 +120,7 @@ class NameSetter:
                             clip_under.AddVersion(name, 0)
                             logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
 
-    def set_name(self, items):
+    def set_name(self, items) -> bool:
         """
         Метод устанавливает имя полученное из маркеров или оффлайн клипов на таймлайне Resolve 
         и применяет его в атрибут Versions на все итемы по двум принципам.
@@ -149,7 +149,7 @@ class NameSetter:
             self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
             return False    
 
-    def run(self):
+    def run(self) -> None:
         """
         Основная логика.
         """
@@ -397,7 +397,7 @@ class DeliveryPipline:
 
         return resolution
     
-    def stop_process(self):
+    def stop_process(self) -> None:
         """
         Приостановка конвеера, пока идет процесс рендера текущего итема.
         """
@@ -420,14 +420,14 @@ class DeliveryPipline:
         self.signals.error_signal.emit(f"Не удалось применить пресет рендера {handles_value}")
         return False 
             
-    def set_project_resolution(self, height_res, width_res):
+    def set_project_resolution(self, height_res, width_res) -> None:
         """
         Установка проектного разрешения перед рендером.
         """
         self.project.SetSetting("timelineResolutionHeight", height_res)
         self.project.SetSetting("timelineResolutionWidth", width_res)
             
-    def set_render_settings(self, clip, clip_resolution):
+    def set_render_settings(self, clip, clip_resolution) -> tuple:
         '''
         Метод задает настройки для  рендера текущего итема 
         и добавляет текущий render job в очередь.
@@ -440,7 +440,7 @@ class DeliveryPipline:
             logger.info(f"Установлено разрешение с настройках рендера: {width}x{height}")
         except Exception as e:
             self.signals.error_signal.emit(f"Не удалось вычислить разрешение {resolution}: {e}")
-            return False
+            return False, None
         
         self.set_project_resolution(height, width)
 
@@ -482,7 +482,7 @@ class DeliveryPipline:
             return False
         return True
     
-    def export_timeline(self):
+    def export_timeline(self) -> None:
         """
         Экспорт таймлайна после окончания рендера в формате xml.
 
@@ -495,7 +495,7 @@ class DeliveryPipline:
         else:
             logger.info(f"Таймлайн {xml_name} успешно экспортирован")
 
-    def set_enabled(self):
+    def set_enabled(self) -> None:
 
         for track_number in range(1, self.max_track + 1):
             
@@ -563,7 +563,7 @@ class DeliveryPipline:
                     if not item.clip_color == SETTINGS["colors"][4]:
                         self.get_handles(item, hide_log=False)
                 except ZeroDivisionError:
-                    warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен идти на рендер без захлестов")
+                    warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен рендериться без захлестов")
                 except ValueError:
                     warnings.append(f"У клипа '{clip.GetName()}' на треке {track_num} ретайм свыше 1000%")
 
@@ -587,7 +587,7 @@ class DeliveryPipline:
         for job in render_jobs:
             self.project.DeleteRenderJob(job)
 
-    def run(self):
+    def run(self) -> None:
         """
         Логика конвеера рендера.
         """
@@ -743,6 +743,9 @@ class ConfigValidator:
                 int(user_config["fps"])
             except ValueError:
                 self.errors.append("Значения должны быть целыми числами")
+
+            if not user_config["set_name_from_markers"] or user_config["set_name_from_track"]:
+                self.errors.append("Укажите метод установки имени")
             return not self.errors    
 
     def get_errors(self) -> list:
