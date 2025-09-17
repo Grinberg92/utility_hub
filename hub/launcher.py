@@ -124,9 +124,15 @@ class HubApp(QWidget):
             description_text="Конвертация расшота из Excel в локаторы для Avid",
             script_name="excel_to_locs.py"
         )
+        row23 = self.create_button_description_row(
+            button_name="EDL Filter",
+            description_text="Фильтрация EDL-файла по списку запрашиваемых номеров шотов",
+            script_name="edl_filter.py"
+        )
         other_layout.addLayout(row20)
         other_layout.addLayout(row21)
         other_layout.addLayout(row22)
+        other_layout.addLayout(row23)
 
         other_box.setLayout(other_layout)
         other_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
