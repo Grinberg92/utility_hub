@@ -81,14 +81,6 @@ class NameSetter:
             self.signals.error_signal.emit(f"Ошибка получения данных об объектах маркеров: {e}")
             return False
 
-    def is_effect(self, track, track_type="video"):
-        """
-        Проверка на предмет наличия дорожки с эффектами.
-        """
-        for item in self.timeline.GetItemListInTrack(track_type, track):
-            if item.GetName() == "Text+":
-                return True
-            
     def from_markers(self) -> None:
         """
         Присвоение имен из маркеров.
@@ -176,12 +168,13 @@ class NameSetter:
 
         items = self.timeline.GetItemListInTrack('video', self.track_number)
 
-        if items is None:
-            self.signals.warning_signal.emit(f"Дорожка {self.track_number} не существует.")
-            return
-        if items == []:
-            self.signals.warning_signal.emit(f"На дорожке {self.track_number} отсутствуют объекты.")
-            return
+        if self.name_from_track:
+            if items is None:
+                self.signals.warning_signal.emit(f"Дорожка {self.track_number} не существует.")
+                return
+            if items == []:
+                self.signals.warning_signal.emit(f"На дорожке {self.track_number} отсутствуют объекты.")
+                return
         
         if not self.set_name(items):
             return
