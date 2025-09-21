@@ -276,7 +276,7 @@ class RenderPipline:
                 suffix = "main_cam" if is_main else "mixed"
                 timeline_name = f"tmln_{res}_{suffix}_{random_number}"
 
-                if is_main and self.apply_arri_cdl:
+                if is_main and self.apply_arri_cdl and self.lut_to_log:
 
                     timeline = self.media_pool.ImportTimelineFromFile(self.timeline_preset_path) # Импорт шаблона таймлайна с loc4 to rec709 трансформом
                         
@@ -295,6 +295,11 @@ class RenderPipline:
                     timeline = self.media_pool.CreateEmptyTimeline(timeline_name)
                     self.project.SetCurrentTimeline(timeline)
                     self.media_pool.AppendToTimeline(clips)
+                    if not self.lut_to_log and is_main:
+                        timeline.SetSetting('useCustomSettings', '1')
+                        timeline.SetSetting("colorScienceMode", "davinciYRGB")
+                        self.set_import_timeline_resolution(timeline_name, timeline)
+                        
 
                 if timeline:
                     logger.info(f"Создан таймлайн: {timeline_name}")
@@ -485,6 +490,7 @@ class RenderPipline:
         self.timeline_preset_path = self.user_config["timeline_preset_path"]
         self.media_pool = self.user_config["media_pool"] # Тянем медиапул который использовался в GUI
         self.project = self.user_config["project_resolve"]
+        self.lut_to_log = self.user_config["LUT_to_log"]
 
         self.obj = ResolveObjects()
         self.resolve = self.obj.resolve_obj
@@ -639,7 +645,8 @@ class ConfigValidator:
             "timeline_preset_path": self.gui.timeline_preset_path, 
             "burnin_path": self.gui.burn_in_base_path,
             "media_pool": self.gui.media_pool,
-            "project_resolve": self.gui.project
+            "project_resolve": self.gui.project,
+            "LUT_to_log": self.gui.log_rb.isChecked()
         }
         
     def validate(self, user_config: dict) -> bool:
@@ -714,6 +721,10 @@ class ResolveGUI(QWidget):
         self.auto_sync_checkbox = QCheckBox("Sync Audio")
         self.create_sound_folder = QCheckBox("Create 'SOUND' Folder")
         self.source_root_folder = QLineEdit("001_OCF")
+        self.lut_to_label = QLabel("LUT to:")
+        self.log_rb = QRadioButton("log")
+        self.rec709_rb = QRadioButton("rec709")
+        self.log_rb.setChecked(True)
 
         self.burn_in_list = CheckableComboBox()
 
@@ -797,7 +808,13 @@ class ResolveGUI(QWidget):
         self.lut_project.currentTextChanged.connect(self.update_lut_files)
         color_layout.addWidget(QLabel("LUT File:"))
         color_layout.addWidget(self.lut_file)
-        color_layout.addWidget(self.apply_arricdl_lut)
+        self.apply_cdl_layout = QHBoxLayout()
+        self.apply_cdl_layout.addWidget(self.apply_arricdl_lut)
+        self.apply_cdl_layout.addSpacing(60)
+        self.apply_cdl_layout.addWidget(self.lut_to_label)
+        self.apply_cdl_layout.addWidget(self.log_rb)
+        self.apply_cdl_layout.addWidget(self.rec709_rb)
+        color_layout.addLayout(self.apply_cdl_layout) 
         color_group.setLayout(color_layout)
         layout.addWidget(color_group)
 
