@@ -95,7 +95,7 @@ class NameSetter:
                     if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
                         # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
                         name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
-                        clip_under.AddVersion(name_new, 0)
+                        clip_under.SetName(name_new)
                         logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
                         applied = True
 
@@ -117,7 +117,7 @@ class NameSetter:
                         if clip_under.GetStart() == item.GetStart():
                             # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
                             name = clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
-                            clip_under.AddVersion(name, 0)
+                            clip_under.SetName(name)
                             logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
 
     def set_name(self, items) -> bool:
@@ -547,25 +547,29 @@ class DeliveryPipline:
         warnings = []
         warnings_question = []
         no_select = True
-        for track_num, track in enumerate(video_tracks, start=2):
+        try:
+            for track_num, track in enumerate(video_tracks, start=2):
 
-            track_items = self.get_mediapoolitems(start_track=track, end_track=track)
-            for item in track_items:
+                track_items = self.get_mediapoolitems(start_track=track, end_track=track)
+                for item in track_items:
+                    
+                    clip = item.mp_item
 
-                clip = item.mp_item
-                if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
-                    warnings_question.append((clip.GetName(), track_num))
+                    if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
+                        warnings_question.append((clip.GetName(), track_num))    
 
-                if not item.clip_color == SETTINGS["colors"][4]:
-                    no_select = False
-
-                try:
                     if not item.clip_color == SETTINGS["colors"][4]:
-                        self.get_handles(item, hide_log=False)
-                except ZeroDivisionError:
-                    warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен рендериться без захлестов")
-                except ValueError:
-                    warnings.append(f"У клипа '{clip.GetName()}' на треке {track_num} ретайм свыше 1000%")
+                        no_select = False
+
+                    try:
+                        if not item.clip_color == SETTINGS["colors"][4]:
+                            self.get_handles(item, hide_log=False)
+                    except ZeroDivisionError:
+                        warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен рендериться без захлестов")
+                    except ValueError:
+                        warnings.append(f"У клипа '{clip.GetName()}' на треке {track_num} ретайм свыше 1000%")
+        except:
+            warnings.append(f"На таймлайне обнаружен объект не подлежащий верификации")
 
         if no_select:
             warnings.append("Не выбран ни один клип на таймлайне")
