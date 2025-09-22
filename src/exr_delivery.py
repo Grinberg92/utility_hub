@@ -100,30 +100,34 @@ class NameSetter:
                         applied = True
 
                 if not applied:
-                    self.warnings.append(f"Для клипа {clip_under.GetName()} не было установлено имя")
+                    self.warnings.append(f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
 
     def from_offline(self, items) -> None:
         """
         Присвоение имен из оффлайн клипов.
         """
-        for item in items:
-            clipName = item.GetName()
+        for track_index in range(2, self.count_of_tracks + 1):
+            clips_under = self.timeline.GetItemListInTrack('video', track_index)
+            for clip_under in clips_under:
+                applied = False 
 
-            for track_index in range(2, self.count_of_tracks + 1):
-                clips_under = self.timeline.GetItemListInTrack('video', track_index)
-                if clips_under:
-                    for clip_under in clips_under:
-                        
-                        if clip_under.GetStart() == item.GetStart():
-                            # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
-                            name = clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
-                            clip_under.SetName(name)
-                            logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
+                for item in items:
+                    if clip_under.GetStart() == item.GetStart():
+                        # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
+                        name = item.GetName() + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        clip_under.SetName(name)
+                        logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
+                        applied = True
+                        break 
+
+                if not applied:
+                    self.warnings.append(
+                        f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
 
     def set_name(self, items) -> bool:
         """
         Метод устанавливает имя полученное из маркеров или оффлайн клипов на таймлайне Resolve 
-        и применяет его в атрибут Versions на все итемы по двум принципам.
+        и применяет его в имена клипов по двум принципам.
         В случае получения имен из оффлайн клипов - имена применяются на все итемы лежащие ниже оффлайн клипа.
         Стартовый таймкод оффлайн клипа должен пересекаться со стартовыми таймкодами итемов, лежащими под ним.
         В случае получения имен из маркеров - имена применяются на все клипы, которые лежат ниже маркера. 
