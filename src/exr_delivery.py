@@ -748,7 +748,7 @@ class ConfigValidator:
             except ValueError:
                 self.errors.append("Значения должны быть целыми числами")
 
-            if not user_config["set_name_from_markers"] or user_config["set_name_from_track"]:
+            if not any([user_config["set_name_from_markers"], user_config["set_name_from_track"]]):
                 self.errors.append("Укажите метод установки имени")
             return not self.errors    
 
