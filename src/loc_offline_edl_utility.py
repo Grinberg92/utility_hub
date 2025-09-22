@@ -209,52 +209,77 @@ class LogicProcessor:
             self.signals.error_signal.emit(f"Ошибка формирования EDL: {e}")
             return False
         
-    def set_name(self):
+    def from_markers(self) -> None:
+        """
+        Присвоение имен из маркеров.
+        """
+        markers = self.get_markers()
+
+        for track_index in range(2, self.count_of_tracks + 1):
+            clips_under = self.timeline.GetItemListInTrack('video', track_index)
+            for clip_under in clips_under:
+                applied = False  # было ли имя присвоено этому текущему clip_under
+                for name, timecode in markers:
+                    if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
+                        # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
+                        name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        clip_under.SetName(name_new)
+                        logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
+                        applied = True
+
+                if not applied:
+                    self.warnings.append(f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
+
+    def from_offline(self, items) -> None:
+        """
+        Присвоение имен из оффлайн клипов.
+        """
+        for track_index in range(2, self.count_of_tracks + 1):
+            clips_under = self.timeline.GetItemListInTrack('video', track_index)
+            for clip_under in clips_under:
+                applied = False 
+
+                for item in items:
+                    if clip_under.GetStart() == item.GetStart():
+                        # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
+                        name = item.GetName() + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        clip_under.SetName(name)
+                        logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
+                        applied = True
+                        break 
+
+                if not applied:
+                    self.warnings.append(
+                        f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
+
+    def set_name(self, items) -> bool:
         """
         Метод устанавливает имя полученное из маркеров или оффлайн клипов на таймлайне Resolve 
-        и применяет его в атрибут Versions на все итемы по двум принципам.
+        и применяет его в имена клипов по двум принципам.
         В случае получения имен из оффлайн клипов - имена применяются на все итемы лежащие ниже оффлайн клипа.
         Стартовый таймкод оффлайн клипа должен пересекаться со стартовыми таймкодами итемов, лежащими под ним.
         В случае получения имен из маркеров - имена применяются на все клипы, которые лежат ниже маркера. 
         Таймкод маркера должен быть внутри таймкода такого клипа.
         """
-        try:
-            items = self.timeline.GetItemListInTrack('video', int(self.offline_track))
-            self.count_of_tracks = self.timeline.GetTrackCount('video')
+        self.warnings = []
 
+        try:
             if self.name_from_markers:
-                markers = self.get_markers()
-                for name, timecode in markers:
-                    for track_index in range(2, self.count_of_tracks):
-                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
-                        for clip_under in clips_under:
-                            if clip_under.GetStart() <= timecode <= (clip_under.GetStart() + clip_under.GetDuration()):
-                                # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
-                                name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
-                                clip_under.AddVersion(name_new, 0)
-                                logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
+                self.from_markers()
 
             elif self.name_from_track:
-                for item in items:
-                    clipName = item.GetName()
+                self.from_offline(items)
 
-                    for track_index in range(2, self.count_of_tracks):
-                        clips_under = self.timeline.GetItemListInTrack('video', track_index)
-                        if clips_under:
-                            
-                            for clip_under in clips_under:
-
-                                if clip_under.GetStart() == item.GetStart():
-                                    # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
-                                    name = clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
-                                    clip_under.AddVersion(name, 0)
-                                    logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
-
-            logger.info("Имена успешно применены на клипы.")
+            if self.warnings:
+                self.signals.warning_signal.emit("\n".join(self.warnings))
+                return False
+            else:
+                logger.info("Имена успешно применены на клипы.")
             return True
+        
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
-            return False     
+            return False    
 
     def run(self) -> bool:
         self.timeline = ResolveObjects().timeline
@@ -274,8 +299,12 @@ class LogicProcessor:
         self.srt_create_bool = self.user_config["create_srt_checkbox"]
         self.name_from_track = self.user_config["set_name_from_track"]
         self.name_from_markers = self.user_config["set_name_from_markers"]
-        self.offline_track = self.user_config["offline_track_number"]
+        self.offline_track = int(self.user_config["offline_track_number"])
         self.shot_filter = self.user_config["shot_filter"]
+
+        self.count_of_tracks = self.timeline.GetTrackCount('video')
+        items = self.timeline.GetItemListInTrack('video', self.offline_track)
+        self.warnings = []
 
         if self.process_edl_logic:
             process_edl_var = self.process_edl()
@@ -298,7 +327,7 @@ class LogicProcessor:
                 return False
             
         if self.name_from_markers or self.name_from_track:
-            set_name_var = self.set_name()
+            set_name_var = self.set_name(items)
             if not set_name_var:
                 return False
             
