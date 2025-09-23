@@ -41,6 +41,9 @@ class LogicProcessor:
             markers_list = []
             for timecode, name in self.timeline.GetMarkers().items():
                 name = name[self.marker_from].strip()
+                if timecode == 0:
+                    self.signals.error_signal.emit(f"Таймкод первого маркера равен 0\nУдалите или переместите его.")
+                    return False
                 timecode_marker = tc(self.fps, frames=timecode + self.timeline_start_tc) + 1  
                 markers_list.append((name, timecode_marker))
             return markers_list
@@ -71,6 +74,9 @@ class LogicProcessor:
         '''
         try:
             markers_list = self.get_markers()
+            if not markers_list:
+                return
+            
             path = Path(self.locator_output_path) / f"{self.timeline.GetName()}.txt"
             with open(path, "a", encoding='utf8') as output:
 
