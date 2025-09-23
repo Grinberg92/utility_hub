@@ -456,7 +456,7 @@ class ConfigValidator:
 class EDLProcessorGUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("EDL&Markers Creator")
+        self.setWindowTitle("EDL Processor")
         self.resize(620, 300)
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.init_ui()
@@ -474,7 +474,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.fps_entry = QLineEdit("24")
         self.fps_entry.setFixedWidth(50)
 
-        locator_label = QLabel("Marker name from:")
+        locator_label = QLabel("Marker from field:")
         self.locator_from_combo = QComboBox()
         self.locator_from_combo.setFixedWidth(70)
         self.locator_from_combo.addItems(["name", "note"])
@@ -488,7 +488,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout.addLayout(fps_layout)
 
         # Locators / Track / Export Locators
-        block1_group = QGroupBox("Markers Options")
+        block1_group = QGroupBox("Resolve to markers")
         block1_group_layout = QVBoxLayout()
         block1_group_layout.addSpacing(15)
 
@@ -534,15 +534,15 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout.addWidget(block1_group)
 
         # Offline/Dailies + Input/Output paths 
-        block2_group = QGroupBox("Convertors")
+        block2_group = QGroupBox("Resolve to EDL")
         block2_group_layout = QVBoxLayout()
         block2_group_layout.addSpacing(20)
 
         # Checkboxes
         checks_layout = QHBoxLayout()
         checks_layout.setAlignment(Qt.AlignLeft)
-        self.offline_clips_checkbox = QCheckBox("Offline EDL")
-        self.edl_for_dailies_checkbox = QCheckBox("Dailies EDL")
+        self.offline_clips_checkbox = QCheckBox("EDL for offline")
+        self.edl_for_dailies_checkbox = QCheckBox("EDL for autoconform")
         self.create_srt_cb = QCheckBox("EDL to SRT")
         self.create_srt_cb.stateChanged.connect(self.update_fields_state)
         checks_layout.addWidget(self.offline_clips_checkbox)
@@ -580,7 +580,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout.addWidget(block2_group)
 
         # Set Name group
-        set_name_group = QGroupBox("Set Name")
+        set_name_group = QGroupBox("Resolve to clip names")
         set_name_group.setMinimumHeight(80)
         set_name_layout = QHBoxLayout()
         set_name_layout.addSpacing(20)
