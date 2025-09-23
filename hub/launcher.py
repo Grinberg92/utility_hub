@@ -34,17 +34,17 @@ class HubApp(QWidget):
         # Добавляем кнопки в resolve_layout
         row1 = self.create_button_description_row(
             button_name="Autoconfom",
-            description_text="Автоматическая сборка дейлизов (EXR, JPG)",
+            description_text="Автоматическая сборка дейлизов",
             script_name="autoconform_dailies.py"
         )
         row2 = self.create_button_description_row(
-            button_name="Conform delivery",
-            description_text="Внутристудийный пайплайн выдачи конформа из Resolve",
+            button_name="Plate Delivery",
+            description_text="Внутристудийный пайплайн выдачи плейтов из Resolve",
             script_name="exr_delivery.py"
         )
         row3 = self.create_button_description_row(
-            button_name="Conform delivery FD",
-            description_text="Пайплайн выдачи для FilmDirection",
+            button_name="Outsource Plate Delivery",
+            description_text="Пайплайн выдачи для сторонних студий",
             script_name="exr_delivery_fd.py"
         )
         row4 = self.create_button_description_row(
@@ -53,18 +53,18 @@ class HubApp(QWidget):
             script_name="copy_grade.py"
         )
         row5 = self.create_button_description_row(
-            button_name="Shot Versions",
-            description_text="Получение отчета об актуальности версий шотов",
+            button_name="Check Shot Version",
+            description_text="Сверка версий шотов",
             script_name="compare_versions.py"
         )
         row6 = self.create_button_description_row(
-            button_name="Get Shot",
-            description_text="Загрузка дейлизов в медиапул",
+            button_name="Resolve Get Shot",
+            description_text="Загрузка дейлизов из SG в Resolve",
             script_name="get_shot_in_dvr.py"
         )
         row7 = self.create_button_description_row(
             button_name="Render Proxy",
-            description_text="Автоматический рендер MXF прокси для Avid",
+            description_text="Автоматический рендер прокси для монтажа",
             script_name="mxf_proxy_render.py"
         )
         row8 = self.create_button_description_row(
@@ -78,8 +78,8 @@ class HubApp(QWidget):
             script_name="set_name_from_offline.py"
         )
         row10 = self.create_button_description_row(
-            button_name="Additional Programs",
-            description_text="Хаб для работы с маркерами и созданием EDL",
+            button_name="EDL Processor",
+            description_text="Хаб для работы с маркерами и EDL",
             script_name="loc_offline_edl_utility.py"
         )
 
