@@ -40,7 +40,7 @@ class GUI(QtWidgets.QWidget):
         # === Ряд с чекбоксами и FPS-инпутом ===
         options_layout = QtWidgets.QHBoxLayout()
 
-        self.checkbox_color = QtWidgets.QCheckBox("Set color")
+        self.checkbox_color = QtWidgets.QCheckBox("Set resolution color")
         self.checkbox_fps = QtWidgets.QCheckBox("Set FPS")
         self.checkbox_excel = QtWidgets.QCheckBox("Create Excel")
 
@@ -86,7 +86,7 @@ class GUI(QtWidgets.QWidget):
         self.height_entry.setPlaceholderText("Height")
         self.height_entry.setMaximumWidth(80)
 
-        resolution_layout.addWidget(QtWidgets.QLabel("Resolution:"))
+        resolution_layout.addWidget(QtWidgets.QLabel("Film Resolution:"))
         resolution_layout.addWidget(self.width_entry)
         resolution_layout.addWidget(self.separator)
         resolution_layout.addWidget(self.height_entry)

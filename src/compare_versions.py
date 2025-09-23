@@ -20,7 +20,7 @@ logger = get_logger(__file__)
 class VersionCheckerGUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Versions Check")
+        self.setWindowTitle("Check Shot Version")
         self.resize(550, 500)
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
 
@@ -40,7 +40,7 @@ class VersionCheckerGUI(QtWidgets.QWidget):
         self.column_letter = QLineEdit("H")
 
         self.file_type_xlsx = QRadioButton("excel")
-        self.file_type_csv = QRadioButton(".csv")
+        self.file_type_csv = QRadioButton(".csv from PL")
         self.file_type_xlsx.setChecked(True)
 
         self.failed_paths_text = QTextEdit()

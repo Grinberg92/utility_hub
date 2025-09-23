@@ -776,16 +776,16 @@ class ExrDelivery(QWidget):
         self.resize(600, 200)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
-        self.set_effects_btn = QPushButton("Set Effects")
+        self.set_effects_btn = QPushButton("Set Burn-in")
         self.set_effects_btn.clicked.connect(lambda: self.run(EffectsAppender, mode="effects", button=self.set_effects_btn))
 
         self.from_track_label = QLabel("From Track:")
         self.from_track_qline = QLineEdit()
         self.from_track_qline.setMaximumWidth(40)
-        self.set_names_btn = QPushButton("Set Names")
+        self.set_names_btn = QPushButton("Set Shot name")
         self.set_names_btn.clicked.connect(lambda: self.run(NameSetter, mode="names", button=self.set_names_btn))
 
-        self.res_group = QGroupBox("Resolution")
+        self.res_group = QGroupBox("Film Resolution")
         self.res_group.setFixedHeight(70)
         self.res_group.setMinimumWidth(180)
         self.width_input = QLineEdit("2048")

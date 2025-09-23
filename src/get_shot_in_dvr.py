@@ -43,7 +43,7 @@ class WorkerThread(QThread):
 class GetShotDvr(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Get Shot")
+        self.setWindowTitle("Resolve Get Shot")
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
         layout = QVBoxLayout()
@@ -68,7 +68,7 @@ class GetShotDvr(QWidget):
         layout.addWidget(self.is_normalize)
 
         # Поле для ввода путей
-        self.text_widget = QTextEdit()
+        self.text_widget = QTextEdit("Insert shot link")
         layout.addWidget(self.text_widget)
 
         # Прогрессбар и метка текущего шота

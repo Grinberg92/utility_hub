@@ -762,7 +762,7 @@ class ConfigValidator:
 class ExrDelivery(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("EXR Delivery")
+        self.setWindowTitle("Plate Delivery")
         self.resize(650, 200)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
@@ -770,7 +770,7 @@ class ExrDelivery(QWidget):
         self.fps_entry = QLineEdit("24")
         self.fps_entry.setFixedWidth(50)
 
-        self.locator_label = QLabel("name from:")
+        self.locator_label = QLabel("from field:")
         self.locator_from_combo = QComboBox()
         self.locator_from_combo.setFixedWidth(70)
         self.locator_from_combo.addItems(["name", "note"])
@@ -782,7 +782,7 @@ class ExrDelivery(QWidget):
         self.set_names_btn = QPushButton("Start")
         self.set_names_btn.clicked.connect(lambda: self.run(NameSetter, mode="names", button=self.set_names_btn))
 
-        self.res_group = QGroupBox("Resolution")
+        self.res_group = QGroupBox("Film Resolution")
         self.res_group.setFixedHeight(70)
         self.width_input = QLineEdit("2048")
         self.width_input.setFixedWidth(60)
@@ -808,7 +808,7 @@ class ExrDelivery(QWidget):
         layout = QVBoxLayout()
 
         # -- Группа установки имен клипов
-        step2_group = QGroupBox("Set Name")
+        step2_group = QGroupBox("Set Shot name")
         step2_group.setMinimumHeight(120)
         names_layout = QVBoxLayout()
         input_track_layout = QHBoxLayout()

@@ -131,7 +131,7 @@ class ColorGradeApplyApp(QMainWindow):
 
         # --- Кнопки ---
 
-        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button = QPushButton("Refresh timeline")
         self.refresh_button.clicked.connect(self.refresh_timeline_data)
         layout.addWidget(self.refresh_button)
 

@@ -1161,7 +1161,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.logic_mode_group.addButton(self.full_conform_mode)
 
         vbox1 = QVBoxLayout()
-        from_start_label = QLabel("From start frame")
+        from_start_label = QLabel("From shot frame")
         from_start_label.setAlignment(Qt.AlignHCenter)
         vbox1.addWidget(self.from_start_frame_mode, alignment=Qt.AlignHCenter)
         vbox1.addWidget(from_start_label)
@@ -1173,7 +1173,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         vbox2.addWidget(from_edl_label)
 
         vbox3 = QVBoxLayout()
-        full_logic_label = QLabel("Full conform")
+        full_logic_label = QLabel("From EDL")
         full_logic_label.setAlignment(Qt.AlignHCenter)
         vbox3.addWidget(self.full_conform_mode, alignment=Qt.AlignHCenter)
         vbox3.addWidget(full_logic_label)
@@ -1249,7 +1249,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         # Вторая строка: Start frame + Include slate
         frame_hbox = QHBoxLayout()
 
-        self.include_slate = QCheckBox("Include slate")
+        self.include_slate = QCheckBox("No slate")
         self.include_slate.setChecked(True)
         frame_hbox.addWidget(self.include_slate)
         frame_hbox.addSpacing(20)
@@ -1307,7 +1307,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         main_layout.addLayout(otio_path_layout)
 
         # Кнопка Check
-        self.button_check = QPushButton("PreCheck")
+        self.button_check = QPushButton("Omit PreCheck")
         self.button_check.clicked.connect(self.precheck_shots)
         main_layout.addWidget(self.button_check)
 
