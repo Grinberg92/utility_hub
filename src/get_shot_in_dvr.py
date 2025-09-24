@@ -68,7 +68,8 @@ class GetShotDvr(QWidget):
         layout.addWidget(self.is_normalize)
 
         # Поле для ввода путей
-        self.text_widget = QTextEdit("Insert shot link")
+        self.text_widget = QTextEdit()
+        self.text_widget.setPlaceholderText("Insert shots path (by new string 'shift + enter')")
         layout.addWidget(self.text_widget)
 
         # Прогрессбар и метка текущего шота
