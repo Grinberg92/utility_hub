@@ -18,12 +18,34 @@ class TransferWorker(QThread):
     error = pyqtSignal(str)
     success = pyqtSignal(str)
 
-    def __init__(self, parent, source_track, target_track, lut_name):
+    def __init__(self, parent, source_track_in, source_track_out, target_track, lut_name):
         super().__init__()
         self.parent = parent
-        self.source_track = source_track
+        self.source_track_in = source_track_in
+        self.source_track_out = source_track_out
         self.target_track = target_track
         self.lut_name = lut_name
+
+    def get_source_clips(self, start_track: int, end_track: int, timeline) -> list:
+        """
+        Возвращает список клипов с верхнего трека в указанном диапазоне.
+        Если несколько клипов стоят в стеке, берётся тот, что выше по номеру трека.
+        """
+        top_items = []
+
+        for track_index in range(end_track, start_track - 1, -1):
+            clips = timeline.GetItemListInTrack('video', track_index)
+            for clip in clips:
+                start = clip.GetStart()
+                duration = clip.GetDuration()
+                end = start + duration
+
+                if not any(c.GetStart() <= start < (c.GetStart() + c.GetDuration()) or
+                        start <= c.GetStart() < end
+                        for c in top_items):
+                    top_items.append(clip)
+
+        return top_items
 
     def run(self):
         """
@@ -39,8 +61,8 @@ class TransferWorker(QThread):
             if not timeline:
                 self.error.emit("Таймлайн не найден.")
                 return
-
-            source_clips = timeline.GetItemListInTrack("video", self.source_track)
+            
+            source_clips = self.get_source_clips(self.source_track_in, self.source_track_out, timeline)
             target_clips = timeline.GetItemListInTrack("video", self.target_track)
 
             if not target_clips:
@@ -107,13 +129,17 @@ class ColorGradeApplyApp(QMainWindow):
         # --- Дорожки ---
         track_layout = QHBoxLayout()
         track_layout.addStretch()
-        track_layout.addWidget(QLabel("Source Track:"))
-        self.source_track_input = QLineEdit()
-        self.source_track_input.setFixedWidth(40)
-        track_layout.addWidget(self.source_track_input)
+        track_layout.addWidget(QLabel("Source tracks range:"))
+        self.source_track_in_input = QLineEdit()
+        self.source_track_out_input = QLineEdit()
+        self.source_track_out_input.setFixedWidth(40)
+        self.source_track_in_input.setFixedWidth(40)
+        track_layout.addWidget(self.source_track_in_input)
+        track_layout.addWidget(QLabel(" - "))
+        track_layout.addWidget(self.source_track_out_input)
         track_layout.addSpacing(20)
 
-        track_layout.addWidget(QLabel("Target Track:"))
+        track_layout.addWidget(QLabel("Target track:"))
         self.target_track_input = QLineEdit()
         self.target_track_input.setFixedWidth(40)
         track_layout.addWidget(self.target_track_input)
@@ -177,8 +203,9 @@ class ColorGradeApplyApp(QMainWindow):
         logger.debug("Запуск скрипта")
         
         try:
-            source_track = int(self.source_track_input.text())
+            source_track_in = int(self.source_track_in_input.text())
             target_track = int(self.target_track_input.text())
+            source_track_out = int(self.source_track_out_input.text())
         except ValueError:
             self.show_error("Ошибка", "Введите корректные номера дорожек.")
             return
@@ -197,8 +224,8 @@ class ColorGradeApplyApp(QMainWindow):
             if reply == QMessageBox.No:
                 return  
 
-        logger.debug("\n".join(("SetUp:", f"Source Track: {source_track}", f"Target Track: {target_track}", f"Select LUT: {selected_lut}")))
-        self.worker = TransferWorker(self, source_track, target_track, selected_lut)
+        logger.debug("\n".join(("SetUp:", f"Source track in: {source_track_in}", f"Source track out: {source_track_in}", f"Target track: {target_track}", f"Select LUT: {selected_lut}")))
+        self.worker = TransferWorker(self, source_track_in, source_track_out, target_track, selected_lut)
         self.worker.error.connect(lambda msg: self.show_error("Ошибка", msg))
         self.worker.success.connect(lambda msg: self.show_info("Успех", msg))
         self.worker.start()
