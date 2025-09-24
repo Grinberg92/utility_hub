@@ -399,10 +399,6 @@ class DeliveryPipline:
         elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][3]:
             resolution = self.full_resolution(clip)
 
-        else:
-            self.signals.error_signal.emit(f"Не валидное расширение клипа {clip.GetName()}")
-            return False
-
         return resolution
     
     def stop_process(self) -> None:
@@ -442,15 +438,18 @@ class DeliveryPipline:
 
         :return: Кортеж (Флаг ошибки, render job item)
         '''
+        last_resolution = ''
         try:
             resolution = re.search(r'\d{4}x\d{3,4}', clip_resolution).group(0)
+            last_resolution = resolution
             width, height = resolution.split("x")
             logger.info(f"Установлено разрешение с настройках рендера: {width}x{height}")
         except Exception as e:
             self.signals.error_signal.emit(f"Не удалось вычислить разрешение {resolution}: {e}")
             return False, None
         
-        self.set_project_resolution(height, width)
+        if resolution != last_resolution:
+            self.set_project_resolution(height, width)
 
         render_settings = {
             "SelectAllFrames": False,
@@ -568,6 +567,9 @@ class DeliveryPipline:
 
                     if not item.clip_color == SETTINGS["colors"][4]:
                         no_select = False
+
+                    if not clip.GetName().lower().endswith(SETTINGS["extentions"]):
+                        warnings.append(f"Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
 
                     try:
                         if not item.clip_color == SETTINGS["colors"][4]:
