@@ -388,16 +388,20 @@ class DeliveryPipline:
         if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][0]:
             resolution = self.standart_resolution(clip)
         # 1.5-кратное увеличение разрешение от стандартного
-        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][1]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][1]:
             resolution = self.scale_1_5_resolution(clip)
         
         # 2-кратное увеличение разрешение от стандартного(условный 4К)
-        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][2]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][2]:
             resolution = self.scale_2_resolution(clip)
             
         # Полное съемочное разрешение
-        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][3]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][3]:
             resolution = self.full_resolution(clip)
+
+        else:
+            self.signals.error_signal.emit(f"Не валидное расширение клипа {clip.GetName()}")
+            return False
 
         return resolution
     
@@ -649,6 +653,8 @@ class DeliveryPipline:
                 handles_value = self.get_handles(item)
 
                 item_resolution = self.get_resolution_settings(item)
+                if not item_resolution:
+                    return False
 
                 # Ставится до установки render preset
                 self.stop_process()
