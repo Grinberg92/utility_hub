@@ -24,8 +24,8 @@ SETTINGS = {
     "burn_in_mac_path": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/burn_in_presets",
     "lut_path_win": r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY',
     "lut_path_mac": r'/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/',
-    "timeline_preset_path_win": r"J:\003_transcode_to_vfx\projects\Others\timeline_presets\logc4_to_rec709.drt",
-    "timeline_preset_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/timeline_presets/logc4_to_rec709.drt",
+    "timeline_preset_path_win": r"J:\003_transcode_to_vfx\projects\Others\timeline_presets",
+    "timeline_preset_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/timeline_presets/",
     "all_extensions": (".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine"),
     "standart_extensions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
     "excepted_extensions": ('.mov', '.mp4', '.jpg')
@@ -278,10 +278,12 @@ class RenderPipline:
 
                 if is_main and self.apply_arri_cdl and self.lut_to_log:
 
-                    timeline = self.media_pool.ImportTimelineFromFile(self.timeline_preset_path) # Импорт шаблона таймлайна с loc4 to rec709 трансформом
+                    timeline_path = str(Path(self.timeline_preset_path) / self.timeline_preset)
+
+                    timeline = self.media_pool.ImportTimelineFromFile(timeline_path) # Импорт шаблона таймлайна с loc4 to rec709 трансформом
                         
                     if not timeline:
-                        logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {self.timeline_preset_path_posix}")
+                        logger.critical(f"Отсутствует шаблон таймлайна для ARRI: {timeline_path}")
                         return None
 
                     self.set_import_timeline_resolution(timeline_name, timeline)
@@ -488,6 +490,7 @@ class RenderPipline:
         self.set_burnin = self.user_config["set_burnin"]
         self.burnin_list = self.user_config["burnin_list"]
         self.timeline_preset_path = self.user_config["timeline_preset_path"]
+        self.timeline_preset = self.user_config["timeline_lut_preset"]
         self.media_pool = self.user_config["media_pool"] # Тянем медиапул который использовался в GUI
         self.project = self.user_config["project_resolve"]
         self.lut_to_log = self.user_config["LUT_to_log"]
@@ -646,7 +649,8 @@ class ConfigValidator:
             "burnin_path": self.gui.burn_in_base_path,
             "media_pool": self.gui.media_pool,
             "project_resolve": self.gui.project,
-            "LUT_to_log": self.gui.log_rb.isChecked()
+            "LUT_to_log": self.gui.log_rb.isChecked(),
+            "timeline_lut_preset": self.gui.lut_preset.currentData()
         }
         
     def validate(self, user_config: dict) -> bool:
@@ -709,6 +713,7 @@ class ResolveGUI(QWidget):
         self.lut_project = QComboBox()
         self.lut_file = QComboBox()
         self.apply_arricdl_lut = QCheckBox("Apply ARRI Camera LUT")
+        self.apply_arricdl_lut.toggled.connect(self.set_enabled_widget)
 
         self.set_fps_checkbox = QCheckBox("Set Project FPS")
         self.project_fps_value = QLineEdit("24")
@@ -717,13 +722,15 @@ class ResolveGUI(QWidget):
         self.label_ocf = QLabel("Choose Shoot Date:")
         self.label_root = QLabel("Choose Root Folder:")
         self.set_burn_in_checkbox = QCheckBox("Set Burn-in")
-        self.add_all_extensions = QCheckBox("Use All Extensions")
+        self.add_all_extensions = QCheckBox("Render Excepted clips")
         self.auto_sync_checkbox = QCheckBox("Sync Audio")
         self.create_sound_folder = QCheckBox("Create 'SOUND' Folder")
         self.source_root_folder = QLineEdit("001_OCF")
+        self.lut_preset = QComboBox()
         self.lut_to_label = QLabel("LUT to:")
         self.log_rb = QRadioButton("log")
-        self.rec709_rb = QRadioButton("rec709")
+        self.log_rb.toggled.connect(self.set_enabled_widget)
+        self.rec709_rb = QRadioButton("rec.709")
         self.log_rb.setChecked(True)
 
         self.burn_in_list = CheckableComboBox()
@@ -738,16 +745,13 @@ class ResolveGUI(QWidget):
         self.resolve = self.is_connect_resolve()
 
         self.init_ui()
-        self.get_project_preset_list()
-        self.get_render_preset_list()
-        self.update_lut_projects()
 
     def init_ui(self):
         
         layout = QVBoxLayout(self)
 
         # Resolution
-        res_group = QGroupBox("Resolution")
+        res_group = QGroupBox("Film Resolution")
         res_group.setFixedWidth(150)
         res_group.setFixedHeight(70)
         res_layout = QHBoxLayout()
@@ -808,6 +812,7 @@ class ResolveGUI(QWidget):
         self.lut_project.currentTextChanged.connect(self.update_lut_files)
         color_layout.addWidget(QLabel("LUT File:"))
         color_layout.addWidget(self.lut_file)
+        color_layout.addSpacing(10)
         self.apply_cdl_layout = QHBoxLayout()
         self.apply_cdl_layout.addWidget(self.apply_arricdl_lut)
         self.apply_cdl_layout.addSpacing(60)
@@ -815,6 +820,9 @@ class ResolveGUI(QWidget):
         self.apply_cdl_layout.addWidget(self.log_rb)
         self.apply_cdl_layout.addWidget(self.rec709_rb)
         color_layout.addLayout(self.apply_cdl_layout) 
+        color_layout.addSpacing(5)
+        color_layout.addWidget(QLabel("Timeline LUT Preset"))
+        color_layout.addWidget(self.lut_preset)
         color_group.setLayout(color_layout)
         layout.addWidget(color_group)
 
@@ -878,6 +886,10 @@ class ResolveGUI(QWidget):
         self.start_button.clicked.connect(self.start)
         layout.addWidget(self.start_button)
 
+        self.get_project_preset_list()
+        self.get_render_preset_list()
+        self.get_timeline_lut_preset()
+        self.update_lut_projects()
         self.load_subfolders_list()
         self.load_burn_in()
 
@@ -898,7 +910,8 @@ class ResolveGUI(QWidget):
 
     def on_error_signal(self, message):
         QMessageBox.critical(self, "Error", message)
-        logger.exception(message)
+        logger.error(message)
+        return
 
     def on_success_signal(self, message):
         QMessageBox.information(self, "Success", message)
@@ -916,6 +929,24 @@ class ResolveGUI(QWidget):
         folder = QFileDialog.getExistingDirectory(self, "Выбор папки")
         if folder:
             self.output_folder.setText(folder)
+
+    def set_enabled_widget(self):
+        """
+        Вкл/выкл виджеты интерфейса.
+        """
+        if self.log_rb.isChecked():
+            self.lut_preset.setEnabled(True)
+        else:
+            self.lut_preset.setEnabled(False)
+
+        if self.apply_arricdl_lut.isChecked():
+            self.log_rb.setEnabled(True)
+            self.rec709_rb.setEnabled(True)
+            self.lut_to_label.setEnabled(True)
+        else:
+            self.log_rb.setEnabled(False)
+            self.rec709_rb.setEnabled(False)
+            self.lut_to_label.setEnabled(False)
 
     def update_lut_projects(self):
         """
@@ -949,6 +980,14 @@ class ResolveGUI(QWidget):
         Метод получает данные о пресетах burn-in.
         """
         preset_list = os.listdir(self.burn_in_base_path)
+
+        try:
+            preset_list = os.listdir(self.burn_in_base_path)
+        except FileNotFoundError:
+            self.on_error_signal("Отсутствует путь к пресетам burn in")
+            return
+        
+
         preset_list_sorted = sorted(
                                     preset_list,
                                     key=lambda name: os.path.getmtime(os.path.join(self.burn_in_base_path, name)))
@@ -984,11 +1023,30 @@ class ResolveGUI(QWidget):
         project_preset_list = [preset["Name"] for preset in self.project.GetPresetList()][3:] # Отрезаем системные пресеты
         self.project_preset.addItems(project_preset_list)
 
+    def get_timeline_lut_preset(self):
+        """
+        Метод получания пресетов с настройками цвета на таймлайне.
+        """
+        try:
+            timeline_lut_presets = os.listdir(self.timeline_preset_path)
+        except FileNotFoundError:
+            self.on_error_signal("Отсутствует путь к пресетам timeline LUT")
+            return
+        
+        for preset in timeline_lut_presets:
+            name_no_ext = os.path.splitext(preset)[0]  
+            self.lut_preset.addItem(name_no_ext, preset) 
+
+        default_preset = "logc4_to_rec709.drt"
+        index = self.lut_preset.findData(default_preset)
+        if index != -1:
+            self.lut_preset.setCurrentIndex(index)
+
     def get_render_preset_list(self):
         """
         Метод получения пресета рендера.
         """     
-        render_presets_list = [preset for preset in self.project.GetRenderPresetList()][31:] # Отрезаем системные пресеты
+        render_presets_list = [preset for preset in self.project.GetRenderPresetList()][34:] # Отрезаем системные пресеты
         self.render_preset.addItems(render_presets_list)
 
     def start(self):
@@ -999,7 +1057,7 @@ class ResolveGUI(QWidget):
         self.user_config = self.validator.collect_config()
 
         if not self.validator.validate(self.user_config):
-            self.on_error_signal("\n".join(self.validator.get_errors()))
+            self.on_warning_signal("\n".join(self.validator.get_errors()))
             return
         
         logger.info(f"\n\nUser Config:\n{pformat(self.user_config)}\n")
