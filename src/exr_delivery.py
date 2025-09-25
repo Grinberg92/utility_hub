@@ -416,13 +416,17 @@ class DeliveryPipline:
         в списке всех пресетов рендера.
         '''
         preset_list = self.project.GetRenderPresetList()
-        for preset in preset_list:
-            if re.match(handles_value, preset):
-                self.project.LoadRenderPreset(preset)
-                logger.info(f"Установлен пресет рендера: {handles_value} ")
-                return True
-        self.signals.error_signal.emit(f"Не удалось применить пресет рендера {handles_value}")
-        return False 
+        if self._last_render_preset != handles_value:
+            for preset in preset_list:
+                if re.match(handles_value, preset):
+                    self.project.LoadRenderPreset(preset)
+                    self._last_render_preset = handles_value
+                    logger.info(f"Установлен пресет рендера: {handles_value} ")
+                    return True
+            self.signals.error_signal.emit(f"Не удалось применить пресет рендера {handles_value}")
+            return False 
+        else:
+            return True
             
     def set_project_resolution(self, height_res, width_res) -> None:
         """
@@ -438,18 +442,18 @@ class DeliveryPipline:
 
         :return: Кортеж (Флаг ошибки, render job item)
         '''
-        last_resolution = ''
         try:
             resolution = re.search(r'\d{4}x\d{3,4}', clip_resolution).group(0)
-            last_resolution = resolution
             width, height = resolution.split("x")
             logger.info(f"Установлено разрешение с настройках рендера: {width}x{height}")
         except Exception as e:
             self.signals.error_signal.emit(f"Не удалось вычислить разрешение {resolution}: {e}")
             return False, None
         
-        if resolution != last_resolution:
+        if resolution != self._last_resolution:
             self.set_project_resolution(height, width)
+
+        self._last_resolution = resolution
 
         render_settings = {
             "SelectAllFrames": False,
@@ -619,6 +623,8 @@ class DeliveryPipline:
         self.boe_fix = self.user_config["boe_fix"]
 
         self.rj_to_clear = []
+        self._last_render_preset = None
+        self._last_resolution = None
 
         video_tracks = self.get_tracks()
         if video_tracks == []:
