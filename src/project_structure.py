@@ -38,6 +38,7 @@ J_SRTUCTURE = [
     "J:/001_sources",
     "J:/002_edits",
     "J:/003_transcode_to_vfx",
+    "J:/003_transcode_to_vfx/projects",
     "J:/004_masters"
 ]
 R_STRUCTURE = "R:/"
@@ -49,6 +50,14 @@ STRUCTURE_001_FOLDER = {
     "04_shots": {},
     "05_restore": {}
 }
+
+STRUCTURE_003_TRANSCODE_PROJECTS = {
+    "Autoconform": {},
+    "Check": {},
+    "Reports": {},
+    "tmp": {},
+}
+
 STRUCTURE_004_MASTERS = {
     "01_tmp": {},
     "02_printmasters": {
@@ -289,6 +298,8 @@ class MainWindow(QWidget):
         is_reel = self.type_selector.currentText() == "REEL"
         self.reels_input.setEnabled(is_reel)
 
+        self.add_proj_folder.setEnabled(self.type_selector.currentText() == "OCF")
+
     def on_error_signal(self, message):
         QMessageBox.critical(self, "Ошибка", message)
         logger.exception(message)
@@ -415,6 +426,9 @@ class MainWindow(QWidget):
 
             if "001_sources" in base_path:
                 self.create_folder_structure(STRUCTURE_001_FOLDER, project_path)
+
+            elif "003_transcode_to_vfx/projects" in base_path:
+                self.create_folder_structure(STRUCTURE_003_TRANSCODE_PROJECTS, project_path)
 
             elif "004_masters" in base_path:
                 self.create_folder_structure(STRUCTURE_004_MASTERS, project_path)
