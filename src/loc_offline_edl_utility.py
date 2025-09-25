@@ -106,7 +106,7 @@ class LogicProcessor:
         """
         base = ":".join(str(timecode).split(":")[:3])
         frames = str(timecode).split(":")[3]
-        frames_to_mmm = str(math.ceil(int(frames) * (1000 / 24)))
+        frames_to_mmm = f'{str(math.ceil(int(frames) * (1000 / 24))):03}'
         return ",".join([base, frames_to_mmm])
     
     def get_edl_data(self) -> list:
