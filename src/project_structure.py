@@ -140,7 +140,11 @@ class MainWindow(QWidget):
         super().__init__()
         self.setWindowTitle("Project Structure Creator")
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
-        self.resize(460, 280)
+        self.resize(570, 280)
+
+        self.projects = os.listdir(r"T:\projects")
+        self.projects.insert(0, "Select project")
+
         self.setup_ui()
 
     def setup_ui(self):
@@ -180,9 +184,13 @@ class MainWindow(QWidget):
 
         name_row = QHBoxLayout()
         name_row.addWidget(QLabel("Project:"))
+        self.explorer_project_name_cb = QComboBox() 
+        self.explorer_project_name_cb.addItems(self.projects)
+        name_row.addWidget(self.explorer_project_name_cb)
         self.explorer_project_name = QLineEdit()
-        self.explorer_project_name.setPlaceholderText("Project name")
+        self.explorer_project_name.setPlaceholderText("Enter manually")
         self.explorer_project_name.setMinimumWidth(200)
+        name_row.addWidget(QLabel(" or "))
         name_row.addWidget(self.explorer_project_name)
         explorer_layout.addLayout(name_row)
         self.explorer_group.setLayout(explorer_layout)
@@ -216,9 +224,13 @@ class MainWindow(QWidget):
 
         project_row = QHBoxLayout()
         project_row.addWidget(QLabel("Project:"))
+        self.resolve_project_name_cb = QComboBox() 
+        self.resolve_project_name_cb.addItems(self.projects)
+        project_row.addWidget(self.resolve_project_name_cb)
         self.resolve_project_name = QLineEdit()
-        self.resolve_project_name.setPlaceholderText("Project name")
+        self.resolve_project_name.setPlaceholderText("Enter manually")
         self.resolve_project_name.setMinimumWidth(200)
+        project_row.addWidget(QLabel(" or "))
         project_row.addWidget(self.resolve_project_name)
         resolve_layout.addLayout(project_row)
         type_row.addStretch()
@@ -291,13 +303,19 @@ class MainWindow(QWidget):
         QMessageBox.information(self, "Успех", message)
         logger.info(message)
 
+    def choose_project(self):
+        if self.explorer_project_name_cb.currentText().strip() != "Select project":
+            return self.explorer_project_name_cb.currentText().strip()
+        else:
+            return self.explorer_project_name.text().strip()
+
     def run(self):
         """
         Метод запуска целевой логики.
         """
         if self.explorer_radio.isChecked():
             disk = self.disk_selector.currentText()
-            project_name = self.explorer_project_name.text().strip()
+            project_name = self.choose_project()
             if not project_name:
                 self.on_warning_signal("Пожалуйста, укажите имя проекта для Explorer.")
                 return
@@ -345,7 +363,7 @@ class MainWindow(QWidget):
                 if subfolders:
                     self.create_folder_structure(subfolders, folder_path)
         except Exception as e:
-            self.on_error_signal(f"Не удалось создать структуру папок {base_path}")
+            self.on_error_signal(f"Не удалось создать структуру папок {base_path}: {e}")
 
     def copy_files(self, mapping, base_path, source_path):
         """
@@ -405,7 +423,7 @@ class MainWindow(QWidget):
                 self.create_folder_structure(R_FOLDER_STRUCTURE, project_path)
 
         except Exception as e:
-            self.on_error_signal(f"Путь {base_path} не найден")
+            self.on_error_signal(f"Путь {base_path} не найден: {e}")
 
     def recursive_resolve(self, media_pool, parent_folder, structure):
         for name, subfolders in structure.items():
