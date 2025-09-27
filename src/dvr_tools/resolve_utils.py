@@ -47,37 +47,50 @@ class ResolveObjects:
     def mediapool_current_folder(self):
         return self.resolve_mediapool_current_folder
 
-def get_resolve_shot_list(track_in, track_out, extension, pattern=None):
+import re
+from collections import Counter
+import DaVinciResolveScript as dvr
+
+def get_resolve_shot_list(start_track: int, end_track: int, extension: str, pattern: str = None) -> Counter:
     """
-    Получает список шотов из таймлайна DaVinci Resolve.
-    
-    :param track_in: начальный трек (int)
-    :param track_out: конечный трек (int)
-    :param extension: формат, например 'exr'
-    :param pattern: кастомный regex фильтр по имени
-    :return: Counter с именами шотов
+    Возвращает список имён клипов с верхнего трека в указанном диапазоне.
+    Если несколько клипов стоят в стеке, берётся тот, что выше по номеру трека.
     """
     try:
         resolve = dvr.scriptapp("Resolve")
         project = resolve.GetProjectManager().GetCurrentProject()
         timeline = project.GetCurrentTimeline()
 
+        if not timeline:
+            return Counter()
+
         if pattern is None:
             pattern = r'(.+_)?\d{1,4}[a-zA-Z]?_\d{1,4}_.+'
+        regex = re.compile(pattern)
 
-        timeline_shots = []
-        for track in range(track_in, track_out + 1):
-            timeline_shots += timeline.GetItemListInTrack('video', track)
+        top_items = {}
+        # идём сверху вниз, чтобы нижние не перезаписывали верхние
+        for track_index in range(end_track, start_track - 1, -1):
+            clips = timeline.GetItemListInTrack('video', track_index)
 
+            for clip in clips:
+                start, end = clip.GetStart(), clip.GetStart() + clip.GetDuration()
+
+                if not any(s <= start < e or start <= s < end for s, e in top_items.keys()):
+                    top_items[(start, end)] = clip
+
+        # Фильтрация по расширению и паттерну
         filtered = [
-            item.GetName()
-            for item in timeline_shots
-            if item.GetName().lower().endswith(f".{extension.lower()}") and re.search(pattern, item.GetName())
+            clip.GetName()
+            for clip in top_items.values()
+            if clip.GetName().lower().endswith(f".{extension.lower()}") and regex.search(clip.GetName())
         ]
+
         return Counter(filtered)
+
     except Exception as e:
         print(f"Ошибка подключения к API Resolve: {e}")
-        return []
+        return Counter()
 
 class ResolveTimelineItemExtractor():
 
