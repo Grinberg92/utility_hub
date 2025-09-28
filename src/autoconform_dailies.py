@@ -671,7 +671,7 @@ class OTIOCreator:
                     }
 
                     # Выбор логики конформа
-                    if self.handles_logic == "from_start_frame":
+                    if self.handles_logic == "from_offset_frame":
                         self.start_frame_logic(shot_data)
                     elif self.handles_logic == "from_edl_start":
                         self.edl_start_logic(shot_data)
@@ -1127,9 +1127,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
 
         self.result_label = QLabel()
 
-        self.from_start_frame_mode = QRadioButton()
-        self.from_start_frame_mode.setChecked(True) 
-        self.from_start_frame_mode.setProperty("mode", "from_start_frame")
+        self.from_offset_frame_mode = QRadioButton()
+        self.from_offset_frame_mode.setChecked(True) 
+        self.from_offset_frame_mode.setProperty("mode", "from_offset_frame")
 
         self.from_edl_start_mode = QRadioButton()
         self.from_edl_start_mode.setProperty("mode", "from_edl_start")
@@ -1156,15 +1156,15 @@ class Autoconform(QWidget, ConformCheckerMixin):
         logic_layout = QHBoxLayout()
 
         self.logic_mode_group = QButtonGroup(self)
-        self.logic_mode_group.addButton(self.from_start_frame_mode)
+        self.logic_mode_group.addButton(self.from_offset_frame_mode)
         self.logic_mode_group.addButton(self.from_edl_start_mode)
         self.logic_mode_group.addButton(self.full_conform_mode)
 
         vbox1 = QVBoxLayout()
-        from_start_label = QLabel("From shot frame")
-        from_start_label.setAlignment(Qt.AlignHCenter)
-        vbox1.addWidget(self.from_start_frame_mode, alignment=Qt.AlignHCenter)
-        vbox1.addWidget(from_start_label)
+        from_offset_frame_label = QLabel("From offset frame")
+        from_offset_frame_label.setAlignment(Qt.AlignHCenter)
+        vbox1.addWidget(self.from_offset_frame_mode, alignment=Qt.AlignHCenter)
+        vbox1.addWidget(from_offset_frame_label)
 
         vbox2 = QVBoxLayout()
         from_edl_label = QLabel("From EDL start")
@@ -1246,7 +1246,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         tracks_hbox.addStretch()
         right_vbox.addLayout(tracks_hbox)
 
-        # Вторая строка: Start frame + Include slate
+        # Вторая строка: Offset frame + Include slate
         frame_hbox = QHBoxLayout()
 
         self.include_slate = QCheckBox("No slate")
@@ -1256,7 +1256,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         frame_hbox.addWidget(self.frame_rate_label)
         frame_hbox.addWidget(self.frame_rate)
         frame_hbox.addSpacing(15)
-        frame_hbox.addWidget(QLabel("Start frame:"))
+        frame_hbox.addWidget(QLabel("Offset frame:"))
         self.start_frame = QLineEdit(self.select_frame)
         self.start_frame.setMaximumWidth(30)
         frame_hbox.addWidget(self.start_frame)
@@ -1400,7 +1400,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         selected_button = self.logic_mode_group.checkedButton()
         selected_mode = selected_button.property("mode") if selected_button else None
 
-        start_frame_enabled = selected_mode in ("from_start_frame", "full_logic")
+        start_frame_enabled = selected_mode in ("from_offset_frame", "full_logic")
         self.start_frame.setEnabled(start_frame_enabled)
 
         self.include_slate.setEnabled(self.format_menu.currentText() in ("MOV", "MP4"))
