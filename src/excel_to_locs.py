@@ -51,7 +51,7 @@ class LocatorCreator:
 class LocatorGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Locator Creator")
+        self.setWindowTitle("Locators from EXCEL")
         self.setFixedSize(500, 280)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 

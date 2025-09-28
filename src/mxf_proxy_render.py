@@ -692,7 +692,7 @@ class ResolveGUI(QWidget):
     """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Proxy Render")
+        self.setWindowTitle("Edit Proxy Render")
         self.resize(550, 500)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
