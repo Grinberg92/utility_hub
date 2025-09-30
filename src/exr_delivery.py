@@ -572,7 +572,7 @@ class DeliveryPipline:
                     if not item.clip_color == SETTINGS["colors"][4]:
                         no_select = False
 
-                    if not clip.GetName().lower().endswith(SETTINGS["extentions"]):
+                    if not clip.GetName().lower().endswith(SETTINGS["extentions"]) and not clip.GetName().lower().endswith(SETTINGS["false_extentions"]):
                         warnings.append(f"Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
 
                     try:
