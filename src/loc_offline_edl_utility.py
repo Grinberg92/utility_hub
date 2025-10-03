@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, 
+from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QRadioButton,
     QLineEdit, QComboBox, QGroupBox, QCheckBox, QPushButton, QSizePolicy, QApplication, QFileDialog)
 from dataclasses import dataclass
 from dvr_tools.css_style import apply_style
@@ -54,14 +54,29 @@ class LogicProcessor:
     def set_markers(self) -> bool:
         '''
         Установка маркеров с номерами полученными из оффлайн клипов на текущем таймлайне.
+        В зависимости от self.center_marker устанавливается по старту клипа или середине клипа.
         '''
         try:
             clips = self.timeline.GetItemListInTrack('video', self.track_number)
             for clip in clips:
                 clip_name = clip.GetName()
-                if re.search(SETTINGS["shot_name"], clip_name):
-                    clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
+
+                if self.shot_filter:
+                    if re.search(SETTINGS["shot_name"], clip_name):
+                        if self.center_marker:
+                            clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
+                        else:
+                            clip_start = int(clip.GetStart()) - self.timeline_start_tc
+                        self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+                else:
+                    if self.center_marker:
+                        clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
+                    else:
+                        clip_start = int(clip.GetStart()) - self.timeline_start_tc
+                        print(clip_start)
                     self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+
+                
             logger.info("Маркеры успешно установлены.")
             return True
         except Exception as e:
@@ -307,6 +322,7 @@ class LogicProcessor:
         self.name_from_markers = self.user_config["set_name_from_markers"]
         self.offline_track = int(self.user_config["offline_track_number"])
         self.shot_filter = self.user_config["shot_filter"]
+        self.center_marker = self.user_config["is_center_marker"]
 
         self.count_of_tracks = self.timeline.GetTrackCount('video')
         items = self.timeline.GetItemListInTrack('video', self.offline_track)
@@ -387,7 +403,8 @@ class ConfigValidator:
         "set_name_from_track": self.gui.from_track_cb.isChecked(),
         "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
         "offline_track_number": self.gui.from_track_edit.text().strip(),
-        "shot_filter": self.gui.filter_shot.isChecked()
+        "shot_filter": self.gui.filter_shot.isChecked(),
+        "is_center_marker": self.gui.to_center_rb.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -452,7 +469,7 @@ class ConfigValidator:
             if offline_track_number > resolve.timeline.GetTrackCount("video"):
                 self.errors.append("Указан несуществующий трек")
         except ValueError:
-            self.errors.append("Номер дорожки должен быть числом!")        
+            self.errors.append("Номер дорожки должен быть числом!")       
 
         return not self.errors
 
@@ -498,25 +515,41 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         block1_group_layout = QVBoxLayout()
         block1_group_layout.addSpacing(15)
 
-        # Checkboxes and track field
-        options_layout = QHBoxLayout()
-        options_layout.setAlignment(Qt.AlignLeft)
 
+        # Set name 
+        set_marker_layout = QHBoxLayout()
         self.set_markers_checkbox = QCheckBox("Set markers")
         self.set_markers_checkbox.stateChanged.connect(self.update_fields_state)
-        options_layout.addWidget(self.set_markers_checkbox)
-
+        set_marker_layout.addWidget(self.set_markers_checkbox)
         self.track_label = QLabel("from track:")
         self.track_entry = QLineEdit("1")
+        self.track_entry.setEnabled(False)
         self.track_entry.setFixedWidth(40)
-        options_layout.addWidget(self.track_label)
-        options_layout.addWidget(self.track_entry)
-        options_layout.addSpacing(30)
+        set_marker_layout.addWidget(self.track_label)
+        set_marker_layout.addWidget(self.track_entry)
+
+        set_marker_label = QLabel("and place at:")
+        self.to_start_rb = QRadioButton("start")
+        self.to_start_rb.setEnabled(False)
+        self.to_center_rb = QRadioButton("center")
+        self.to_center_rb.setEnabled(False)
+        self.to_center_rb.setChecked(True)
+        set_marker_layout.addWidget(set_marker_label)
+        set_marker_layout.addSpacing(15)
+        set_marker_layout.addWidget(self.to_start_rb)
+        set_marker_layout.addSpacing(15)
+        set_marker_layout.addWidget(self.to_center_rb)
+        set_marker_layout.addStretch()
+        block1_group_layout.addLayout(set_marker_layout)
+
+        # Locator & Shot filter
+        options_layout = QHBoxLayout()
+        options_layout.setAlignment(Qt.AlignLeft)
 
         self.export_loc_checkbox = QCheckBox("Export locators to Avid")
         self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
         options_layout.addWidget(self.export_loc_checkbox)
-        options_layout.addSpacing(30)
+        options_layout.addSpacing(290)
 
         self.filter_shot = QCheckBox("Shot filter")
         options_layout.addWidget(self.filter_shot)
@@ -632,20 +665,15 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         Лок/анлок полей в UI.
         """
         self.track_entry.setEnabled(self.set_markers_checkbox.isChecked())
+        self.to_start_rb.setEnabled(self.set_markers_checkbox.isChecked())
+        self.to_center_rb.setEnabled(self.set_markers_checkbox.isChecked())
 
-        if not self.export_loc_checkbox.isChecked():
-            self.save_locators_path_entry.setEnabled(False)
-            self.save_path_btn.setEnabled(False)
-        else:
-            self.save_locators_path_entry.setEnabled(True)
-            self.save_path_btn.setEnabled(True)
+        self.save_locators_path_entry.setEnabled(self.export_loc_checkbox.isChecked())
+        self.save_path_btn.setEnabled(self.export_loc_checkbox.isChecked())
 
-        if self.create_srt_cb.isChecked():
-            self.input_entry.setEnabled(True)
-            self.input_btn.setEnabled(True)
-        else:
-            self.input_entry.setEnabled(False)
-            self.input_btn.setEnabled(False)
+        self.input_entry.setEnabled(self.create_srt_cb.isChecked())
+        self.input_btn.setEnabled(self.create_srt_cb.isChecked())
+
 
     def run_script(self):
         self.validator = ConfigValidator(self)
