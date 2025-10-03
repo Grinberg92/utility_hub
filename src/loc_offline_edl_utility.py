@@ -54,10 +54,12 @@ class LogicProcessor:
     def set_markers(self) -> bool:
         '''
         Установка маркеров с номерами полученными из оффлайн клипов на текущем таймлайне.
+        Поддерживает опциональную фильтрацию по паттерну имени шота при создании маркера.
         В зависимости от self.center_marker устанавливается по старту клипа или середине клипа.
         '''
         try:
             clips = self.timeline.GetItemListInTrack('video', self.track_number)
+            no_markers = True
             for clip in clips:
                 clip_name = clip.GetName()
 
@@ -67,16 +69,19 @@ class LogicProcessor:
                             clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
                         else:
                             clip_start = int(clip.GetStart()) - self.timeline_start_tc
-                        self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+                        if self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed'):
+                            no_markers = False
                 else:
                     if self.center_marker:
                         clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
                     else:
                         clip_start = int(clip.GetStart()) - self.timeline_start_tc
-                        print(clip_start)
-                    self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
+                    if self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed'):
+                        no_markers = False
 
-                
+            if no_markers:
+                self.signals.warning_signal.emit(f"Маркеры не были созданы.")
+                return False 
             logger.info("Маркеры успешно установлены.")
             return True
         except Exception as e:
@@ -86,6 +91,7 @@ class LogicProcessor:
     def export_locators_to_avid(self) -> bool:
         '''
         Формирование строк и экспорт локаторов для AVID в .txt.
+        Поддерживает опциональную фильтрацию по паттерну имени шота при конвертации в локаторы.
         '''
         try:
             markers_list = self.get_markers()
