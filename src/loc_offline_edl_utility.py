@@ -33,6 +33,18 @@ class LogicProcessor:
         self.user_config = user_config
         self.signals = signals
 
+    def timecode_to_frame(self, timecode)-> int:
+        """
+        Метод получает таймкод во фреймах.
+        """
+        return tc(self.fps, timecode).frames
+
+    def frame_to_timecode(self, frames) -> tc:
+        """
+        Метод получает таймкод из значений фреймов.
+        """
+        return tc(self.fps, frames=frames)
+
     def get_markers(self) -> list: 
         '''
         Получение маркеров для работы других методов.
@@ -170,7 +182,46 @@ class LogicProcessor:
             self.signals.error_signal.emit(f"Ошибка создания SRT файла {e}")
             return False
         
-    def create_temp_edl(self, output_path) -> None:
+    def convert_timecode_srt(self, timecode: str) -> str:
+        """
+        Конвертирует таймкод из формата SRT (HH:MM:SS,mmm)
+        в формат видеотаймкода (HH:MM:SS:FF), где FF — кадры.
+        
+        Пример: 01:08:43,750 --> 01:08:43:18 (при 24 fps)
+        """
+        base, ms = timecode.split(',')
+        frames = math.ceil(int(ms) * self.fps / 1000)
+        return f"{base}:{frames:02d}"
+        
+    def edl_from_srt(self, srt_path: str) -> None:
+        """
+        Создание EDL файла оффлайн клипов с номерами шотов, из данных полученных из SRT файла.
+        """
+        try:
+            result_path = Path(str(srt_path).replace(".srt", ".edl"))
+
+            with open(srt_path, 'r', encoding='utf-8') as input:
+                srt = input.read().strip().split('\n\n')
+
+                for i in srt:
+                    number, timecode_raw, shot_name = i.split('\n')
+                    number = number.strip('\ufeff') # Удаление символа по началу самой первой строки
+                    record_in_raw, record_out_raw = timecode_raw.split('-->')
+                    record_in = self.convert_timecode_srt(record_in_raw)
+                    record_out = self.convert_timecode_srt(record_out_raw)
+                    rec_duration = self.timecode_to_frame(record_out) - self.timecode_to_frame(record_in) 
+                    src_in = "00:00:00:00"
+                    src_out = self.frame_to_timecode(self.timecode_to_frame(src_in) + rec_duration)
+
+                    with open(result_path, 'a', encoding='utf-8') as o:
+                        o.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
+            logger.info("EDL файл из SRT успешно создан.")
+            return True
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка создания EDL файлов из SRT {e}")
+            return False
+        
+    def create_temp_edl(self) -> None:
         """
         Создает промежуточный EDL для offline edl и dailies edl.
         """
@@ -195,7 +246,7 @@ class LogicProcessor:
         try:
             markers_list = self.get_markers()
             
-            edl_path = self.create_temp_edl(self.output_path)
+            edl_path = self.create_temp_edl()
             if edl_path:
 
                 with open(edl_path, "r", encoding='utf8') as edl_file:
@@ -329,6 +380,7 @@ class LogicProcessor:
         self.offline_track = int(self.user_config["offline_track_number"])
         self.shot_filter = self.user_config["shot_filter"]
         self.center_marker = self.user_config["is_center_marker"]
+        self.edl_from_srt_bool = self.user_config["create_edl_from_srt"]
 
         self.count_of_tracks = self.timeline.GetTrackCount('video')
         items = self.timeline.GetItemListInTrack('video', self.offline_track)
@@ -352,6 +404,11 @@ class LogicProcessor:
         if self.srt_create_bool:
             srt_create_var = self.create_srt()
             if not srt_create_var:
+                return False
+            
+        if self.edl_from_srt_bool:
+            edl_from_srt_var = self.edl_from_srt(self.edl_path)
+            if not edl_from_srt_var:
                 return False
             
         if self.name_from_markers or self.name_from_track:
@@ -410,7 +467,8 @@ class ConfigValidator:
         "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
         "offline_track_number": self.gui.from_track_edit.text().strip(),
         "shot_filter": self.gui.filter_shot.isChecked(),
-        "is_center_marker": self.gui.to_center_rb.isChecked()
+        "is_center_marker": self.gui.to_center_rb.isChecked(),
+        "create_edl_from_srt": self.gui.srt_to_edl_cb.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -433,9 +491,10 @@ class ConfigValidator:
         dailies_edl_cb = user_config["dailies_checkbox"]
         create_srt_cb = user_config["create_srt_checkbox"]
         set_markers_cb = user_config["set_markers"]
+        edl_from_srt = user_config["create_edl_from_srt"]
 
         if not any([name_from_track, name_from_markers, offline_edl_cb, 
-                    dailies_edl_cb, create_srt_cb, export_loc_cb, set_markers_cb]):
+                    dailies_edl_cb, create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt]):
             self.errors.append("Не выбрана ни одна опция!")
             return
 
@@ -450,6 +509,9 @@ class ConfigValidator:
 
         if create_srt_cb and (not output_path or not edl_path):
             self.errors.append("Укажите входной и выходной путь для EDL!")
+
+        if edl_from_srt and not edl_path:
+            self.errors.append("Укажите входной путь для EDL!")
         
         if not locator_output_path and export_loc_cb:
             self.errors.append("Введите путь для сохранения локаторов!")
@@ -589,12 +651,16 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.offline_clips_checkbox = QCheckBox("EDL for offline")
         self.edl_for_dailies_checkbox = QCheckBox("EDL for autoconform")
         self.create_srt_cb = QCheckBox("EDL to SRT")
+        self.srt_to_edl_cb = QCheckBox("SRT to EDL")
         self.create_srt_cb.stateChanged.connect(self.update_fields_state)
+        self.srt_to_edl_cb.stateChanged.connect(self.update_fields_state)
         checks_layout.addWidget(self.offline_clips_checkbox)
-        checks_layout.addSpacing(60)
+        checks_layout.addSpacing(30)
         checks_layout.addWidget(self.edl_for_dailies_checkbox)
-        checks_layout.addSpacing(60)
+        checks_layout.addSpacing(30)
         checks_layout.addWidget(self.create_srt_cb)
+        checks_layout.addSpacing(30)
+        checks_layout.addWidget(self.srt_to_edl_cb)
         block2_group_layout.addLayout(checks_layout)
 
         # Input path
@@ -650,7 +716,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout.addWidget(self.run_button)
 
     def select_input_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select EDL file", "", "EDL files (*.edl)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select EDL file", "", "SRT files (*.srt);; EDL files (*.edl)")
         if file_path:
             self.input_entry.setText(file_path)
 
@@ -679,6 +745,13 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         self.input_entry.setEnabled(self.create_srt_cb.isChecked())
         self.input_btn.setEnabled(self.create_srt_cb.isChecked())
+
+        input_enabled = self.create_srt_cb.isChecked() or self.srt_to_edl_cb.isChecked()
+        self.input_entry.setEnabled(input_enabled)
+        self.input_btn.setEnabled(input_enabled)
+
+        self.output_entry.setEnabled(not self.srt_to_edl_cb.isChecked())
+        self.output_btn.setEnabled(not self.srt_to_edl_cb.isChecked())
 
 
     def run_script(self):
