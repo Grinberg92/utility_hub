@@ -23,7 +23,7 @@ class GUI(QtWidgets.QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Color&FPS Setter')
+        self.setWindowTitle('OCF Color and FPS')
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.resize(450, 130)
         self.clip_color_list = ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
@@ -63,6 +63,7 @@ class GUI(QtWidgets.QWidget):
 
         # Добавляем всё в layout
         options_layout.addWidget(self.checkbox_color)
+        options_layout.addSpacing(15)
         options_layout.addWidget(self.checkbox_fps)
         options_layout.addWidget(self.checkbox_excel)
         options_layout.addWidget(fps_widget)
