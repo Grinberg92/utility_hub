@@ -296,20 +296,32 @@ class DeliveryPipline:
         (высота кадра текущего клипа * ширина целевого разрешения) / (ширина кадра такущего клипа).
         Если полученное значение ширины или высоты кадра получается нечетным, то идет округление вверх до ближайшего четного значения.
         """
-        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-            aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            # Временный фикс
-            if self.boe_fix:
-                if calculate_width == "2500":
-                    calculate_width = "2498"
-            resolution = "x".join([calculate_width, self.height_res_glob])
-            return resolution
-        
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+            # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) ))) / 2) * 2))
+                # Временный фикс
+                if self.boe_fix:
+                    if calculate_width == "2500":
+                        calculate_width = "2498"
+                resolution = "x".join([calculate_width, self.height_res_glob])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect)))) / 2) * 2))
+                # Временный фикс
+                if self.boe_fix:
+                    if calculate_width == "2500":
+                        calculate_width = "2498"
+                resolution = "x".join([calculate_width, self.height_res_glob])
+                return resolution
+            
         else:
             aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
             resolution = "x".join([self.width_res_glob, calculate_height])
             return resolution
@@ -321,20 +333,33 @@ class DeliveryPipline:
         Вычисление аналогично standart_resolution, но при этом и ширина и высота домножаются на коэффициент 1.5.
         """
         # Находит анаморф, вычисляет ширину по аспекту
-        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-            aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            # Временный фикс
-            width_1_5 = str(int(int(calculate_width) * 1.5))
-            if self.boe_fix:
-                if width_1_5 == "3750":
-                        width_1_5 = "3748"
-            resolution = "x".join([width_1_5, str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
-            return resolution
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+            # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (float(height) ))) / 2) * 2))
+                # Временный фикс
+                width_1_5 = str(int(math.ceil((float(calculate_width) * 1.5) / 2.0) * 2))
+                if self.boe_fix:
+                    if width_1_5 == "3750":
+                            width_1_5 = "3748"
+                resolution = "x".join([width_1_5, str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+                # Временный фикс
+                width_1_5 = str(int(math.ceil((float(calculate_width) * 1.5) / 2.0) * 2))
+                if self.boe_fix:
+                    if width_1_5 == "3750":
+                            width_1_5 = "3748"
+                resolution = "x".join([width_1_5, str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
+                return resolution
         else:
             aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
             resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 1.5) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 1.5) / 2) * 2))])
             return resolution
@@ -345,15 +370,23 @@ class DeliveryPipline:
         умноженное на 2 при зуме(скеиле) свыше 50%.
         Вычисление аналогично standart_resolution, но при этом и ширина и высота домножаются на коэффициент 2.
         """
-        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-            aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            resolution = "x".join([str(int(int(calculate_width) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
-            return resolution
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+            # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height))) ) / 2) * 2))
+                resolution = "x".join([str(int(int(calculate_width) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+                resolution = "x".join([str(int(int(calculate_width) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
+                return resolution      
         else:
             aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
             resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 2) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 2) / 2) * 2))])
             return resolution
@@ -365,12 +398,21 @@ class DeliveryPipline:
         (высота кадра текущего клипа / аспект текущего клипа).
         Если полученное значение высоты кадра получается нечетным, то идет округление вверх до ближайшего четного значения.
         """
-        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-            aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_height = str((math.ceil((int(height) / float(aspect))  / 2) * 2))
-            resolution = "x".join([width, calculate_height])
-            return resolution
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+             # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_height = str((math.ceil((int(height))  / 2) * 2))
+                resolution = "x".join([width, calculate_height])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_height = str((math.ceil((int(height) / float(aspect))  / 2) * 2))
+                resolution = "x".join([width, calculate_height])
+                return resolution
         else:
             return clip.GetClipProperty('Resolution')
         
