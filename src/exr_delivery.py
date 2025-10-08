@@ -575,6 +575,9 @@ class DeliveryPipline:
                     if not clip.GetName().lower().endswith(SETTINGS["extentions"]) and not clip.GetName().lower().endswith(SETTINGS["false_extentions"]):
                         warnings.append(f"Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
 
+                    if float(clip.GetClipProperty("FPS")) != float(self.fps):
+                        warnings.append(f"FPS клипа {clip.GetName()} на треке {track_num} не соответствует проектному")
+
                     try:
                         if not item.clip_color == SETTINGS["colors"][4]:
                             self.get_handles(item, hide_log=False)
@@ -621,6 +624,7 @@ class DeliveryPipline:
         self.render_path = self.user_config["render_path"]
         self.export_bool = self.user_config["export_xml"]
         self.boe_fix = self.user_config["boe_fix"]
+        self.fps = self.user_config["fps"]
 
         self.rj_to_clear = []
         self._last_render_preset = None
@@ -732,7 +736,8 @@ class ConfigValidator:
                 "handles": self.gui.handle_input.text().strip(),
                 "render_path": self.gui.render_path.text().strip(),
                 "export_xml": self.gui.export_cb.isChecked(),
-                "boe_fix": self.gui.boe_fix_cb.isChecked()
+                "boe_fix": self.gui.boe_fix_cb.isChecked(),
+                "fps": self.gui.fps_entry.text(),
             }
         if self.mode == "names":
             return {"track_number": self.gui.from_track_qline.text().strip(),
