@@ -45,9 +45,12 @@ class LogicProcessor:
         """
         return tc(self.fps, frames=frames)
 
-    def get_markers(self) -> list: 
+    def get_markers(self, mode="external") -> list: 
         '''
         Получение маркеров для работы других методов.
+
+        :param mode: При 'external' - будет прибавляться 1 фрейм для корректной работы с внешними монтажными документами. 
+        При 'internal' для работы с маркерами внутри резолв ничего не добавляем.
         '''
         try:
             markers_list = []
@@ -56,7 +59,7 @@ class LogicProcessor:
                 if timecode == 0:
                     self.signals.error_signal.emit(f"Таймкод первого маркера равен 0\nУдалите или переместите его.")
                     return False
-                timecode_marker = tc(self.fps, frames=timecode + self.timeline_start_tc) + 1  
+                timecode_marker = tc(self.fps, frames=timecode + self.timeline_start_tc) + (0,1)[mode == "external"]  
                 markers_list.append((name, timecode_marker))
             return markers_list
         except Exception as e:
@@ -291,7 +294,7 @@ class LogicProcessor:
         """
         Присвоение имен из маркеров.
         """
-        markers = self.get_markers()
+        markers = self.get_markers(mode="internal")
 
         for track_index in range(2, self.count_of_tracks + 1):
             clips_under = self.timeline.GetItemListInTrack('video', track_index)
