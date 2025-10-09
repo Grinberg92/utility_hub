@@ -164,22 +164,22 @@ class LogicProcessor:
         
         return items_data
             
-    def create_srt(self) -> bool:
+    def srt_from_edl(self, edl_path) -> bool:
         """
         Создание SRT файла из данных, извлеченных из EDL файла.
         """
         try:
+            result_path = Path(str(edl_path).replace(".edl", "_converted.srt"))
             items_data = self.get_edl_data()
-            with open(self.output_path, "a" ,encoding="utf-8") as o:
+            with open(result_path, "a" ,encoding="utf-8") as o:
                 for index, data in enumerate(items_data, start=1):
                     name, start_tc, end_tc = data
-
                     index_str = index
                     timecode_str = f"{start_tc} --> {end_tc}"
                     name_str = name
 
                     o.write(f"{index_str}\n{timecode_str}\n{name_str}\n\n")
-            logger.info("SRT файл успешно создан.")
+            logger.info(f"SRT файл успешно создан: {result_path}")
             return True
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания SRT файла {e}")
@@ -201,7 +201,7 @@ class LogicProcessor:
         Создание EDL файла оффлайн клипов с номерами шотов, из данных полученных из SRT файла.
         """
         try:
-            result_path = Path(str(srt_path).replace(".srt", ".edl"))
+            result_path = Path(str(srt_path).replace(".srt", "_converted.edl"))
 
             with open(srt_path, 'r', encoding='utf-8') as input:
                 srt = input.read().strip().split('\n\n')
@@ -217,10 +217,11 @@ class LogicProcessor:
                     src_out = self.frame_to_timecode(self.timecode_to_frame(src_in) + rec_duration)
 
                     with open(result_path, 'a', encoding='utf-8') as o:
+                        # Жестко придерживаться табуляции, что бы корректно принимал AVID
                         o.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
                         o.write(f"* FROM CLIP NAME: {shot_name}\n")
 
-            logger.info("EDL файл из SRT успешно создан.")
+            logger.info("EDL файл из SRT успешно создан: {result_path}")
             return True
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания EDL файлов из SRT {e}")
@@ -407,7 +408,7 @@ class LogicProcessor:
                 return False
             
         if self.srt_create_bool:
-            srt_create_var = self.create_srt()
+            srt_create_var = self.srt_from_edl(self.edl_path)
             if not srt_create_var:
                 return False
             
@@ -669,7 +670,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         block2_group_layout.addLayout(checks_layout)
 
         # Input path
-        input_label = QLabel("Choose input EDL:")
+        input_label = QLabel("Choose input file:")
         input_layout = QHBoxLayout()
         self.input_entry = QLineEdit()
         self.input_entry.setEnabled(False)
@@ -682,7 +683,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         block2_group_layout.addLayout(input_layout)
 
         # Output path
-        output_label = QLabel("Save output result:")
+        output_label = QLabel("Save result:")
         output_layout = QHBoxLayout()
         self.output_entry = QLineEdit()
         self.output_btn = QPushButton("Choose")
@@ -755,8 +756,8 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.input_entry.setEnabled(input_enabled)
         self.input_btn.setEnabled(input_enabled)
 
-        self.output_entry.setEnabled(not self.srt_to_edl_cb.isChecked())
-        self.output_btn.setEnabled(not self.srt_to_edl_cb.isChecked())
+        self.output_entry.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked())))
+        self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked())))
 
 
     def run_script(self):
