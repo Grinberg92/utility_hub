@@ -218,6 +218,8 @@ class LogicProcessor:
 
                     with open(result_path, 'a', encoding='utf-8') as o:
                         o.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
+                        o.write(f"* FROM CLIP NAME: {shot_name}\n")
+
             logger.info("EDL файл из SRT успешно создан.")
             return True
         except Exception as e:
