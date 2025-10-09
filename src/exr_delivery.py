@@ -557,20 +557,42 @@ class DeliveryPipline:
     def remove_transform(self, item) -> None:
         """
         Удаляет трансформы и кроппинг с таймлайн итема.
+
+        Не используется.
         """
-        item.SetProperty("Pan", 0.000)
-        item.SetProperty("Tilt", 0.000)
-        item.SetProperty("ZoomX", 1.000)
-        item.SetProperty("ZoomY", 1.000)
-        item.SetProperty("Pitch", 0.000)
-        item.SetProperty("Yaw", 0.000)
-        item.SetProperty("RotationAngle", 0.000)
-        item.SetProperty("CropLeft", 0.000)
-        item.SetProperty("CropRight", 0.000)
-        item.SetProperty("CropTop", 0.000)
-        item.SetProperty("CropBottom", 0.000)
-        item.SetProperty("Opacity", 100)
-        item.SetProperty("CropSoftness", 0.000)
+        item.timeline_item.SetProperty("Tilt", 0.000)
+        item.timeline_item.SetProperty("ZoomX", 1.000)
+        item.timeline_item.SetProperty("ZoomY", 1.000)
+        item.timeline_item.SetProperty("Pitch", 0.000)
+        item.timeline_item.SetProperty("Yaw", 0.000)
+        item.timeline_item.SetProperty("RotationAngle", 0.000)
+        item.timeline_item.SetProperty("CropLeft", 0.000)
+        item.timeline_item.SetProperty("CropRight", 0.000)
+        item.timeline_item.SetProperty("CropTop", 0.000)
+        item.timeline_item.SetProperty("CropBottom", 0.000)
+        item.timeline_item.SetProperty("Opacity", 100)
+        item.timeline_item.SetProperty("CropSoftness", 0.000)
+
+    def detect_transform(self, item) -> bool:
+        """
+        Определяет есть ли трансформы и кроппинг на таймлайн итеме.
+        """
+        try:
+            return not all((float(item.timeline_item.GetProperty("Pan")) == float(0.0),
+                        float(item.timeline_item.GetProperty("Tilt")) == float(0.0),
+                        float(item.timeline_item.GetProperty("ZoomX")) == float(1.0),
+                        float(item.timeline_item.GetProperty("ZoomY")) == float(1.0),
+                        float(item.timeline_item.GetProperty("Pitch")) == float(0.0),
+                        float(item.timeline_item.GetProperty("Yaw")) == float(0.0),
+                        float(item.timeline_item.GetProperty("RotationAngle")) == float(0.0),
+                        float(item.timeline_item.GetProperty("CropLeft")) == float(0.0),
+                        float(item.timeline_item.GetProperty("CropRight")) == float(0.0),
+                        float(item.timeline_item.GetProperty("CropBottom")) == float(0.0),
+                        float(item.timeline_item.GetProperty("Opacity")) == float(100.0),
+                        float(item.timeline_item.GetProperty("CropSoftness")) == float(0.0)))
+
+        except Exception as e:
+            self.signals.warning_signal.emit(f"Ошибка получения значений трансформов: {e}")
 
     def is_question_items(self, warnings) -> bool:
         """
@@ -605,7 +627,7 @@ class DeliveryPipline:
 
                 track_items = self.get_mediapoolitems(start_track=track, end_track=track)
                 for item in track_items:
-                    
+
                     clip = item.mp_item
 
                     if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
@@ -615,20 +637,24 @@ class DeliveryPipline:
                         no_select = False
 
                     if not clip.GetName().lower().endswith(SETTINGS["extentions"]) and not clip.GetName().lower().endswith(SETTINGS["false_extentions"]):
-                        warnings.append(f"Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
+                        warnings.append(f"• Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
 
                     if float(clip.GetClipProperty("FPS")) != float(self.fps):
-                        warnings.append(f"FPS клипа {clip.GetName()} на треке {track_num} не соответствует проектному")
+                        warnings.append(f"• FPS клипа {clip.GetName()} на треке {track_num} не соответствует проектному")
+                    
+                    if self.detect_transform(item):
+                        warnings.append(f"• Уберите трансфомы/скейлы с клипов на треке {track}")
+                        break
 
                     try:
                         if not item.clip_color == SETTINGS["colors"][4]:
                             self.get_handles(item, hide_log=False)
                     except ZeroDivisionError:
-                        warnings.append(f"Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен рендериться без захлестов")
+                        warnings.append(f"• Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен рендериться без захлестов")
                     except ValueError:
-                        warnings.append(f"У клипа '{clip.GetName()}' на треке {track_num} ретайм свыше 1000%")
+                        warnings.append(f"• У клипа '{clip.GetName()}' на треке {track_num} ретайм свыше 1000%")
         except:
-            warnings.append(f"На таймлайне обнаружен объект не подлежащий верификации")
+            warnings.append(f"На таймлайне обнаружен объект, который невозможно верифицировать.\nПроверьте нет ли на таймлайне эффектов перехода или других эффектов.")
 
         if no_select:
             warnings.append("Не выбран ни один клип на таймлайне")
@@ -671,6 +697,9 @@ class DeliveryPipline:
         self.rj_to_clear = []
         self._last_render_preset = None
         self._last_resolution = None
+
+        self.timeline.DuplicateTimeline(self.timeline.GetName() + "_with_transform")
+        self.project.SetCurrentTimeline(self.timeline)
 
         video_tracks = self.get_tracks()
         if video_tracks == []:
