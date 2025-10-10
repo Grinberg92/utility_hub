@@ -69,4 +69,8 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 4) установка зависимостей
 5) Запуск симлинк скрипта
 
+АВТОЗАПУСК АВТОПУЛА ГИТА
+
+./autorefresh_win.sh >> /j/003_transcode_to_vfx/projects/log.log 2>&1 &
+
 
