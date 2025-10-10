@@ -513,7 +513,7 @@ class ConfigValidator:
         if process_edl and not output_path:
             self.errors.append("Выберите путь для сохранения EDL!")
 
-        if create_srt_cb and (not output_path or not edl_path):
+        if create_srt_cb and not edl_path:
             self.errors.append("Укажите входной и выходной путь для EDL!")
 
         if edl_from_srt and not edl_path:
