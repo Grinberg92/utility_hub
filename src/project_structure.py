@@ -151,7 +151,7 @@ class MainWindow(QWidget):
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.resize(570, 280)
 
-        self.projects = os.listdir(r"T:\projects")
+        self.projects = os.listdir((r"T:\projects", r"/Volumes/transfer")[sys.platform != "win32"] )
         self.projects.insert(0, "Select project")
 
         self.setup_ui()
