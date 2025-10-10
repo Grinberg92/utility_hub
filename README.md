@@ -73,4 +73,6 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 
 ./autorefresh_win.sh >> /j/003_transcode_to_vfx/projects/log.log 2>&1 &
 
+MAC - /usr/bin/nohup ./autorefresh_mac.sh >> /Volumes/share2/003_transcode_to_vfx/projects/log.log 2>&1 &
+
 
