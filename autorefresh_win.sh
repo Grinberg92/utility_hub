@@ -1,6 +1,6 @@
 
 REPO_PATH='/c/VsCodeProj/utility_hub'
-INTERVAL=10
+INTERVAL=28800
 
 cd $REPO_PATH || { echo "Not found $REPO_PATH"; exit 1; }
 
