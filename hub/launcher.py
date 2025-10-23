@@ -82,6 +82,11 @@ class HubApp(QWidget):
             description_text="Хаб для работы с маркерами и EDL",
             script_name="loc_offline_edl_utility.py"
         )
+        row11 = self.create_button_description_row(
+            button_name="Find Source",
+            description_text="Поиск исходника и добавление его на таймлайн",
+            script_name="find_clip_by_tc.py"
+        )
 
         resolve_layout.addLayout(row1)
         resolve_layout.addLayout(row2)
@@ -93,7 +98,7 @@ class HubApp(QWidget):
         resolve_layout.addLayout(row8)
         resolve_layout.addLayout(row9)
         resolve_layout.addLayout(row10)
-
+        resolve_layout.addLayout(row11)
 
         resolve_box.setLayout(resolve_layout)
         resolve_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
