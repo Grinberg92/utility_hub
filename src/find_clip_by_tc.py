@@ -70,6 +70,16 @@ class ResolveClipExtractor:
             return frame 
         else:
             return timeline.GetStartFrame() # Фрейм начала тайлайна Resovle
+        
+    def is_valid_frame(self, in_tc, out_tc, clip):
+        """
+        Валидация стартового и конечного таймкода на наличие их в целевом клипе.
+        """
+        start = int(clip.GetClipProperty("Start"))
+        end = int(clip.GetClipProperty("End")) + 1
+        print(start, end, int(tc(24, in_tc).frames), int(tc(24, out_tc).frames))
+        frames = [self.get_frame(clip, x) for x in [in_tc, out_tc]]
+        return all(start <= f <= end for f in frames)
 
     def run(self):
         """
@@ -77,8 +87,8 @@ class ResolveClipExtractor:
         """
         self.search_bin = self.user_config["search_bin"]
         self.target_name = self.user_config["target_name"]
-        self.input_tc = self.user_config["input_tc"]
-        self.output_tc = self.user_config["output_tc"]
+        self.start_tc = self.user_config["start_tc"]
+        self.end_tc = self.user_config["end_tc"]
         self.track = int(self.user_config["track_input"])
         self.append_mode = self.user_config["append_mode"]
         self.selected_range = self.user_config["selected_range"]
@@ -98,6 +108,12 @@ class ResolveClipExtractor:
         if not trg_clip:
             self.signals.error_signal.emit(f"Клип {self.target_name} отсутствует")
             return
+        
+        if self.is_valid_frame(self.start_tc, self.end_tc, trg_clip):
+            pass
+        else:
+            self.signals.error_signal.emit(f"Стартовый или конечный тамкоды не найдены")
+            return
 
         if self.append_mode:
             record_frame = self.get_last_rec_frame(timeline, self.track)
@@ -110,8 +126,8 @@ class ResolveClipExtractor:
             return
 
         if self.selected_range:
-            start_frame = self.get_frame(trg_clip, self.input_tc)
-            end_frame = self.get_frame(trg_clip, self.output_tc) + 1
+            start_frame = self.get_frame(trg_clip, self.start_tc)
+            end_frame = self.get_frame(trg_clip, self.end_tc) + 1
         else:
             # Берем начальный и конечный фрейм из метаданных клипа
             start_frame = int(trg_clip.GetClipProperty("Start"))
@@ -149,7 +165,7 @@ class ResolveExtractorWorker(QThread):
     def run(self):
         try:
             logic = ResolveClipExtractor(self.user_config, self)
-            result = logic.run() 
+            logic.run() 
 
         except Exception as e:
             self.error_signal.emit(f"Ошибка: {e}")
@@ -169,8 +185,8 @@ class ConfigValidator:
         return {
                 "search_bin": self.gui.search_bin_input.text().strip(),
                 "target_name": self.gui.target_name_input.text().strip(),
-                "input_tc": self.gui.input_tc.text().strip(),
-                "output_tc": self.gui.output_tc.text().strip(),
+                "start_tc": self.gui.start_tc.text().strip(),
+                "end_tc": self.gui.end_tc.text().strip(),
                 "track_input": self.gui.track_input.text().strip(),
                 "append_mode": self.gui.mode_append_rb.isChecked(),
                 "selected_range": self.gui.range_selected_rb.isChecked()
@@ -186,9 +202,9 @@ class ConfigValidator:
             self.errors.append("Укажите бин для поиска клипов")
         if not user_config["target_name"]:
             self.errors.append("Укажите имя целевого клипа")
-        if not user_config["input_tc"] and user_config["selected_range"]:
+        if not user_config["start_tc"] and user_config["selected_range"]:
             self.errors.append("Укажите стартовый таймкод")
-        if not user_config["output_tc"] and user_config["selected_range"]:
+        if not user_config["end_tc"] and user_config["selected_range"]:
             self.errors.append("Укажите конечный таймкод")
 
         try:
@@ -206,8 +222,8 @@ class ResolveClipExtractorUI(QWidget):
 
         self.search_bin_input = QLineEdit("001_OCF")
         self.target_name_input = QLineEdit()
-        self.input_tc = QLineEdit()
-        self.output_tc = QLineEdit()
+        self.start_tc = QLineEdit()
+        self.end_tc = QLineEdit()
         self.track_input = QLineEdit("1")
 
         self.range_selected_rb = QRadioButton("Selected")
@@ -263,8 +279,8 @@ class ResolveClipExtractorUI(QWidget):
         layout.addRow(range_layout)
         layout.addRow("Search Bin:", self.search_bin_input)
         layout.addRow("Target Name:", self.target_name_input)
-        layout.addRow("Input TC:", self.input_tc)
-        layout.addRow("Output TC:", self.output_tc)
+        layout.addRow("Start TC:", self.start_tc)
+        layout.addRow("End TC:", self.end_tc)
         layout.addRow("Track:", self.track_input)
         layout.addRow(mode_layout)
         layout.addRow(self.run_button)
@@ -273,8 +289,8 @@ class ResolveClipExtractorUI(QWidget):
         self.setLayout(layout)
 
     def update_state(self):
-        self.input_tc.setEnabled(not self.range_full_rb.isChecked())
-        self.output_tc.setEnabled(not self.range_full_rb.isChecked())
+        self.start_tc.setEnabled(not self.range_full_rb.isChecked())
+        self.end_tc.setEnabled(not self.range_full_rb.isChecked())
 
     def run(self):
         """
