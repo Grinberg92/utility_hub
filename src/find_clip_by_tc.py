@@ -96,7 +96,7 @@ class ResolveClipExtractor:
 
         trg_clip = self.find_clips_by_name(target_media_folder, self.target_name)
         if not trg_clip:
-            self.signals.error_signal.emit(f"Клип {trg_clip.GetName()} отсутствует")
+            self.signals.error_signal.emit(f"Клип {self.target_name} отсутствует")
             return
 
         if self.append_mode:
@@ -152,7 +152,7 @@ class ResolveExtractorWorker(QThread):
             result = logic.run() 
 
         except Exception as e:
-            self.error_signal.emit(f"Не удалось создать OTIO файл: {e}")
+            self.error_signal.emit(f"Ошибка: {e}")
 
 class ConfigValidator:
     """
@@ -213,6 +213,7 @@ class ResolveClipExtractorUI(QWidget):
         self.range_selected_rb = QRadioButton("Selected")
         self.range_full_rb = QRadioButton("Full Range")
         self.range_selected_rb.setChecked(True)
+        self.range_full_rb.toggled.connect(self.update_state)
 
         self.range_group = QButtonGroup()
         self.range_group.addButton(self.range_selected_rb)
@@ -270,6 +271,10 @@ class ResolveClipExtractorUI(QWidget):
         layout.addRow(self.log)
         
         self.setLayout(layout)
+
+    def update_state(self):
+        self.input_tc.setEnabled(not self.range_full_rb.isChecked())
+        self.output_tc.setEnabled(not self.range_full_rb.isChecked())
 
     def run(self):
         """
