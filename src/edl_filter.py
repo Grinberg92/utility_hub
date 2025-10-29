@@ -1,51 +1,49 @@
 import sys
 import os
-import re
+from collections import Counter
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QTextEdit, QPushButton, QFileDialog, QMessageBox
 )
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
+from common_tools.edl_parsers import detect_edl_parser
 
 logger = get_logger(__file__)
 
-def filter_edl(edl_text: str, exclude_ids: list[str]) -> str:
+def filter_edl(self, edl_path: str, exclude_shots: list[str], fps) -> str:
     """
-    Убирает из EDL блоки, в которых *LOC содержит один из exclude_ids.
+    Пересобирает шоты в EDL при нахождении их в списке exclude_ids
     """
-    lines = edl_text.splitlines()
-    blocks = []
-    current_block = []
+    logger.info("Start process")
+    edl_parser = detect_edl_parser(fps, edl_path=edl_path)
 
-    for line in lines:
-        if re.match(r"^\d{6}", line):  
-            if current_block:
-                blocks.append(current_block)
-            current_block = [line]
-        elif line.startswith("*LOC"):
-            current_block.append(line)
-            blocks.append(current_block)
-            current_block = []
-        else:
-            if current_block is not None:
-                current_block.append(line)
+    edl_shot_names = Counter([i.edl_shot_name for i in edl_parser]) # Словарь имен шотов из EDL
 
-    if current_block:
-        blocks.append(current_block)
+    edl_shot_data = [i for i in edl_parser] # Объекты EDL парсера в списке
 
-    filtered_blocks = []
-    for block in blocks:
-        loc_line = next((l for l in block if l.startswith("*LOC")), None)
-        if loc_line:
-            shot_id = loc_line.strip().split()[-1]
-            if shot_id in exclude_ids:
-                filtered_blocks.append(block)
-        else:
-            filtered_blocks.append(block)
+    exclude_shots_data = Counter(exclude_shots) # Словарь имен шотов из инпута
 
-    return "\n".join("\n".join(b) for b in filtered_blocks)
+    base, ext = os.path.splitext(self.edl_path)
+    output_path = base + "_filtered" + ext
+    logger.info(f"Output: {output_path}")
 
+    # Поиск шота из EDL в списке exclude_shots
+    for shot_data in edl_shot_data:
+        with open(output_path, "a", encoding="utf-8") as f:
+            if shot_data.edl_shot_name in exclude_shots_data: 
+                f.write(f"{shot_data.edl_record_id}  {shot_data.edl_shot_name}   V     C        {shot_data.edl_source_in} {shot_data.edl_source_out} {shot_data.edl_record_in} {shot_data.edl_record_out}\n")    
+    
+    # Поиск шотов отсутствующих в EDL
+    not_found_shots = []
+    for exclude_shot in exclude_shots_data:
+        if exclude_shot not in edl_shot_names:
+            not_found_shots.append(f"В EDL отсутствует шот {exclude_shot}")
+    if not_found_shots:
+        self.log.append("\n".join(not_found_shots))
+        return True
+
+    return True
 
 class EDLFilterApp(QMainWindow):
     def __init__(self):
@@ -53,6 +51,7 @@ class EDLFilterApp(QMainWindow):
         self.setWindowTitle("EDL Filter")
         self.resize(600, 200)
 
+        self.fps = 24
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
@@ -78,6 +77,11 @@ class EDLFilterApp(QMainWindow):
         filter_btn.clicked.connect(self.run_filter)
         layout.addWidget(filter_btn)
 
+        self.log = QTextEdit()
+        self.log.setPlaceholderText("Errors log")
+        self.log.setReadOnly(True)
+        layout.addWidget(self.log)
+
         self.edl_text = ""
         self.edl_path = ""
 
@@ -86,26 +90,27 @@ class EDLFilterApp(QMainWindow):
         if path:
             self.file_edit.setText(path)
             self.edl_path = path
-            with open(path, "r", encoding="utf-8") as f:
-                self.edl_text = f.read()
 
     def run_filter(self):
-        if not self.edl_text or not self.edl_path:
-            QMessageBox.warning(self, "Error", "Сначала выберите файл EDL")
+        if not self.edl_path:
+            QMessageBox.warning(self, "Warning", "Сначала выберите файл EDL")
+            logger.warning("Сначала выберите файл EDL")
+            return
+        
+        if not self.ids_edit.toPlainText().strip():
+            QMessageBox.warning(self, "Warning", "Добавьте exclude shots")
+            logger.warning("Добавьте exclude shots")
             return
 
         ids_raw = self.ids_edit.toPlainText().strip()
         exclude_ids = ids_raw.replace(",", " ").split()
-        result = filter_edl(self.edl_text, exclude_ids)
-
-        base, ext = os.path.splitext(self.edl_path)
-        new_path = base + "_filtered" + ext
-
-        with open(new_path, "w", encoding="utf-8") as f:
-            f.write(result)
-
-        QMessageBox.information(self, "Success", f"Файл сохранён:\n{new_path}")
-
+        result = filter_edl(self, self.edl_path, exclude_ids, self.fps)
+        if result:
+            QMessageBox.information(self, "Success", f"Файл успешно создан")
+            logger.info(f"Файл успешно создан")
+        else:
+            QMessageBox.critical(self, "Error", f"Ошибка создания файла")
+            logger.error(f"Ошибка создания файла")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
