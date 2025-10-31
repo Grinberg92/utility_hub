@@ -127,12 +127,13 @@ class RenderPipline:
         """
         return self.project.IsRenderingInProgress()
     
-    def choose_burnin_type(self, height):
+    def choose_burnin_type(self, width, height):
         """
         Выбор пресета burn in.
         """
-
-        if int(height) < 1000:
+        ratio = int(width) / int(height) # Соотношение выше 2.2 всегда анаморфот
+        
+        if ratio > 2.2:
             self.turn_on_burn_in("anam")
         else:
             self.turn_on_burn_in("square")
@@ -455,7 +456,7 @@ class RenderPipline:
             self.project.SetSetting("timelineResolutionWidth", width)
             self.project.SetSetting("timelineResolutionHeight", height)
 
-            self.choose_burnin_type(height)
+            self.choose_burnin_type(width, height)
 
             start_render_var = self.project.StartRendering(render)
             if not start_render_var:
