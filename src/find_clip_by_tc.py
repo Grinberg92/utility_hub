@@ -109,11 +109,12 @@ class ResolveClipExtractor:
             self.signals.error_signal.emit(f"Клип {self.target_name} отсутствует")
             return
         
-        if self.is_valid_frame(self.start_tc, self.end_tc, trg_clip):
-            pass
-        else:
-            self.signals.error_signal.emit(f"Стартовый или конечный тамкоды не найдены")
-            return
+        if self.selected_range:
+            if self.is_valid_frame(self.start_tc, self.end_tc, trg_clip):
+                pass
+            else:
+                self.signals.error_signal.emit(f"Стартовый или конечный тамкоды не найдены")
+                return
 
         if self.append_mode:
             record_frame = self.get_last_rec_frame(timeline, self.track)
