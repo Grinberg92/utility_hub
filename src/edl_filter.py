@@ -11,9 +11,9 @@ from common_tools.edl_parsers import detect_edl_parser
 
 logger = get_logger(__file__)
 
-def filter_edl(self, edl_path: str, exclude_shots: list[str], fps) -> str:
+def filter_edl(self, edl_path: str, input_shots: list[str], fps) -> str:
     """
-    Пересобирает шоты в EDL при нахождении их в списке exclude_ids
+    Пересобирает шоты в EDL при нахождении их в списке input_ids
     """
     logger.info("Start process")
     edl_parser = detect_edl_parser(fps, edl_path=edl_path)
@@ -22,23 +22,23 @@ def filter_edl(self, edl_path: str, exclude_shots: list[str], fps) -> str:
 
     edl_shot_data = [i for i in edl_parser] # Объекты EDL парсера в списке
 
-    exclude_shots_data = Counter(exclude_shots) # Словарь имен шотов из инпута
+    input_shots_data = Counter(input_shots) # Словарь имен шотов из инпута
 
     base, ext = os.path.splitext(self.edl_path)
     output_path = base + "_filtered" + ext
     logger.info(f"Output: {output_path}")
 
-    # Поиск шота из EDL в списке exclude_shots
+    # Поиск шота из EDL в списке input_shots
     for shot_data in edl_shot_data:
         with open(output_path, "a", encoding="utf-8") as f:
-            if shot_data.edl_shot_name in exclude_shots_data: 
+            if shot_data.edl_shot_name in input_shots_data: 
                 f.write(f"{shot_data.edl_record_id}  {shot_data.edl_shot_name}   V     C        {shot_data.edl_source_in} {shot_data.edl_source_out} {shot_data.edl_record_in} {shot_data.edl_record_out}\n")    
     
     # Поиск шотов отсутствующих в EDL
     not_found_shots = []
-    for exclude_shot in exclude_shots_data:
-        if exclude_shot not in edl_shot_names:
-            not_found_shots.append(f"В EDL отсутствует шот {exclude_shot}")
+    for input_shot in input_shots_data:
+        if input_shot not in edl_shot_names:
+            not_found_shots.append(f"В EDL отсутствует шот {input_shot}")
     if not_found_shots:
         self.log.append("\n".join(not_found_shots))
         return True
@@ -70,7 +70,7 @@ class EDLFilterApp(QMainWindow):
         self.ids_edit = QTextEdit()
         self.ids_edit.setPlaceholderText("Input shot name (separated by a space or from new string)")
         self.ids_edit.setFixedHeight(300)
-        layout.addWidget(QLabel("Shot names to exclude:"))
+        layout.addWidget(QLabel("Shot names to get:"))
         layout.addWidget(self.ids_edit)
 
         filter_btn = QPushButton("Start")
@@ -98,13 +98,13 @@ class EDLFilterApp(QMainWindow):
             return
         
         if not self.ids_edit.toPlainText().strip():
-            QMessageBox.warning(self, "Warning", "Добавьте exclude shots")
-            logger.warning("Добавьте exclude shots")
+            QMessageBox.warning(self, "Warning", "Добавьте input shots")
+            logger.warning("Добавьте input shots")
             return
 
         ids_raw = self.ids_edit.toPlainText().strip()
-        exclude_ids = ids_raw.replace(",", " ").split()
-        result = filter_edl(self, self.edl_path, exclude_ids, self.fps)
+        input_ids = ids_raw.replace(",", " ").split()
+        result = filter_edl(self, self.edl_path, input_ids, self.fps)
         if result:
             QMessageBox.information(self, "Success", f"Файл успешно создан")
             logger.info(f"Файл успешно создан")
