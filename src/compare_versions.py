@@ -221,6 +221,26 @@ class VersionCheckerGUI(QtWidgets.QWidget):
                                 f"Source-exel: {self.file_type_xlsx.isChecked()}",f"Source-csv: {self.file_type_csv.isChecked()}", 
                                 f"Resolve-reel: {self.reel_name.text()}", f"Track in: {self.start_track.text()}", f"Track Out: {self.end_track.text()}", 
                                 f"Sheet: {self.sheet_name.text()}", f"Excel-reel: {self.column_reel.text()}", f"Shots: {self.column_letter.text()}")))
+        
+        def get_timeline_items(start_track: int, end_track: int, timeline) -> list:
+            """
+            Возвращает список клипов с верхнего трека в указанном диапазоне.
+            Если несколько клипов стоят в стеке, берётся тот, что выше по номеру трека.
+            """
+            top_items = []
+            for track_index in range(end_track, start_track - 1, -1):
+                clips = timeline.GetItemListInTrack('video', track_index)
+                for clip in clips:
+                    start = clip.GetStart()
+                    duration = clip.GetDuration()
+                    end = start + duration
+
+                    if not any(c.GetStart() <= start < (c.GetStart() + c.GetDuration()) or
+                            start <= c.GetStart() < end
+                            for c in top_items):
+                        top_items.append(clip)
+
+            return top_items
 
         def is_dublicate(check_list: list)-> None:
 
@@ -419,9 +439,7 @@ class VersionCheckerGUI(QtWidgets.QWidget):
         logger.debug(f"Данные маркеров с таймлайна:\n{markers_list}")
 
         # Собираем в список шоты(Объекты Blackmagic) с таймлайнов 
-        all_cg_items = []
-        for i in range(int(self.start_track.text()), int(self.end_track.text()) + 1):
-            all_cg_items += timeline.GetItemListInTrack('video', i)
+        all_cg_items = get_timeline_items(int(self.start_track.text()), int(self.end_track.text()) + 1, timeline)
         
         # Формирования пути для финального .txt файла
         result_file_path = os.path.join(self.result_path.text(), f'result_{date.today()}.txt')
