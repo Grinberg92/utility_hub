@@ -209,7 +209,7 @@ class ColorGradeApplyApp(QMainWindow):
             self.show_error("Ошибка", "Таймлайн не найден.")
             return
         
-    def is_cc(self, target_track) -> bool:
+    def is_cc_target(self, target_track) -> bool:
         """
         Проверка на отсутствие ЦК в target_clips.
         """
@@ -220,8 +220,24 @@ class ColorGradeApplyApp(QMainWindow):
         has_tools = any(bool(clip.GetNodeGraph(1).GetToolsInNode(1)) for clip in target_clips)
 
         return has_nodes or has_tools
-
     
+    def is_cc_source(self, src_in, src_out) -> bool:
+        """
+        Проверка на отсутствие ЦК в target_clips.
+        """
+        for track in range(src_in, src_out + 1):
+            clips = self.timeline.GetItemListInTrack("video", track)
+
+            for clip in clips:
+                if clip.GetNumNodes() > 1:
+                    return False
+                
+                tools = clip.GetNodeGraph(1).GetToolsInNode(1)
+                if tools:
+                    return False
+
+        return True 
+        
     def start_transfer(self):
 
         logger.debug("Запуск скрипта")
@@ -236,7 +252,7 @@ class ColorGradeApplyApp(QMainWindow):
 
         selected_lut = self.lut_combobox.currentText()
 
-        if self.is_cc(target_track):
+        if self.is_cc_target(target_track):
             reply = QMessageBox.question(
                 self,
                 "Подтверждение",
@@ -247,6 +263,8 @@ class ColorGradeApplyApp(QMainWindow):
 
             if reply == QMessageBox.No:
                 return  
+        
+
 
         logger.debug("\n".join(("SetUp:", f"Source track in: {source_track_in}", f"Source track out: {source_track_in}", f"Target track: {target_track}", f"Select LUT: {selected_lut}")))
         self.worker = TransferWorker(self, source_track_in, source_track_out, target_track, selected_lut)
