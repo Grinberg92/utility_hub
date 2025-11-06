@@ -264,7 +264,9 @@ class ColorGradeApplyApp(QMainWindow):
             if reply == QMessageBox.No:
                 return  
         
-
+        if self.is_cc_source(source_track_in, source_track_out):
+            self.show_info("Предупреждение", "На исходных дорожках отсутствует ЦК")
+            return 
 
         logger.debug("\n".join(("SetUp:", f"Source track in: {source_track_in}", f"Source track out: {source_track_in}", f"Target track: {target_track}", f"Select LUT: {selected_lut}")))
         self.worker = TransferWorker(self, source_track_in, source_track_out, target_track, selected_lut)
