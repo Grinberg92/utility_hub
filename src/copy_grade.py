@@ -1,14 +1,15 @@
+import DaVinciResolveScript
+import sys
+import os
+import bisect
+from dvr_tools.logger_config import get_logger
+from dvr_tools.css_style import apply_style
+from dvr_tools.resolve_utils import ResolveObjects
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QPushButton, QMessageBox
 )
 from PyQt5.QtCore import pyqtSignal, QObject, QThread, Qt
-import DaVinciResolveScript
-import sys
-import os
-from dvr_tools.logger_config import get_logger
-from dvr_tools.css_style import apply_style
-from dvr_tools.resolve_utils import ResolveObjects
 
 logger = get_logger(__file__)
 
@@ -27,25 +28,49 @@ class TransferWorker(QThread):
         self.lut_name = lut_name
 
     def get_source_clips(self, start_track: int, end_track: int, timeline) -> list:
-        """
-        Возвращает список клипов с верхнего трека в указанном диапазоне.
-        Если несколько клипов стоят в стеке, берётся тот, что выше по номеру трека.
-        """
-        top_items = []
+        top_clips = []
+        covered = []  # список интервалов (start, end), отсортированный по start
 
+        def intersects(start, end):
+            """Проверка пересечений через двоичный поиск."""
+            i = bisect.bisect_left(covered, (start, end))
+            # Проверяем интервал слева
+            if i > 0 and covered[i-1][1] > start:
+                return True
+            # Проверяем интервал справа
+            if i < len(covered) and covered[i][0] < end:
+                return True
+            return False
+
+        def add_interval(start, end):
+            """Вставка интервала с возможным слиянием."""
+            i = bisect.bisect_left(covered, (start, end))
+            
+            # слияние с соседями
+            while i < len(covered) and covered[i][0] <= end:
+                start = min(start, covered[i][0])
+                end = max(end, covered[i][1])
+                covered.pop(i)
+            
+            if i > 0 and covered[i-1][1] >= start:
+                start = min(start, covered[i-1][0])
+                end = max(end, covered[i-1][1])
+                covered.pop(i-1)
+                i -= 1
+            
+            covered.insert(i, (start, end))
+
+        # идем от верхних треков к нижним
         for track_index in range(end_track, start_track - 1, -1):
-            clips = timeline.GetItemListInTrack('video', track_index)
-            for clip in clips:
+            for clip in timeline.GetItemListInTrack('video', track_index):
                 start = clip.GetStart()
-                duration = clip.GetDuration()
-                end = start + duration
+                end = start + clip.GetDuration()
 
-                if not any(c.GetStart() <= start < (c.GetStart() + c.GetDuration()) or
-                        start <= c.GetStart() < end
-                        for c in top_items):
-                    top_items.append(clip)
+                if not intersects(start, end):
+                    top_clips.append(clip)
+                    add_interval(start, end)
 
-        return top_items
+        return top_clips
 
     def run(self):
         """
