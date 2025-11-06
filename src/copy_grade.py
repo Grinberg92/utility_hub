@@ -15,7 +15,6 @@ logger = get_logger(__file__)
 
 class TransferWorker(QThread):
 
-    finished = pyqtSignal()
     error = pyqtSignal(str)
     success = pyqtSignal(str)
 
@@ -251,6 +250,8 @@ class ColorGradeApplyApp(QMainWindow):
 
         logger.debug("\n".join(("SetUp:", f"Source track in: {source_track_in}", f"Source track out: {source_track_in}", f"Target track: {target_track}", f"Select LUT: {selected_lut}")))
         self.worker = TransferWorker(self, source_track_in, source_track_out, target_track, selected_lut)
+        self.apply_button.setEnabled(False)
+        self.worker.finished.connect(lambda: self.apply_button.setEnabled(True))
         self.worker.error.connect(lambda msg: self.show_error("Ошибка", msg))
         self.worker.success.connect(lambda msg: self.show_info("Успех", msg))
         self.worker.start()
