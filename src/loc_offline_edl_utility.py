@@ -215,7 +215,7 @@ class LogicProcessor:
                     rec_duration = self.timecode_to_frame(record_out) - self.timecode_to_frame(record_in) 
                     src_in = "00:00:00:00"
                     src_out = self.frame_to_timecode(self.timecode_to_frame(src_in) + rec_duration)
-
+                    shot_name = shot_name.strip("<b>").strip("</b>")
                     with open(result_path, 'a', encoding='utf-8') as o:
                         # Жестко придерживаться табуляции, что бы корректно принимал AVID
                         o.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
