@@ -214,4 +214,46 @@ def apply_style(app):
         QTabBar::tab:!selected {{
             background: #3c3f41;
         }}
+        QHeaderView::section {{
+            background-color: #3c3f41;
+            color: #dcdcdc;
+            padding: 4px;
+            border: none;
+            border-right: 1px solid #555;
+        }}
+
+        QTreeView {{
+            background-color: #2b2b2b;
+            alternate-background-color: #323232;
+            color: #dcdcdc;
+            show-decoration-selected: 1;
+            selection-background-color: #007acc;
+            selection-color: white;
+        }}
+
+        QTreeView::branch {{
+            background: transparent;
+        }}
+
+        QTreeView::branch:has-children:!has-siblings:closed,
+        QTreeView::branch:closed:has-children {{
+            image: url("{ICON_PATH}");
+        }}
+
+        QTreeView::branch:open:has-children {{
+            image: url("{ICON_PATH}");
+            transform: rotate(90deg);
+        }}
+        QTreeView::item {{
+            height: 26px;  /* Высота строки, если нужно */
+        }}
+
+        QTreeView QLineEdit {{
+            min-height: 26px;
+            padding: 4px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #3c3f41;
+            color: #ffffff;
+        }}
     """)

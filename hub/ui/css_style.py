@@ -1,12 +1,15 @@
+import os 
+
 def apply_style(app):
     font_family = "Segoe UI"  # Современный системный шрифт
-
+    ICON_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "hub", "ui", "arrow_ico_white.png")
+    ICON_PATH = os.path.abspath(ICON_PATH).replace("\\", "/")
     app.setStyleSheet(f"""
         QWidget {{
             background-color: #2b2b2b;
             color: #dcdcdc;
             font-family: "{font_family}";
-            font-size: 10.5pt;
+            font-size: 9.5pt;
         }}
 
         QLineEdit, QComboBox, QTextEdit {{
@@ -27,6 +30,14 @@ def apply_style(app):
         QComboBox::drop-down {{
             border: none;
             background-color: #3c3f41;
+        }}
+
+        QComboBox::down-arrow {{
+            image: url("{ICON_PATH}");
+            width: 12px;
+            height: 12px;
+            margin-right: 15px;
+            background: transparent;
         }}
 
         QGroupBox {{
@@ -155,7 +166,7 @@ def apply_style(app):
 
         QScrollBar::add-line:vertical,
         QScrollBar::sub-line:vertical {{
-            height: 0px;
+            height: 0px;a
         }}
 
         QProgressBar {{
@@ -175,5 +186,62 @@ def apply_style(app):
             background-color: #2a2a2a;
             color: #777;
             border: 1px solid #444;
+        }}
+        QTabWidget::pane {{
+            border: 1px solid #444;
+            background: #2b2b2b;
+            border-radius: 4px;
+        }}
+
+        QTabBar::tab {{
+            background: #3c3f41;
+            color: #dcdcdc;
+            padding: 6px 12px;
+            margin-right: 2px;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }}
+
+        QTabBar::tab:selected {{
+            background: #007acc;
+            color: white;
+        }}
+
+        QTabBar::tab:hover {{
+            background: #2899e0;
+        }}
+
+        QTabBar::tab:!selected {{
+            background: #3c3f41;
+        }}
+        QHeaderView::section {{
+            background-color: #3c3f41;
+            color: #dcdcdc;
+            padding: 4px;
+            border: none;
+            border-right: 1px solid #555;
+        }}
+
+        QTreeView {{
+            background-color: #2b2b2b;
+            alternate-background-color: #323232;
+            color: #dcdcdc;
+            show-decoration-selected: 1;
+            selection-background-color: #007acc;
+            selection-color: white;
+        }}
+
+        QTreeView::branch {{
+            background: transparent;
+        }}
+
+        QTreeView::branch:has-children:!has-siblings:closed,
+        QTreeView::branch:closed:has-children {{
+            image: url("{ICON_PATH}");
+        }}
+
+        QTreeView::branch:open:has-children {{
+            image: url("{ICON_PATH}");
+            transform: rotate(90deg);
         }}
     """)
