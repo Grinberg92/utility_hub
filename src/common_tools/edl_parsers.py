@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 from dataclasses import dataclass
 from timecode import Timecode as tc
 
@@ -312,6 +313,7 @@ class EDLParser_v23_new:
         """
         edl_record_id: str
         edl_shot_name: str
+        edl_source_name: str
         edl_track_type: str
         edl_transition: str
         edl_source_in: str
@@ -357,7 +359,9 @@ class EDLParser_v23_new:
             with open(self.edl_path, 'r') as edl_file:
                 lines = edl_file.readlines()
 
-        edit_name = lines[0].strip().split(":")[1].strip() # Отрезаем слово 'TITLE'
+        edit_name = str(Path(self.edl_path).stem)
+        if lines and "TITLE" in lines[0]:
+            edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
 
         i = 0
         while i < len(lines):
@@ -387,6 +391,7 @@ class EDLParser_v23_new:
                 yield self.EDLEntry(
                     edl_record_id=parts[0],
                     edl_shot_name=parts[1],
+                    edl_source_name = parts[1],
                     edl_track_type=parts[2],
                     edl_transition=parts[3],
                     edl_source_in=parts[4],
@@ -669,7 +674,7 @@ class EDLParser:
             with open(self.edl_path, 'r', encoding="utf-8") as edl_file:
                 lines = edl_file.readlines()
 
-        edit_name = None
+        edit_name = str(Path((self.edl_path)).stem)
         if lines and "TITLE" in lines[0]:
             edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
 
