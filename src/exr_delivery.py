@@ -427,18 +427,18 @@ class DeliveryPipline:
         clip_color = timeline_item.clip_color
 
         # Стандартное разрешение от final delivery res
-        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][0]:
+        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][0]:
             resolution = self.standart_resolution(clip)
         # 1.5-кратное увеличение разрешение от стандартного
-        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][1]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][1]:
             resolution = self.scale_1_5_resolution(clip)
         
         # 2-кратное увеличение разрешение от стандартного(условный 4К)
-        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][2]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][2]:
             resolution = self.scale_2_resolution(clip)
             
         # Полное съемочное разрешение
-        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"]) and clip_color == SETTINGS["colors"][3]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][3]:
             resolution = self.full_resolution(clip)
 
         return resolution
