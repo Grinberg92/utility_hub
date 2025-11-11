@@ -215,9 +215,9 @@ class ColorGradeApplyApp(QMainWindow):
         """
         target_clips = self.timeline.GetItemListInTrack("video", target_track)
         # Больше одной ноды
-        has_nodes = any(clip.GetNumNodes() > 1 for clip in target_clips)
+        has_nodes = any(clip.GetNumNodes() > 1 for clip in target_clips if clip.GetMediaPoolItem() is not None)
         # Есть ЦК в ноде
-        has_tools = any(bool(clip.GetNodeGraph(1).GetToolsInNode(1)) for clip in target_clips)
+        has_tools = any(bool(clip.GetNodeGraph(1).GetToolsInNode(1)) for clip in target_clips if clip.GetMediaPoolItem() is not None)
 
         return has_nodes or has_tools
     
@@ -227,14 +227,14 @@ class ColorGradeApplyApp(QMainWindow):
         """
         for track in range(src_in, src_out + 1):
             clips = self.timeline.GetItemListInTrack("video", track)
-
             for clip in clips:
-                if clip.GetNumNodes() > 1:
-                    return False
-                
-                tools = clip.GetNodeGraph(1).GetToolsInNode(1)
-                if tools:
-                    return False
+                if clip.GetMediaPoolItem() is not None:
+                    if clip.GetNumNodes() > 1:
+                        return False
+                    
+                    tools = clip.GetNodeGraph(1).GetToolsInNode(1)
+                    if tools:
+                        return False
 
         return True 
         
