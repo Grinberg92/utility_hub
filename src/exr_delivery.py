@@ -426,6 +426,8 @@ class DeliveryPipline:
         clip = timeline_item.mp_item
         clip_color = timeline_item.clip_color
 
+        resolution = None
+
         # Стандартное разрешение от final delivery res
         if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][0]:
             resolution = self.standart_resolution(clip)
@@ -635,6 +637,9 @@ class DeliveryPipline:
 
                     if not item.clip_color == SETTINGS["colors"][4]:
                         no_select = False
+
+                    if item.clip_color not in SETTINGS["colors"]:
+                        warnings.append(f"• Не валидный цвет клипа {clip.GetName()} на треке {track_num}")
 
                     if not clip.GetName().lower().endswith(SETTINGS["extentions"]) and not clip.GetName().lower().endswith(SETTINGS["false_extentions"]):
                         warnings.append(f"• Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
