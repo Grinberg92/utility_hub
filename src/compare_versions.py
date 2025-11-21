@@ -10,7 +10,8 @@ import csv
 from itertools import count
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import (QFileDialog, QLabel, QLineEdit, QPushButton, QRadioButton, 
-                             QVBoxLayout, QHBoxLayout, QGroupBox, QTextEdit, QComboBox, QWidget, QMessageBox)
+                             QVBoxLayout, QHBoxLayout, QGroupBox, QTextEdit, QComboBox, 
+                             QWidget, QMessageBox, QCheckBox, QButtonGroup)
 from PyQt5.QtGui import QFont
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
@@ -39,9 +40,19 @@ class VersionCheckerGUI(QtWidgets.QWidget):
         self.column_reel = QLineEdit("B")
         self.column_letter = QLineEdit("H")
 
+        self.file_type_group_rb = QButtonGroup()
         self.file_type_xlsx = QRadioButton("excel")
         self.file_type_csv = QRadioButton(".csv from PL")
+        self.file_type_group_rb.addButton(self.file_type_xlsx)
+        self.file_type_group_rb.addButton(self.file_type_csv)
         self.file_type_xlsx.setChecked(True)
+
+        self.mode_group_rb = QButtonGroup()
+        self.global_mode =  QRadioButton('Global')
+        self.local_mode =  QRadioButton('Local')
+        self.mode_group_rb.addButton(self.file_type_xlsx)
+        self.mode_group_rb.addButton(self.file_type_csv)
+        self.local_mode.setChecked(True)
 
         self.failed_paths_text = QTextEdit()
         self.failed_paths_text.setPlaceholderText("Здесь будут показаны имена шотов, которые не удалось определить.")
@@ -93,6 +104,18 @@ class VersionCheckerGUI(QtWidgets.QWidget):
         filetype_layout.addStretch()
         file_type_group.setLayout(filetype_layout)
         layout.addWidget(file_type_group, alignment=QtCore.Qt.AlignCenter)
+
+        mode_group = QGroupBox("Mode")
+        mode_group.setFixedWidth(300)
+        mode_group.setFixedHeight(50)
+        mode_layout = QHBoxLayout()
+        mode_layout.addStretch()
+        mode_layout.addWidget(self.global_mode)
+        mode_layout.addSpacing(80)
+        mode_layout.addWidget(self.local_mode)
+        mode_layout.addStretch()
+        mode_group.setLayout(mode_layout)
+        layout.addWidget(mode_group, alignment=QtCore.Qt.AlignCenter)
 
         # === GroupBox Section ===
         groupbox_layout = QHBoxLayout()
@@ -431,22 +454,24 @@ class VersionCheckerGUI(QtWidgets.QWidget):
                 else:
                     self.result_list.setdefault("Шот есть в контрольном списке, но нет на таймлайне:", []).append(play_list[pl_shot])
 
-            # Сверяем данные из таймлайна с данными из контрольного списка
-            for tmln_shot in timeline_items:
-                if tmln_shot not in play_list and tmln_shot not in self.failed_names:
-                    self.result_list_except.setdefault("Шот отсутствует в контрольном списке:", []).append(tmln_shot)
+            # Используются только в случае выбора глобального режима
+            if not self.local_mode:
+                # Сверяем данные из таймлайна с данными из контрольного списка
+                for tmln_shot in timeline_items:
+                    if tmln_shot not in play_list and tmln_shot not in self.failed_names:
+                        self.result_list_except.setdefault("Шот отсутствует в контрольном списке:", []).append(tmln_shot)
 
-            ''' Проверка на отсутствие графики на таймлайне и в контрольном списке.
-            Пересбор словаря с номерами шотов в ключах без префиксов для унификации. prk_001_0010 добавится как 001_0010. 
-            Если изначально 001_0010 - то так и добавится.
-            Список маркеров и словарь с шотами с таймлайна и контрольного списка приведены к одному значению - 001_0010'''       
-            play_list_dict_for_markers = {re.search(pattern_shot_number, k).group(0).lower(): j for k, j in play_list.items()}
-            timeline_dict_for_markers = {re.search(pattern_shot_number, k).group(0).lower(): j for k, j in timeline_items.items()}
-            for marker in markers_list:          
-                if marker not in play_list_dict_for_markers and marker not in timeline_dict_for_markers: 
-                    self.result_list_except.setdefault('Шот отсутствует на таймлайне и в контрольном списке:', []).append(marker)          
-            
-            print(f"Данные для сверки соответствия между списком маркеров и ключами в play_list_dict_for_markers:\n{[k for k, v in play_list_dict_for_markers.items()]}")
+                ''' Проверка на отсутствие графики на таймлайне и в контрольном списке.
+                Пересбор словаря с номерами шотов в ключах без префиксов для унификации. prk_001_0010 добавится как 001_0010. 
+                Если изначально 001_0010 - то так и добавится.
+                Список маркеров и словарь с шотами с таймлайна и контрольного списка приведены к одному значению - 001_0010'''       
+                play_list_dict_for_markers = {re.search(pattern_shot_number, k).group(0).lower(): j for k, j in play_list.items()}
+                timeline_dict_for_markers = {re.search(pattern_shot_number, k).group(0).lower(): j for k, j in timeline_items.items()}
+                for marker in markers_list:          
+                    if marker not in play_list_dict_for_markers and marker not in timeline_dict_for_markers: 
+                        self.result_list_except.setdefault('Шот отсутствует на таймлайне и в контрольном списке:', []).append(marker)          
+                
+                print(f"Данные для сверки соответствия между списком маркеров и ключами в play_list_dict_for_markers:\n{[k for k, v in play_list_dict_for_markers.items()]}")
             
             export_result_var = export_result(result_path)
             if export_result_var is None:
