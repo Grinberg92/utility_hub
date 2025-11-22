@@ -1030,7 +1030,7 @@ class ConformCheckerMixin:
         for shot_name in shots_list:
             
             for edl_line in parser:
-                if edl_line.edl_shot_name in shot_name:
+                if edl_line.edl_shot_name.lower() in shot_name.lower():
                     triger_flag = True
             
             if not triger_flag:
