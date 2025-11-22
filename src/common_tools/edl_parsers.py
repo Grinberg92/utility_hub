@@ -358,8 +358,8 @@ class EDLParser_v23_new:
         else:    
             with open(self.edl_path, 'r') as edl_file:
                 lines = edl_file.readlines()
-
-        edit_name = str(Path(self.edl_path).stem)
+        if self.edl_path:
+            edit_name = str(Path(self.edl_path).stem)
         if lines and "TITLE" in lines[0]:
             edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
 
@@ -673,8 +673,8 @@ class EDLParser:
         else:
             with open(self.edl_path, 'r', encoding="utf-8") as edl_file:
                 lines = edl_file.readlines()
-
-        edit_name = str(Path((self.edl_path)).stem)
+        if self.edl_path:
+            edit_name = str(Path((self.edl_path)).stem)
         if lines and "TITLE" in lines[0]:
             edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
 
