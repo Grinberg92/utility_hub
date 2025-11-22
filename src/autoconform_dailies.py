@@ -1035,11 +1035,14 @@ class ConformCheckerMixin:
             
             if not triger_flag:
                 self.warning_signal.emit(f"🔴  Шот {shot_name} отсутствует в монтаже")
+                self.otio_counter += 1
                 check_flag = True
             triger_flag = False
 
         if not check_flag:
             self.warning_signal.emit("🟢  Проверка пройдена успешно!")
+
+        self.update_result_label()
 
 class ConfigValidator:
     """
