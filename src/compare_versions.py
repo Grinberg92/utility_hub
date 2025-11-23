@@ -235,10 +235,10 @@ class VersionCheckerGUI(QtWidgets.QWidget):
             return
 
         # Паттерны на поиск имен шотов
-        pattern_short = r'(?<!\d)(?:..._)?\d{3,4}[a-zA-Z]?_\d{1,4}(?!\d)' # Короткое имя 001_0010 или prk_001_0010
-        pattern_long = r'(?<!\d)(?:[a-zA-Z]+_)*\d{3,4}[a-zA-Z]?_\d{1,4}(?:_[a-zA-Z]+)*?_v?\d+\w*(?!\d)'  # Имя с версией 001_0010_comp_v001 или prk_001_0010_comp_v001
-        pattern_shot_number = r'\d{3,4}[a-zA-Z]?_\d+' # Чистый номер без префиксов, если таковые есть 001_0010
-        pattern_real_shot = r'(.+_)?\d{1,4}[a-zA-Z]?_\d{1,4}_.+' # Легкая маска, для отбрасывания .exr файлов которые не относятся к шотам. Например титры.
+        pattern_short = r'(?<![A-Za-z0-9])(?:[A-Za-z]+_)?\d{3,4}[A-Za-z]?_\d{1,4}[A-Za-z]?(?![A-Za-z0-9/])' # Короткое имя только 001_0010, 001_001c
+        pattern_long = r'(?<!\d)(?:[a-zA-Z]+_)*\d{3,4}[a-zA-Z]?_\d{1,4}[a-zA-Z]?(?:_[a-zA-Z]+)*?(_[a-zA-Z]+)?_[vV]?\d+(?!\d)'  # Имя с версией 001_0010_comp_v001 или prk_001_0010_comp_v001
+        pattern_shot_number = r'\d{3,4}[a-zA-Z]?_\d{1,4}[a-zA-Z]?' # Чистый номер без префиксов, если таковые есть 001_0010
+        pattern_real_shot = r'(.+_)?\d{1,4}[a-zA-Z]?_\d{1,4}[a-zA-Z]?_.+' # Легкая маска, для отбрасывания .exr файлов которые не относятся к шотам. Например титры.
 
         logger.debug("\n".join(("SetUp:", f"Choose input file: {self.file_path.text()}", f"Choose output path: {self.result_path.text()}", 
                                 f"Source-exel: {self.file_type_xlsx.isChecked()}",f"Source-csv: {self.file_type_csv.isChecked()}", 
@@ -281,12 +281,13 @@ class VersionCheckerGUI(QtWidgets.QWidget):
             # идем от верхних треков к нижним
             for track_index in range(end_track, start_track - 1, -1):
                 for clip in timeline.GetItemListInTrack('video', track_index):
-                    start = clip.GetStart()
-                    end = start + clip.GetDuration()
+                    if re.search(pattern_real_shot, clip.GetName()):
+                        start = clip.GetStart()
+                        end = start + clip.GetDuration()
 
-                    if not intersects(start, end):
-                        top_clips.append(clip)
-                        add_interval(start, end)
+                        if not intersects(start, end):
+                            top_clips.append(clip)
+                            add_interval(start, end)
 
             return top_clips
 
@@ -368,13 +369,19 @@ class VersionCheckerGUI(QtWidgets.QWidget):
                                 continue
                             if i['Path to EXR'] and re.search(self.reel_name.text(), i['Reel']): # Ищется в первую очередь
                                 try:
-                                    play_list[re.search(pattern_short, i['Path to EXR']).group(0)] = re.search(pattern_long, i['Path to EXR']).group(0)
-                                    dublicate_shot.append(re.search(pattern_short, i['Path to EXR']).group(0))
+                                    i['Path to EXR']
+                                    try:
+                                        play_list[re.search(pattern_short, i['Path to EXR']).group(0)] = re.search(pattern_long, i['Path to EXR']).group(0).lower()
+                                        dublicate_shot.append(re.search(pattern_short, i['Path to EXR']).group(0))
+                                    except:
+                                        self.failed_paths.append(f"Имя {i['Path to EXR']} не опознано")
+                                        self.failed_names.add(i['Entity'])
+                                        continue
                                 except AttributeError:
                                     pass # Ничего не делать. Переходим к проверке Path to Frames
                             if not i['Path to EXR'] and re.search(self.reel_name.text(), i['Reel']):   # Если нет хайреза
                                 try:
-                                    play_list[re.search(pattern_short, i['Path to Frames']).group(0)] = re.search(pattern_long, i['Path to Frames']).group(0)
+                                    play_list[re.search(pattern_short, i['Path to Frames']).group(0)] = re.search(pattern_long, i['Path to Frames']).group(0).lower()
                                     dublicate_shot.append(re.search(pattern_short, i['Path to EXR']).group(0))
                                 except AttributeError:
                                     self.failed_paths.append(f"Имя {i['Path to Frames']} не опознано")
@@ -390,13 +397,19 @@ class VersionCheckerGUI(QtWidgets.QWidget):
                                 continue
                             if i['Path to EXR']: # Ищется в первую очередь
                                 try:
-                                    play_list[re.search(pattern_short, i['Path to EXR']).group(0)] = re.search(pattern_long, i['Path to EXR']).group(0)
-                                    dublicate_shot.append(re.search(pattern_short, i['Path to EXR']).group(0))
+                                    i['Path to EXR']
+                                    try:
+                                        play_list[re.search(pattern_short, i['Path to EXR']).group(0)] = re.search(pattern_long, i['Path to EXR']).group(0).lower()
+                                        dublicate_shot.append(re.search(pattern_short, i['Path to EXR']).group(0))
+                                    except:
+                                        self.failed_paths.append(f"Имя {i['Path to EXR']} не опознано")
+                                        self.failed_names.add(i['Entity'])
+                                        continue
                                 except AttributeError:
                                     pass # Ничего не делать. Переходим к проверке Path to Frames
                             if not i['Path to EXR']:   # Если нет хайреза
                                 try:
-                                    play_list[re.search(pattern_short, i['Path to Frames']).group(0)] = re.search(pattern_long, i['Path to Frames']).group(0)
+                                    play_list[re.search(pattern_short, i['Path to Frames']).group(0)] = re.search(pattern_long, i['Path to Frames']).group(0).lower()
                                     dublicate_shot.append(re.search(pattern_short, i['Path to Frames']).group(0))
                                 except AttributeError:
                                     self.failed_paths.append(f"Имя {i['Path to Frames']} не опознано")
@@ -438,15 +451,27 @@ class VersionCheckerGUI(QtWidgets.QWidget):
             # Проходимся циклом по списку шотов из таймлайна. Получаем (имя шота без версии: [имя шота(ов) c версией]).
             timeline_items = {}
             for item in all_cg_items:
-                if item.GetName().endswith(('.exr', '.mov', '.jpg')) and re.search(pattern_real_shot, item.GetName()): # С таймлайна берутся только .exr которые являются шотами
-                    name_item_long = re.search(pattern_long, item.GetName()).group(0).lower() 
-                    name_item_short = re.search(pattern_short, item.GetName()).group(0).lower() 
+                # С таймлайна берутся только .exr которые являются шотами
+                if item.GetName().endswith(('.exr', '.mov', '.jpg')): 
+
+                    name_long_match = re.search(pattern_long, item.GetName())
+                    if name_long_match:
+                        name_item_long = name_long_match.group(0).lower()
+                    else:
+                        continue
+
+                    name_short_match = re.search(pattern_short, item.GetName())
+                    if name_short_match:
+                        name_item_short = name_short_match.group(0).lower()
+                    else:
+                        continue
+
                     timeline_items.setdefault(name_item_short, []).append(name_item_long)
 
             logger.debug(f"Данные собранные с таймлайна (имя шота без версии: [имя шота(ов) c версией]):\n{timeline_items}")
             # Сверяем данные из контрольного списк с данными из таймлайна
             for pl_shot in play_list:
-                if pl_shot in timeline_items :
+                if pl_shot in timeline_items:
                     if play_list[pl_shot] in timeline_items[pl_shot]:
                         self.result_list.setdefault("Стоит актуальная версия шота:", []).append(play_list[pl_shot])
                     else:
