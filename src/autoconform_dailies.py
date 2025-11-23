@@ -29,11 +29,12 @@ class OTIOCreator:
     """
     Класс создания OTIO таймлайна.
     """
-    def __init__(self, user_config, resolve_shot_list):
+    def __init__(self, user_config, resolve_shot_list, gui):
         self.user_config = user_config
         self.resolve_shot_list = resolve_shot_list
         self.send_warning = lambda msg: None
         self.frame_mask = get_config()["patterns"]["frame_number"]
+        self.gui = gui
 
     def get_shots_paths(self, path):
         """
@@ -116,6 +117,8 @@ class OTIOCreator:
             message = f"🔴  Шот {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
             self.send_warning(message)
             logger.warning(message)
+            self.gui.otio_counter += 1
+            self.gui.update_result_label()
             return False
         return True
     
@@ -324,6 +327,8 @@ class OTIOCreator:
                     warning_message = f"🔴  FPS шота {shot.name} расходится с проектным. FPS - {round(frame_fps, 2)}. Необходимо добавить шот вручную."
                     self.send_warning(warning_message)
                     logger.warning(warning_message)
+                    self.gui.otio_counter += 1
+                    self.gui.update_result_label()
                     return  False
                 return True
             return True
@@ -388,6 +393,8 @@ class OTIOCreator:
             error_message = f"Ошибка при обработке секвенции: {e}"
             logger.exception(error_message) 
             self.send_warning(f'🔴  Ошибка при обработке шота {edl_shot_name}. Необходимо добавить его вручную в Media Pool.')
+            self.gui.otio_counter += 1
+            self.gui.update_result_label()
             return []
         
     def cut_slate(self, source_in_tc) -> int:
@@ -505,9 +512,7 @@ class OTIOCreator:
 
             self.start_frame_logic(data)
     
-            self.send_warning(f"🟡  Шот {shot_name}. Нет пересечения диапазона.")
             logger.info(f"Шот {shot_name}. Нет пересечения диапазона.")
-
 
         # Полное пересечение (EDL внутри исходника)
         elif edl_source_in >= source_in and edl_source_out <= source_out:  
@@ -879,10 +884,11 @@ class OTIOWorker(QThread):
         self.user_config = user_config
         self.otio_path = user_config["otio_path"]
         self.resolve_shot_list = resolve_shot_list
+        self.parent = parent
 
     def run(self):
         try:
-            logic = OTIOCreator(self.user_config, self.resolve_shot_list)
+            logic = OTIOCreator(self.user_config, self.resolve_shot_list, self.parent)
             logic.send_warning = lambda msg: self.warnings.emit(msg)
             otio_timeline, timeline_objects = logic.run() #timeline_objects: Количество объектов на OTIO таймлайне
             if not timeline_objects:
