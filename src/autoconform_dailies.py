@@ -511,7 +511,7 @@ class OTIOCreator:
         if source_out < edl_source_in or source_in > edl_source_out:
 
             self.start_frame_logic(data)
-    
+            self.send_warning(f"🟡  Шот {shot_name}. Нет пересечения диапазона.")
             logger.info(f"Шот {shot_name}. Нет пересечения диапазона.")
 
         # Полное пересечение (EDL внутри исходника)
