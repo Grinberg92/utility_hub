@@ -20,9 +20,9 @@ from dvr_tools.logger_config import get_logger
 logger = get_logger(__file__)
 
 SETTINGS = {
-    "data_path_mac": r"/Volumes/003_transcode_to_vfx/projects/Others/projects_data.json",
+    "data_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/projects_data.json",
     "data_path_win": r"J:\003_transcode_to_vfx\projects\Others\projects_data.json",
-    "project_path_mac": r"/Volumes/003_transcode_to_vfx/projects",
+    "project_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/",
     "project_path_win": r"J:\003_transcode_to_vfx\projects" 
 }
 
