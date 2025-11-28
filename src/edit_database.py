@@ -27,6 +27,9 @@ SETTINGS = {
 }
 
 class EditDatabase:
+    """
+    Класс базы данных монтажей.
+    """
     def __init__(self, data_base_path: str, project: str):
         self.data_base = data_base_path
         self.project = project
@@ -45,7 +48,7 @@ class EditDatabase:
             self.data[project] = {}
 
     def add_shot(self, project: str, shot_name: str, edit_name: str, shot_id: str, track_type: str, transition: str, 
-                 src_in: str, src_out: str, rec_in: str, rec_out: str, src_name: str, update_status):
+                 src_in: str, src_out: str, rec_in: str, rec_out: str, src_name: str, update_status) -> None:
         """
         Добавляет новый монтаж шота.
         Проверяет существует ли проект или нет.
@@ -80,7 +83,7 @@ class EditDatabase:
         Удаляет все вхождения монтажа input_edit в указанном проекте.
         """
         if project not in self.data:
-            return
+            return False
 
         project_data = self.data[project]
 
@@ -143,7 +146,7 @@ class EditDatabase:
         result_data = {}
         project_data = self.data.get(project, {})
         for shot, edit in project_data.items():
-            for edit_name, edit_data in edit.items():
+            for _, edit_data in edit.items():
                 if edit_data.get("is_actual"):
                     result_data.update({shot: edit_data})
         
@@ -176,10 +179,16 @@ class EditDatabase:
         return list(names)
 
     def save(self):
+        """
+        Сохранить базу данных.
+        """
         with open(self.data_base, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=4, ensure_ascii=False)
 
     def _clear(self):
+        """
+        Очистить базу данных.
+        """
         self.data = {}
         with open(self.data_base, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=4, ensure_ascii=False) 
@@ -192,7 +201,8 @@ class ShotRestorer(QObject):
     progress = pyqtSignal(str)
     error = pyqtSignal(str) 
 
-    def __init__(self, fps, project, edit_name, target_edit_path, output_path, logic):
+    def __init__(self, fps: int, project: str, edit_name: str, 
+                 target_edit_path: str, output_path: str, logic: str):
         super().__init__()
         self.fps = fps
         self.project = project
@@ -213,7 +223,7 @@ class ShotRestorer(QObject):
         """
         return str(tc(fps, frames=frames))
 
-    def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out):
+    def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out) -> bool:
         """
         Возвращает True, если два диапазона таймкодов пересекаются хотя бы в одном кадре.
         """
@@ -222,7 +232,6 @@ class ShotRestorer(QObject):
         targ_in  = self.timecode_to_frame(fps, targ_src_in)
         targ_out = self.timecode_to_frame(fps, targ_src_out)
 
-        # пересечение хотя бы одного кадра
         return base_in <= targ_out and targ_in <= base_out
     
     def create_and_export_avid_loc(self, shot_info: tuple) -> None:
@@ -245,7 +254,7 @@ class ShotRestorer(QObject):
             logger.debug(message)
             self.progress.emit(message)
 
-    def run(self):
+    def run(self) -> None:
         """
         Основная логика.
         """
@@ -285,7 +294,7 @@ class ShotRestorer(QObject):
                             break
 
             if processed_shots_tmp:                  
-                self.progress.emit(f"Дубликаты шотов в EDL:\n {list(map(lambda x: x[0], list(filter(lambda x: int(x[1]) >= 2, Counter(processed_shots_tmp).items()))))}")
+                self.progress.emit(f"Дубликаты шотов в EDL:\n {[shot for shot, count in Counter(processed_shots_tmp).items() if count >= 2]}")
             self.finished.emit(f"Обработка завершена!")
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
@@ -297,14 +306,17 @@ class EDLInit(QObject):
     finished = pyqtSignal(str) 
     error = pyqtSignal(str) 
 
-    def __init__(self, fps, edl_path, project, update_status):
+    def __init__(self, fps: int, edl_path: str, project: str, update_status: bool):
         super().__init__()
         self.fps = fps
         self.edl_path = edl_path
         self.project = project
         self.update_status = update_status
 
-    def run(self):
+    def run(self) -> None:
+        """
+        Основная логика.
+        """
         try:
             db_path = {"win32": SETTINGS["data_path_win"], 
                         "darwin": SETTINGS["data_path_mac"]}[sys.platform]
@@ -350,8 +362,8 @@ class EDLComparator(QObject):
     progress = pyqtSignal(str)
     error = pyqtSignal(str) 
 
-    def __init__(self, fps, project, base_edit, 
-                                    target_edit, base_logic, target_logic):
+    def __init__(self, fps: int, project: str, base_edit: str, 
+                target_edit: str, base_logic: str, target_logic: str):
         super().__init__()
         self.fps = fps
         self.project = project
@@ -375,7 +387,7 @@ class EDLComparator(QObject):
     def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out, shot_name) -> bool:
         """
         Сравнивает диапазоны таймкодов.
-        Возвращает bool есть ли пересечение или нет.
+        Возвращает bool есть ли пересечение.
         """
         base_in = self.timecode_to_frame(fps, base_src_in)
         base_out = self.timecode_to_frame(fps, base_src_out)
@@ -389,7 +401,7 @@ class EDLComparator(QObject):
 
             start_diff = targ_in - base_in   # Сдвиг начала
             end_diff = targ_out - base_out   # Сдвиг конца
-            print(f'{shot_name}: source in {base_in} source out {base_out} targ in {targ_in} targ_out {targ_out}')
+
             if start_diff == 0 and end_diff == 0:
                 self.progress.emit(f"Шот {shot_name} не изменился")
                 item = {shot_name: (f'No changes', self.base_edit[shot_name])}
@@ -473,7 +485,7 @@ class EDLComparator(QObject):
                         item = {base_shot_data['shot_name']: ('Take changed', base_shot_data)}
                         self.reedit_data.append(f"{item}")
 
-    def run(self):
+    def run(self) -> None:
         """
         Основная логика.
         """
@@ -511,8 +523,8 @@ class PhaseChecker(QObject):
     progress = pyqtSignal(str)
     error = pyqtSignal(str) 
 
-    def __init__(self, fps, project, base_edit, 
-                                    target_edits):
+    def __init__(self, fps: int, project: str, base_edit: str, 
+                                    target_edits: str):
         super().__init__()
         self.fps = fps
         self.project = project
@@ -568,7 +580,7 @@ class PhaseChecker(QObject):
         rec_in_data = []
         rec_in_default = "01:00:00:00"
 
-        for shot, shot_data in filterd_data.items():
+        for _, shot_data in filterd_data.items():
             # Берём копию донора, чтобы не затирать исходные данные
             edit_donor = dict(min(shot_data, key=lambda x: self.timecode_to_frame(x["src_in"])))
 
@@ -632,14 +644,18 @@ class PhaseChecker(QObject):
             no_dubl = str(*set(warnings))
             self.progress.emit(no_dubl)
 
-    def run(self):
-
+    def run(self) -> None:
+        """
+        Основная логика.
+        """
         try:
             db_path = {"win32": SETTINGS["data_path_win"], 
                         "darwin": SETTINGS["data_path_mac"]}[sys.platform]
             db = EditDatabase(db_path, self.project)
+
             base_edit = db.get_shots_by_edit(self.project, self.base_edit)
             target_edits = db.get_shots_by_edits(self.project, self.target_edits)
+
             self.filtred_data = {}
             for base_shot_name, base_shot_data in base_edit.items():
                 for trg_shot_name, trg_shot_data_list in target_edits.items():
