@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from collections import Counter
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 from datetime import datetime as dt, date as d
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSize
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
@@ -404,22 +406,19 @@ class EDLComparator(QObject):
 
             if start_diff == 0 and end_diff == 0:
                 self.progress.emit(f"Шот {shot_name} не изменился")
-                item = {shot_name: (f'No changes', self.base_edit[shot_name])}
-                self.reedit_data.append(f"{item}")
+                self.reedit_data.setdefault('No changes', []).append(shot_name)
 
             elif start_diff > 0 or end_diff < 0:
                 self.progress.emit(
                     f"Шот {shot_name} уменьшился: начало {(~start_diff + 1)}, конец {end_diff}"
                 )
-                item = {shot_name: (f'Less. Start: {(~start_diff + 1)}, End: {end_diff}', self.base_edit[shot_name])}
-                self.reedit_data.append(f"{item}")
+                self.reedit_data.setdefault('Less', []).append(f"Shot {shot_name}. Start: {(~start_diff + 1)}; End: {end_diff}")
 
             elif start_diff < 0 or end_diff > 0:
                 self.progress.emit(
                     f"Шот {shot_name} увеличился: начало {(~start_diff + 1)}, конец {end_diff}"
                 )
-                item = {shot_name: (f'More. Start: {(~start_diff + 1)}, End: {end_diff}', self.base_edit[shot_name])}
-                self.reedit_data.append(f"{item}")
+                self.reedit_data.setdefault('More', []).append(f"Shot {shot_name}. Start: {(~start_diff + 1)}; End: {end_diff}")
 
             return True
         return False
@@ -432,8 +431,7 @@ class EDLComparator(QObject):
         for be_shot in self.base_edit:
             if be_shot not in self.target_edit.keys():
                 self.progress.emit(f"Шот {be_shot} ушел из монтажа")
-                item = {be_shot: (f'Leave', self.base_edit[be_shot])}
-                self.reedit_data.append(f"{item}")
+                self.reedit_data.setdefault('Leave', []).append(be_shot)
 
     def is_new(self) -> None:
         """
@@ -443,19 +441,65 @@ class EDLComparator(QObject):
         for te_shot in self.target_edit:
             if te_shot not in self.base_edit.keys():
                 self.progress.emit(f"Появился новый шот - {te_shot}")
-                item = {te_shot: (f'New', self.target_edit[te_shot])}
-                self.reedit_data.append(f"{item}")
+                self.reedit_data.setdefault('New', []).append(te_shot)
 
-    def export_to_log(self):
-        ...
+    def export_to_excel(self) -> None:
+        """
+        Экспортирует reedit_data в Excel файл.
+        Формат: Category | Shot Name | Details.
+        """
+        if not self.reedit_data:
+            logger.warning("Нет данных для экспорта")
+            return
 
-    def export_to_excel(self):
-        for shot_data in self.reedit_data:
-            print(shot_data.items())
-            '''
-            for name, status, data in shot_data.items():
-                print(name, status)
-                '''
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Re-Edit Report"
+
+        ws.append(["Category", "Shot Name", "Details"])
+
+        for category, items in self.reedit_data.items():
+            for it in items:
+                # Если строка формата "Shot XXX. Start: ..., End: ... "
+                if isinstance(it, str) and it.startswith("Shot "):
+                    try:
+                        name_part, details = it.split(".", 1)
+                        shot_name = name_part.replace("Shot ", "").strip()
+                        details = details.strip()
+                    except:
+                        shot_name = it
+                        details = ""
+                    ws.append([category, shot_name, details])
+
+                # Если это просто имя шота
+                elif isinstance(it, str):
+                    ws.append([category, it, ""])
+
+                else:
+                    # На случай сложных структур — сохраняем как строку
+                    ws.append([category, str(it), ""])
+
+        for col in range(1, 4):
+            max_len = 0
+            col_letter = get_column_letter(col)
+            for cell in ws[col_letter]:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)))
+            ws.column_dimensions[col_letter].width = max_len + 2
+
+        base_path = {"win32": SETTINGS["project_path_win"], 
+                    "darwin": SETTINGS["project_path_mac"]}[sys.platform]
+
+        timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+
+        file_dir = Path(base_path) / self.project / "reedit_reports"
+        file_dir.mkdir(parents=True, exist_ok=True)
+
+        filepath = file_dir / f"{self.project}_reedit_report_{timestamp}.xlsx"
+
+        wb.save(filepath)
+
+        logger.info(f"Excel экспортирован: {filepath}")
 
     def find_cross(self) -> None:
         """
@@ -478,18 +522,16 @@ class EDLComparator(QObject):
                             break
                         else:
                             self.progress.emit(f"У шота {base_shot_data['shot_name']} полность изменилась фаза")
-                            item = {base_shot_data['shot_name']: ('Phase changed', base_shot_data)}
-                            self.reedit_data.append(f"{item}")
+                            self.reedit_data.setdefault('Phase changed', []).append(base_shot_data['shot_name'])
                     else:
                         self.progress.emit(f"У шота {base_shot_data['shot_name']} изменился дубль")
-                        item = {base_shot_data['shot_name']: ('Take changed', base_shot_data)}
-                        self.reedit_data.append(f"{item}")
+                        self.reedit_data.setdefault('Take changed', []).append(base_shot_data['shot_name'])
 
     def run(self) -> None:
         """
         Основная логика.
         """
-        self.reedit_data = []
+        self.reedit_data = {}
         try:
             db_path = {"win32": SETTINGS["data_path_win"], 
                         "darwin": SETTINGS["data_path_mac"]}[sys.platform]
@@ -510,6 +552,8 @@ class EDLComparator(QObject):
             self.is_leave()
 
             self.is_new()
+            
+            self.export_to_excel()
 
             self.finished.emit(f"Обработка успешно завершена!")
         except Exception as e:
