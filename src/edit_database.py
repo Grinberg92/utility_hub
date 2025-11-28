@@ -187,6 +187,14 @@ class EditDatabase:
         with open(self.data_base, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=4, ensure_ascii=False)
 
+    def backup(self):
+        """
+        Бэкап базы данных.
+        """
+        backup_path = self.data_base.replace('.json', '_backup.json')
+        with open(backup_path, "w", encoding="utf-8") as f:
+            json.dump(self.data, f, indent=4, ensure_ascii=False)       
+
     def _clear(self):
         """
         Очистить базу данных.
@@ -352,6 +360,7 @@ class EDLInit(QObject):
                             )
 
             db.save()
+            db.backup()
             self.finished.emit("Данные успешно добавлены!")
         except Exception as e:
             self.error.emit(f"Ошибка добавления данных в базу: {e}")
