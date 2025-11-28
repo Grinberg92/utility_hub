@@ -242,6 +242,5 @@ def apply_style(app):
 
         QTreeView::branch:open:has-children {{
             image: url("{ICON_PATH}");
-            transform: rotate(90deg);
         }}
     """)
