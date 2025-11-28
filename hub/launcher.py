@@ -134,10 +134,16 @@ class HubApp(QWidget):
             description_text="Фильтрация EDL-файла по списку запрашиваемых номеров шотов",
             script_name="edl_filter.py"
         )
+        row24 = self.create_button_description_row(
+            button_name="Edit Database",
+            description_text="База данных проектов + функционал работы с монтажами шотов",
+            script_name="edit_database.py"
+        )
         other_layout.addLayout(row20)
         other_layout.addLayout(row21)
         other_layout.addLayout(row22)
         other_layout.addLayout(row23)
+        other_layout.addLayout(row24)
 
         other_box.setLayout(other_layout)
         other_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
