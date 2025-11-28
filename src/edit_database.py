@@ -660,7 +660,7 @@ class EDLGui(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("EDL Tool")
+        self.setWindowTitle("Edit Database")
         self.resize(800, 400)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
