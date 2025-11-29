@@ -636,7 +636,7 @@ class PhaseChecker(QObject):
         rec_out = self.frame_to_timecode(self.timecode_to_frame(rec_in) + src_duration)
         return rec_out
 
-    def get_max_range(self, filterd_data) -> list:
+    def get_max_range(self, filtred_data) -> list:
         """
         Метод ищет самый ранний таймкод source_in и самый поздный таймкод source_out, 
         высчитывает rec_in и rec_out и устанавливает полученные значения в донора.
@@ -645,13 +645,17 @@ class PhaseChecker(QObject):
         rec_in_data = []
         rec_in_default = "01:00:00:00"
 
-        for _, shot_data in filterd_data.items():
+        for shot_name, shot_data in filtred_data.items():
             # Берём копию донора, чтобы не затирать исходные данные
             edit_donor = dict(min(shot_data, key=lambda x: self.timecode_to_frame(x["src_in"])))
 
             # Выбираем минимальный src_in и максимальный src_out
             min_src_in_edit = min(shot_data, key=lambda x: self.timecode_to_frame(x["src_in"]))
             max_src_out_edit = max(shot_data, key=lambda x: self.timecode_to_frame(x["src_out"]))
+
+            # Вычитаем 1 кадр из src_out для корректного отображения в интерфейсе программы
+            src_out = self.frame_to_timecode(self.timecode_to_frame(max_src_out_edit['src_out']) - 1)
+            self.progress.emit(f"Полный диапазон кадров шота {shot_name}: {min_src_in_edit['src_in']} - {src_out}")
 
             edit_donor["src_in"] = min_src_in_edit["src_in"]
             edit_donor["src_out"] = max_src_out_edit["src_out"]
@@ -678,8 +682,8 @@ class PhaseChecker(QObject):
     def compare(self, base_data, trg_data_list) -> None:
         """
         Метод сравнивает сорс диапазон шота в базовом монтаже с диапазонами
-          из выбранных для сравнения(trg_data_list) монтажей этого шота.
-        Ищет только те случаи, когда в  есть диапазоны шире чем в базовом.
+        из выбранных для сравнения(trg_data_list) монтажей этого шота.
+        Ищет только те случаи, когда в trg_data_list есть диапазоны шире чем в базовом.
         """
         base_src_in = self.timecode_to_frame(base_data["src_in"])
         base_src_out = self.timecode_to_frame(base_data["src_out"])
@@ -699,8 +703,6 @@ class PhaseChecker(QObject):
                 end_diff = trg_src_out - base_src_out   # Сдвиг конца
 
                 if start_diff < 0 or end_diff > 0:
-                    warnings.append(f"У шота {shot_name} недостаточный диапазон кадров")
-
                     self.filtred_data.setdefault(shot_name, []).append(trg_data)
                     # Добавляем базовый монтаж в случае срабатывания условия для сравнения
                     self.filtred_data.setdefault(shot_name, []).append(base_data)
@@ -730,7 +732,7 @@ class PhaseChecker(QObject):
             if self.filtred_data:
                 adjusted_ranges = self.get_max_range(self.filtred_data)
             
-            self.create_edl(adjusted_ranges)
+            #self.create_edl(adjusted_ranges)
             self.finished.emit(f"Обработка успешно завершена!")
 
         except Exception as e:
