@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
 from datetime import datetime as dt, date as d
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSize
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSize, QModelIndex
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QPushButton,  QApplication, QFileDialog, QWidget, QTextEdit, 
@@ -888,7 +888,7 @@ class EDLGui(QWidget):
 
         # Log
         self.restore_log = QTextEdit()
-        self.restore_log.setPlaceholderText("logs")
+        self.restore_log.setPlaceholderText("Restore warnings")
         self.restore_log.setReadOnly(True)
         layout.addWidget(self.restore_log)
 
@@ -969,7 +969,7 @@ class EDLGui(QWidget):
 
         # Log
         self.log = QTextEdit()
-        self.log.setPlaceholderText("logs")
+        self.log.setPlaceholderText("Compare report")
         self.log.setReadOnly(True)
         layout.addWidget(self.log)
 
@@ -1049,7 +1049,7 @@ class EDLGui(QWidget):
 
         # Log output
         self.check_log = QTextEdit()
-        self.check_log.setPlaceholderText("logs")
+        self.check_log.setPlaceholderText("Check report")
         self.check_log.setReadOnly(True)
         layout.addWidget(self.check_log)
 
@@ -1108,11 +1108,39 @@ class EDLGui(QWidget):
         layout.deleteLater()
 
     def view_database(self):
-        """
-        Вкладка с деревом датабазы.
-        """
         tab = QWidget()
         layout = QVBoxLayout(tab)
+
+        # --- Search row ---
+        search_layout = QHBoxLayout()
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Shot number")
+        self.search_input.setFixedWidth(150)
+
+        self.btn_prev = QPushButton("Prev")
+        self.btn_prev.setFixedWidth(55)
+
+        self.btn_next = QPushButton("Next")
+        self.btn_next.setFixedWidth(55)
+
+        self.btn_prev.clicked.connect(lambda: self.navigate_found(-1))
+        self.btn_next.clicked.connect(lambda: self.navigate_found(1))
+
+        self.btn_prev.setEnabled(False)
+        self.btn_next.setEnabled(False)
+
+        self.search_input.returnPressed.connect(self.search_shots)
+
+        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.btn_prev)
+        search_layout.addWidget(self.btn_next)
+        search_layout.addStretch()
+
+        layout.addLayout(search_layout)
+
+        # --- End search row ---
+
         self.tree = QTreeView()
         layout.addWidget(self.tree)
 
@@ -1122,7 +1150,6 @@ class EDLGui(QWidget):
         layout.addWidget(self.btn_save)
 
         self.data = None
-        self.database_path = None
 
         db_path = {
             "win32": SETTINGS["data_path_win"],
@@ -1165,6 +1192,8 @@ class EDLGui(QWidget):
         self.tree.setModel(self.model)
         self.set_row_height(30)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.tree.setModel(self.model)
+        self.tree_model = self.model 
 
     def build_tree(self, parent, data):
         """
@@ -1232,6 +1261,69 @@ class EDLGui(QWidget):
 
             self.on_error(f"Не удалось сохранить изменения")
             self.btn_save.setEnabled(True)
+
+    def search_shots(self):
+        query = self.search_input.text().strip()
+        if not query:
+            return
+
+        self.found_indexes = []
+        root = self.tree_model.invisibleRootItem()
+
+        def recursive_search(item):
+            for row in range(item.rowCount()):
+                child = item.child(row, 0)
+                if query in child.text():
+                    self.found_indexes.append(self.tree_model.indexFromItem(child))
+
+                if child.hasChildren():
+                    recursive_search(child)
+
+        recursive_search(root)
+
+        if not self.found_indexes:
+            self.on_error(f"Шотов с номером '{query}' не найдено")
+            return
+
+        self.current_found = 0
+        self.select_found_item(0)
+
+        # Активируем навигацию при множественных совпадениях
+        self.btn_prev.setEnabled(len(self.found_indexes) > 1)
+        self.btn_next.setEnabled(len(self.found_indexes) > 1)
+
+    def select_found_item(self, index_pos):
+        if not self.found_indexes:
+            return
+
+        index = self.found_indexes[index_pos]
+
+        # Развернуть родителей
+        parent = index.parent()
+        while parent.isValid():
+            self.tree.expand(parent)
+            parent = parent.parent()
+
+        # Выделить и проскроллить
+        self.tree.setCurrentIndex(index)
+        self.tree.scrollTo(index)
+
+    def navigate_found(self, direction):
+        """
+        direction = -1 (Prev), direction = +1 (Next)
+        """
+        if not hasattr(self, "found_indexes") or not self.found_indexes:
+            return
+
+        self.current_found += direction
+
+        # зацикливание
+        if self.current_found < 0:
+            self.current_found = len(self.found_indexes) - 1
+        elif self.current_found >= len(self.found_indexes):
+            self.current_found = 0
+
+        self.select_found_item(self.current_found)
 
     def browse_restore_result(self):
         path = QFileDialog.getExistingDirectory(self, "Select New Edit")
