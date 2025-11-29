@@ -8,6 +8,7 @@ from pathlib import Path
 from collections import Counter
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill
 from datetime import datetime as dt, date as d
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSize
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
@@ -421,13 +422,13 @@ class EDLComparator(QObject):
                 self.progress.emit(
                     f"Шот {shot_name} уменьшился: начало {(~start_diff + 1)}, конец {end_diff}"
                 )
-                self.reedit_data.setdefault('Less', []).append(f"Shot {shot_name}. Start: {(~start_diff + 1)}; End: {end_diff}")
+                self.reedit_data.setdefault('Less', []).append((shot_name, ~start_diff + 1, end_diff))
 
             elif start_diff < 0 or end_diff > 0:
                 self.progress.emit(
                     f"Шот {shot_name} увеличился: начало {(~start_diff + 1)}, конец {end_diff}"
                 )
-                self.reedit_data.setdefault('More', []).append(f"Shot {shot_name}. Start: {(~start_diff + 1)}; End: {end_diff}")
+                self.reedit_data.setdefault('More', []).append((shot_name, ~start_diff + 1, end_diff))
 
             return True
         return False
@@ -454,8 +455,8 @@ class EDLComparator(QObject):
 
     def export_to_excel(self) -> None:
         """
-        Экспортирует reedit_data в Excel файл.
-        Формат: Category | Shot Name | Details.
+        Экспортирует reedit_data в Excel.
+        Формат: Category | Shot | Start | End.
         """
         if not self.reedit_data:
             logger.warning("Нет данных для экспорта")
@@ -463,41 +464,52 @@ class EDLComparator(QObject):
 
         wb = Workbook()
         ws = wb.active
-        ws.title = "Re-Edit Report"
+        ws.title = "re-edit report"
 
-        ws.append(["Category", "Shot Name", "Details"])
+        # Заголовок
+        header = ["Category", "Shot", "Start", "End"]
+        ws.append(header)
+
+        # Стили
+        green_fill = PatternFill(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid")
+        red_fill   = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
 
         for category, items in self.reedit_data.items():
-            for it in items:
-                # Если строка формата "Shot XXX. Start: ..., End: ... "
-                if isinstance(it, str) and it.startswith("Shot "):
-                    try:
-                        name_part, details = it.split(".", 1)
-                        shot_name = name_part.replace("Shot ", "").strip()
-                        details = details.strip()
-                    except:
-                        shot_name = it
-                        details = ""
-                    ws.append([category, shot_name, details])
+            for item in items:
 
-                # Если это просто имя шота
-                elif isinstance(it, str):
-                    ws.append([category, it, ""])
+                #  More / Less
+                if category in ("More", "Less") and isinstance(item, tuple):
+                    shot_name, start, end = item
+
+                    row = [category, shot_name, start, end]
+                    ws.append(row)
+
+                    start_cell = ws[f"C{ws.max_row}"]
+                    if start > 0:
+                        start_cell.fill = green_fill
+                    elif start < 0:
+                        start_cell.fill = red_fill
+
+                    end_cell = ws[f"D{ws.max_row}"]
+                    if end > 0:
+                        end_cell.fill = green_fill
+                    elif end < 0:
+                        end_cell.fill = red_fill
 
                 else:
-                    # На случай сложных структур — сохраняем как строку
-                    ws.append([category, str(it), ""])
+                    row = [category, item, "-", "-"]
+                    ws.append(row)
 
-        for col in range(1, 4):
-            max_len = 0
-            col_letter = get_column_letter(col)
-            for cell in ws[col_letter]:
-                if cell.value:
-                    max_len = max(max_len, len(str(cell.value)))
-            ws.column_dimensions[col_letter].width = max_len + 2
+        # Автоширина
+        for col in range(1, 5):
+            letter = get_column_letter(col)
+            max_len = max(len(str(cell.value)) for cell in ws[letter] if cell.value)
+            ws.column_dimensions[letter].width = max_len + 2
 
-        base_path = {"win32": SETTINGS["project_path_win"], 
-                    "darwin": SETTINGS["project_path_mac"]}[sys.platform]
+        base_path = {
+            "win32": SETTINGS["project_path_win"],
+            "darwin": SETTINGS["project_path_mac"]
+        }[sys.platform]
 
         timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
 
