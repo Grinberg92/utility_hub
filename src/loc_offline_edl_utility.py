@@ -274,6 +274,7 @@ class LogicProcessor:
                                     if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
                                         marker_name = name
                                 if marker_name is not None:
+                                    parts[1] = marker_name
                                     output.write(" ".join(parts) + '\n')
                                     output.write(f'* FROM CLIP NAME: {marker_name}\n\n')
 
