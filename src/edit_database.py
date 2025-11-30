@@ -1385,7 +1385,9 @@ class EDLGui(QWidget):
 
             edit_cb.clear()
             edit_cb.addItems(edits_list)
-
+        else:
+            edit_cb.setEnabled(False)
+            edit_cb.clear()
 
     def get_project(self):
         project_path = {"win32": SETTINGS["project_path_win"], 
