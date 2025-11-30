@@ -127,7 +127,6 @@ class EditDatabase:
                 del self.data[project][shot]
 
         self.save()
-            
 
     def get_shots_by_edit(self, project: str, input_edit_name: str) -> dict:
         """
@@ -458,69 +457,73 @@ class EDLComparator(QObject):
         Экспортирует reedit_data в Excel.
         Формат: Category | Shot | Start | End.
         """
-        if not self.reedit_data:
-            logger.warning("Нет данных для экспорта")
-            return
+        try:
+            if not self.reedit_data:
+                logger.warning("Нет данных для экспорта")
+                return
 
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "re-edit report"
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "re-edit report"
 
-        # Заголовок
-        header = ["Category", "Shot", "Start", "End"]
-        ws.append(header)
+            # Заголовок
+            header = ["Category", "Shot", "Start", "End"]
+            ws.append(header)
 
-        # Стили
-        green_fill = PatternFill(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid")
-        red_fill   = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+            # Стили
+            green_fill = PatternFill(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid")
+            red_fill   = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
 
-        for category, items in self.reedit_data.items():
-            for item in items:
+            for category, items in self.reedit_data.items():
+                for item in items:
 
-                #  More / Less
-                if category in ("More", "Less") and isinstance(item, tuple):
-                    shot_name, start, end = item
+                    #  More / Less
+                    if category in ("More", "Less") and isinstance(item, tuple):
+                        shot_name, start, end = item
 
-                    row = [category, shot_name, start, end]
-                    ws.append(row)
+                        row = [category, shot_name, start, end]
+                        ws.append(row)
 
-                    start_cell = ws[f"C{ws.max_row}"]
-                    if start > 0:
-                        start_cell.fill = green_fill
-                    elif start < 0:
-                        start_cell.fill = red_fill
+                        start_cell = ws[f"C{ws.max_row}"]
+                        if start > 0:
+                            start_cell.fill = green_fill
+                        elif start < 0:
+                            start_cell.fill = red_fill
 
-                    end_cell = ws[f"D{ws.max_row}"]
-                    if end > 0:
-                        end_cell.fill = green_fill
-                    elif end < 0:
-                        end_cell.fill = red_fill
+                        end_cell = ws[f"D{ws.max_row}"]
+                        if end > 0:
+                            end_cell.fill = green_fill
+                        elif end < 0:
+                            end_cell.fill = red_fill
 
-                else:
-                    row = [category, item, "-", "-"]
-                    ws.append(row)
+                    else:
+                        row = [category, item, "-", "-"]
+                        ws.append(row)
 
-        # Автоширина
-        for col in range(1, 5):
-            letter = get_column_letter(col)
-            max_len = max(len(str(cell.value)) for cell in ws[letter] if cell.value)
-            ws.column_dimensions[letter].width = max_len + 2
+            # Автоширина
+            for col in range(1, 5):
+                letter = get_column_letter(col)
+                max_len = max(len(str(cell.value)) for cell in ws[letter] if cell.value)
+                ws.column_dimensions[letter].width = max_len + 2
 
-        base_path = {
-            "win32": SETTINGS["project_path_win"],
-            "darwin": SETTINGS["project_path_mac"]
-        }[sys.platform]
+            base_path = {
+                "win32": SETTINGS["project_path_win"],
+                "darwin": SETTINGS["project_path_mac"]
+            }[sys.platform]
 
-        timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
 
-        file_dir = Path(base_path) / self.project / "reedit_reports"
-        file_dir.mkdir(parents=True, exist_ok=True)
+            file_dir = Path(base_path) / self.project / "reedit_reports"
+            file_dir.mkdir(parents=True, exist_ok=True)
 
-        filepath = file_dir / f"{self.project}_reedit_report_{timestamp}.xlsx"
+            filepath = file_dir / f"{self.project}_reedit_report_{timestamp}.xlsx"
 
-        wb.save(filepath)
+            wb.save(filepath)
 
-        logger.info(f"Excel экспортирован: {filepath}")
+            logger.info(f"Excel экспортирован: {filepath}")
+        
+        except Exception as e:
+            raise 
 
     def find_cross(self) -> None:
         """
@@ -744,7 +747,7 @@ class EDLGui(QWidget):
         super().__init__()
 
         self.setWindowTitle("Edit Database")
-        self.resize(800, 400)
+        self.resize(800, 600)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
 
@@ -1457,6 +1460,8 @@ class EDLGui(QWidget):
                                                                         "win32": SETTINGS["data_path_win"],
                                                                         "darwin": SETTINGS["data_path_mac"]
                                                                     }[sys.platform]))
+        self.worker.error.connect(lambda: self.init_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda: self.thread.quit())
 
         self.thread.start()
 
@@ -1526,6 +1531,8 @@ class EDLGui(QWidget):
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(lambda: self.run_button.setEnabled(True))
+        self.worker.error.connect(lambda: self.run_button.setEnabled(True))
+        self.worker.error.connect(lambda: self.thread.quit())
 
         self.thread.start()
 
@@ -1595,6 +1602,8 @@ class EDLGui(QWidget):
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(lambda: self.analyse_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda: self.analyse_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda: self.thread.quit())
 
         self.thread.start()
 
@@ -1669,6 +1678,8 @@ class EDLGui(QWidget):
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(lambda: self.check_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda: self.check_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda : self.thread.quit())
 
         self.thread.start()
 
