@@ -523,15 +523,12 @@ class VersionCheckerGUI(QtWidgets.QWidget):
         compare_logic = is_compare(all_cg_items, markers_list, result_file_path)
         if compare_logic:
             self.on_error(f"В контрольном документе отсутствуют данные")
+            self.rows = 0 # Обнуляем контрольное количество шотов
         else:
             self.update_failed_paths() # Выводим в GUI данные о неопознанных именах шотов
             self.update_result_label() # Обновляем количество проверенных шотов
             self.rows = 0 # Обнуляем контрольное количество шотов 
-            # Обнуляем все списки
-            self.result_list = {}
-            self.result_list_except = {} 
-            self.failed_paths = [] 
-            self.failed_names = [] 
+
             self.on_info("Проверка завершена!")
 
 if __name__ == '__main__':
