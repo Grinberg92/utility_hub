@@ -787,6 +787,17 @@ class EDLGui(QWidget):
         fps_layout.addStretch()
         layout.addLayout(fps_layout)
 
+        # Create project
+        create_project_layout = QHBoxLayout()
+        create_project_layout.addStretch()
+        self.project_edit_name = QLineEdit()
+        self.project_edit_name.setPlaceholderText("Enter a name to create a project")
+        self.project_edit_name.setFixedWidth(300)
+        self.project_edit_name.returnPressed.connect(lambda: self.create_project())
+        create_project_layout.addWidget(self.project_edit_name)
+        create_project_layout.addStretch()
+        layout.addLayout(create_project_layout)
+
         # Project name input
         project_layout = QHBoxLayout()
         project_layout.addStretch()
@@ -1682,6 +1693,19 @@ class EDLGui(QWidget):
         self.worker.error.connect(lambda : self.thread.quit())
 
         self.thread.start()
+
+    def create_project(self):
+        """
+        Создает новый фолдер(проект)
+        """
+        new_project = self.project_edit_name.text()
+        base_path = Path({"win32": SETTINGS["project_path_win"], 
+                        "darwin": SETTINGS["project_path_mac"]}[sys.platform])
+        new_project_path = base_path / new_project
+        new_project_path.mkdir(exist_ok=True)
+        
+        self.project_combo.clear()
+        self.project_combo.addItems(self.get_project())
 
     def on_finished(self, message: str):
         QMessageBox.information(self, "Success", message)
