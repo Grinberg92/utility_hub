@@ -264,8 +264,10 @@ class ShotRestorer(QObject):
             logger.debug(message)
             self.progress.emit(message)
 
-    def show_duplicates(self, processed_shots):
-
+    def show_duplicates(self, processed_shots: dict) -> None:
+        '''
+        Метод находит выводит информацию в GUI об дубликатах шотов.
+        '''
         self.progress.emit(f"Дубликаты шотов в EDL:\n")
         for shot_name, count in processed_shots.items():
             if len(count) >= 2:
