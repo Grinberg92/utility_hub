@@ -417,13 +417,17 @@ class EDLComparator(QObject):
                 self.progress.emit(f"Шот {shot_name} не изменился")
                 self.reedit_data.setdefault('No changes', []).append(shot_name)
 
-            elif start_diff > 0 or end_diff < 0:
+            elif (
+                (start_diff > 0 and end_diff < 0) or
+                (start_diff > 0 and end_diff == 0) or
+                (start_diff == 0 and end_diff < 0)
+                    ):
                 self.progress.emit(
                     f"Шот {shot_name} уменьшился: начало {(~start_diff + 1)}, конец {end_diff}"
                 )
                 self.reedit_data.setdefault('Less', []).append((shot_name, ~start_diff + 1, end_diff))
 
-            elif start_diff < 0 or end_diff > 0:
+            else:
                 self.progress.emit(
                     f"Шот {shot_name} увеличился: начало {(~start_diff + 1)}, конец {end_diff}"
                 )
