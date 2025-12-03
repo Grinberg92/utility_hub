@@ -756,7 +756,7 @@ class EDLGui(QWidget):
         tabs.addTab(self.init_tab(), "Init Edit")
         tabs.addTab(self.restore_tab(), "Restore shots")
         tabs.addTab(self.analyse_tab(), "Compare Edits")
-        tabs.addTab(self.check_phase_tab(), "Check Phase")
+        tabs.addTab(self.check_phase_tab(), "Max Range")
         tabs.addTab(self.view_database(), "View Database")
 
         tabs.setStyleSheet("""
@@ -1703,7 +1703,7 @@ class EDLGui(QWidget):
                         "darwin": SETTINGS["project_path_mac"]}[sys.platform])
         new_project_path = base_path / new_project
         new_project_path.mkdir(exist_ok=True)
-        
+
         self.project_combo.clear()
         self.project_combo.addItems(self.get_project())
 
