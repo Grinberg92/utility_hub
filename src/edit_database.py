@@ -264,6 +264,16 @@ class ShotRestorer(QObject):
             logger.debug(message)
             self.progress.emit(message)
 
+    def show_duplicates(self, processed_shots):
+
+        self.progress.emit(f"Дубликаты шотов в EDL:\n")
+        for shot_name, count in processed_shots.items():
+            if len(count) >= 2:
+                if shot_name in processed_shots:
+                    for data in processed_shots[shot_name]:
+                        self.progress.emit(f"Шот {shot_name}:   rec_in - {data.edl_record_in},  rec_out - {data.edl_record_out}")
+                self.progress.emit("\n")
+
     def run(self) -> None:
         """
         Основная логика.
@@ -283,28 +293,29 @@ class ShotRestorer(QObject):
             output_path = Path(str(self.target_edit).replace(".edl", f"_restored_rasshot_{d.today()}.edl"))
             
             with open(output_path, "w", encoding="utf-8") as o:
-                processed_shots_tmp = []
-                for new in target_edit:
+                processed_shots_tmp = {}
+                for target_edit_data in target_edit:
                     for _, base_shot_data in base_edit.items():
 
-                        if base_shot_data["src_name"] == new.edl_source_name and self.overlap_range(
+                        if base_shot_data["src_name"] == target_edit_data.edl_source_name and self.overlap_range(
                             self.fps,
                             base_shot_data["src_in"], base_shot_data["src_out"],
-                            new.edl_source_in, new.edl_source_out
+                            target_edit_data.edl_source_in, target_edit_data.edl_source_out
                         ):  
-                            self.create_and_export_avid_loc((new, base_shot_data["shot_name"]))
+                            self.create_and_export_avid_loc((target_edit_data, base_shot_data["shot_name"]))
 
-                            o.write(f"{new.edl_record_id} {base_shot_data['shot_name']} "
-                                    f"{new.edl_track_type} {new.edl_transition} "
-                                    f"{new.edl_source_in} {new.edl_source_out} "
-                                    f"{new.edl_record_in} {new.edl_record_out}")
+                            o.write(f"{target_edit_data.edl_record_id} {base_shot_data['shot_name']} "
+                                    f"{target_edit_data.edl_track_type} {target_edit_data.edl_transition} "
+                                    f"{target_edit_data.edl_source_in} {target_edit_data.edl_source_out} "
+                                    f"{target_edit_data.edl_record_in} {target_edit_data.edl_record_out}")
                             o.write(f'\n* FROM CLIP NAME: {base_shot_data["shot_name"]}\n\n')
 
-                            processed_shots_tmp.append(base_shot_data["shot_name"])
+                            processed_shots_tmp.setdefault(base_shot_data["shot_name"], []).append(target_edit_data)
                             break
 
             if processed_shots_tmp:                  
-                self.progress.emit(f"Дубликаты шотов в EDL:\n {[shot for shot, count in Counter(processed_shots_tmp).items() if count >= 2]}")
+                self.show_duplicates(processed_shots_tmp)
+
             self.finished.emit(f"Обработка завершена!")
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
