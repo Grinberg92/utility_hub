@@ -307,7 +307,7 @@ class VersionComparer:
         #self.total_miss(timeline_items, control_table) 
         return True
     
-    def is_valid_track(self, timeline):
+    def is_valid_track(self, timeline:ResolveObjects) -> bool:
         '''
         Валидация и проверка существования трека.
         '''
