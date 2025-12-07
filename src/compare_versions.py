@@ -255,10 +255,10 @@ class VersionComparer:
                     self.result_list.setdefault("Стоит актуальная версия шота:", []).append(control_table[ct_shot])
                     self.gui.current_counter += 1
                 else:
-                    self.result_list.setdefault("Текущая версия шота не актуальна:", []).append(f"Версия в сверке - {control_table[ct_shot]}. На таймлайне присутствуют версии: {timeline_items[ct_shot]}")
+                    self.result_list.setdefault("Текущая версия шота не актуальна:", []).append(f"Версия в контрольной таблице - {control_table[ct_shot]}. На таймлайне присутствуют версии: {timeline_items[ct_shot]}")
                     self.gui.current_counter += 1
             else:
-                self.result_list.setdefault("Шот есть в контрольном списке, но нет на таймлайне:", []).append(control_table[ct_shot])
+                self.result_list.setdefault("Шот есть в контрольной таблице, но нет на таймлайне:", []).append(control_table[ct_shot])
                 self.gui.current_counter += 1
 
     def check_in_control_table(self, timeline_items:dict, control_table:dict) -> None:
@@ -269,7 +269,7 @@ class VersionComparer:
         if self.global_mode: # Используются только в случае выбора глобального режима
             for tmln_shot in timeline_items:
                 if tmln_shot not in control_table and tmln_shot not in self.failed_names:
-                    self.result_list.setdefault("Шот отсутствует в контрольном списке:", []).append(tmln_shot)
+                    self.result_list.setdefault("Шот отсутствует в контрольной таблице:", []).append(tmln_shot)
 
     def total_miss(self, timeline_items:dict, control_table:dict) -> None:
         '''
@@ -293,7 +293,7 @@ class VersionComparer:
             timeline_dict_for_markers = {re.search(self.pattern_shot_number, k).group(0).lower(): j for k, j in timeline_items.items()}
             for marker in markers_list:          
                 if marker not in control_table_dict_for_markers and marker not in timeline_dict_for_markers: 
-                    self.result_list.setdefault('Шот отсутствует на таймлайне и в контрольном списке:', []).append(marker)  
+                    self.result_list.setdefault('Шот отсутствует на таймлайне и в контрольной таблице:', []).append(marker)  
             print(f"Данные для проверки соответствия между списком маркеров и ключами в control_table_dict_for_markers:\n{[k for k, v in control_table_dict_for_markers.items()]}")
 
     def is_compare(self, timeline_items:dict, control_table:dict) -> bool:
