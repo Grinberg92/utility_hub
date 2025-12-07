@@ -503,6 +503,7 @@ class VersionCheckerGUI(QWidget):
         self.warning_field_ph_text = "Здесь будут показаны имена шотов, которые не удалось определить."
         self.warning_field.setPlaceholderText(self.warning_field_ph_text)
         self.warning_field.setReadOnly(True)
+        self.warning_field.setMinimumHeight(200)
 
         self.result_label = QLabel("Processed 0 from 0 shots")
         bold_font = QFont()
