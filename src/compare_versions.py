@@ -29,12 +29,22 @@ EXTENTIONS = ('.exr', '.mov', '.jpg')
 
 class VersionComparer:
 
-    def __init__(self, user_config, signals, gui):
+    def __init__(self, user_config: dict, signals, gui):
+        """"
+
+        :param signals: Экземпляр класса CheckerWorker для проброса сигналов.
+        :param gui: Экземпляр класса VersionCheckerGUI для проброса предупреждений в ГУИ.
+        """
         self.user_config = user_config
         self.signals = signals
         self.gui = gui
 
-    def get_timeline_items(self, start_track: int, end_track: int, timeline) -> list:
+    def get_timeline_items(self, start_track: int, end_track: int, timeline: ResolveObjects) -> list:
+        """
+        Метод получет самый верхний клип в склейке.
+        Работает только если все клипы в стеке стоят ровно в склейке и не вылезают за границы склейки.
+        При этом отдельные клипы в стеке могут находиться внутри границы склейки и так же будут обработаны.
+        """
         top_clips = []
         covered = []  # список интервалов (start, end), отсортированный по start
 
@@ -92,7 +102,7 @@ class VersionComparer:
 
     def count_global_excel(self, sheet) -> None:
         """
-        Метод подсчитывает общее количество строк(шотов) excel в документе
+        Метод подсчитывает общее количество строк(шотов) excel в документе.
         """
         if self.gui.global_counter == 0:
             shots =  sheet[self.column_shots]
@@ -158,6 +168,7 @@ class VersionComparer:
         '''
         dublicate_shot = []
         self.count_global_csv()
+        
         try:
         # Открываем csv с данными по плейлисту из Шотгана и получаем словарь с парами ключ: значение. Имя шота с версией и имя шота без версии. {001_0010_comp_v001 : 001_0010, ...} 
             with open(self.control_table_path, encoding='utf-8') as f:
@@ -165,34 +176,43 @@ class VersionComparer:
                 
                 # Проверка всего контрольного списка
                 control_table = {}
-                for i in file:
-                    if not i['Path to EXR'] and not i['Path to Frames'] and (re.search(self.resolve_reel, i['Reel']), True)[int(self.resolve_reel) == 0]: # Если нет адресов
-                        self.signals.warnings.emit(f"🔴  Отсутствуют данные о шоте {i['Entity']}")
-                        self.failed_names.add(i['Entity'])
+                for shot in file:
+                    
+                    # Если не указан рил
+                    if self.resolve_reel != 0 and (shot["Reel"] == "" or not shot["Reel"]):
+                        self.signals.warnings.emit(f"🔴  Не указан номер рила в шоте {shot['Entity']}")
+                        self.failed_names.add(shot['Entity'])
+                        self.gui.current_counter += 1
+
+                    if not shot['Path to EXR'] and not shot['Path to Frames'] and (re.search(self.resolve_reel, shot['Reel']), True)[int(self.resolve_reel) == 0]: # Если нет адресов
+                        self.signals.warnings.emit(f"🔴  Отсутствуют данные о шоте {shot['Entity']}")
+                        self.failed_names.add(shot['Entity'])
                         self.gui.current_counter += 1
                         continue
 
-                    if i['Path to EXR'] and (re.search(self.resolve_reel, i['Reel']), True)[int(self.resolve_reel) == 0]: # Если есть путь к ексар и рил в контрольном списке соответствует рилу резолв в гуи
+                    # Если есть путь к exr и рил в контрольном списке соответствует рилу резолв в гуи
+                    if shot['Path to EXR'] and (re.search(self.resolve_reel, shot['Reel']), True)[int(self.resolve_reel) == 0]: 
                         try:
-                            i['Path to EXR']
+                            shot['Path to EXR']
                             try:
-                                control_table[re.search(self.pattern_short, i['Path to EXR']).group(0)] = re.search(self.pattern_long, i['Path to EXR']).group(0).lower()
-                                dublicate_shot.append(re.search(self.pattern_short, i['Path to EXR']).group(0))
+                                control_table[re.search(self.pattern_short, shot['Path to EXR']).group(0)] = re.search(self.pattern_long, shot['Path to EXR']).group(0).lower()
+                                dublicate_shot.append(re.search(self.pattern_short, shot['Path to EXR']).group(0))
                             except:
-                                self.signals.warnings.emit(f"🔴  Имя {i['Path to EXR']} не опознано")
-                                self.failed_names.add(i['Entity'])
+                                self.signals.warnings.emit(f"🔴  Имя {shot['Path to EXR']} не опознано")
+                                self.failed_names.add(shot['Entity'])
                                 self.gui.current_counter += 1
                                 continue
                         except AttributeError:
                             pass # Ничего не делать. Переходим к проверке Path to Frames
-
-                    if not i['Path to EXR'] and (re.search(self.resolve_reel, i['Reel']), True)[int(self.resolve_reel) == 0]:  # Если нет пути к ексар и рил в контрольном списке соответствует рилу резолв в гуи
+                    
+                    # Если нет пути к exr и рил в контрольном списке соответствует рилу резолв в гуи
+                    if not shot['Path to EXR'] and (re.search(self.resolve_reel, shot['Reel']), True)[int(self.resolve_reel) == 0]:
                         try:
-                            control_table[re.search(self.pattern_short, i['Path to Frames']).group(0)] = re.search(self.pattern_long, i['Path to Frames']).group(0).lower()
-                            dublicate_shot.append(re.search(self.pattern_short, i['Path to Frames']).group(0))
+                            control_table[re.search(self.pattern_short, shot['Path to Frames']).group(0)] = re.search(self.pattern_long, shot['Path to Frames']).group(0).lower()
+                            dublicate_shot.append(re.search(self.pattern_short, shot['Path to Frames']).group(0))
                         except AttributeError:
-                            self.signals.warnings.emit(f"🔴  Имя {i['Path to Frames']} не опознано")
-                            self.failed_names.add(i['Entity'])
+                            self.signals.warnings.emit(f"🔴  Имя {shot['Path to Frames']} не опознано")
+                            self.failed_names.add(shot['Entity'])
                             self.gui.current_counter += 1
 
             self.is_dublicate(dublicate_shot)
@@ -255,7 +275,7 @@ class VersionComparer:
                     self.result_list.setdefault("Стоит актуальная версия шота:", []).append(control_table[ct_shot])
                     self.gui.current_counter += 1
                 else:
-                    self.result_list.setdefault("Текущая версия шота не актуальна:", []).append(f"Версия в контрольной таблице - {control_table[ct_shot]}. На таймлайне присутствуют версии: {timeline_items[ct_shot]}")
+                    self.result_list.setdefault("Обнаружено расхождение версий:", []).append(f"Версия в контрольной таблице - {control_table[ct_shot]}. Версии на таймлайне: {timeline_items[ct_shot]}")
                     self.gui.current_counter += 1
             else:
                 self.result_list.setdefault("Шот есть в контрольной таблице, но нет на таймлайне:", []).append(control_table[ct_shot])
@@ -266,7 +286,7 @@ class VersionComparer:
         Проверяем сценарий наличия шота на таймлайне и отсутствие его в контрольной таблице.
         Так же проверяется отстутсвие шота на таймлайне и в контрольной таблице при условии что на таймлайне есть маркер с шотом.
         '''
-        if self.global_mode: # Используются только в случае выбора глобального режима
+        if self.global_mode:
             for tmln_shot in timeline_items:
                 if tmln_shot not in control_table and tmln_shot not in self.failed_names:
                     self.result_list.setdefault("Шот отсутствует в контрольной таблице:", []).append(tmln_shot)
@@ -288,7 +308,7 @@ class VersionComparer:
         
         logger.debug(f"Данные маркеров с таймлайна:\n{markers_list}")
         '''
-        if self.global_mode:  # Используются только в случае выбора глобального режима
+        if self.global_mode:
             control_table_dict_for_markers = {re.search(self.pattern_shot_number, k).group(0).lower(): j for k, j in control_table.items()}
             timeline_dict_for_markers = {re.search(self.pattern_shot_number, k).group(0).lower(): j for k, j in timeline_items.items()}
             for marker in markers_list:          
