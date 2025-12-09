@@ -110,6 +110,21 @@ class VersionComparer:
                 if shot.value is not None and shot.value != '' and re.search(self.pattern_shot_number, shot.value):
                     self.gui.global_counter += 1
 
+    def check_reel_excel(self, sheet) -> None:
+        """
+        Метод проверяет незаполненные поля рил в контрольной таблице.
+        """  
+        shots_column = sheet[self.column_shots]
+        reels_column = sheet[self.column_reel]
+
+        reel_shot = list(zip(reels_column, shots_column))
+
+        if int(self.resolve_reel) != 0:
+            for reel, shot in reel_shot:
+                if shot.value is not None and shot.value != '' and reel.value is None:
+                    self.signals.warnings.emit(f"🔴  Не указан рил в шоте {shot.value}")        
+                    self.gui.current_counter += 1
+
     def count_global_csv(self) -> None:
         '''
         Метод подсчитывает общее количество строк(шотов) в csv документе.
@@ -123,7 +138,6 @@ class VersionComparer:
                     self.gui.global_counter += 1
 
     def read_column_from_excel(self)-> list: 
-
         '''
         Получаем данные из .xlsx файла.
         '''
@@ -132,6 +146,9 @@ class VersionComparer:
             workbook = openpyxl.load_workbook(self.control_table_path) 
             sheet = workbook[self.sheet_name]
             self.count_global_excel(sheet)
+
+            if self.gui.current_counter == 0:
+                self.check_reel_excel(sheet)
             
             # Проверка, указан ли номер рила или рил = 0
             is_reel = int(self.resolve_reel) != 0
@@ -178,8 +195,8 @@ class VersionComparer:
                 control_table = {}
                 for shot in file:
                     
-                    # Если не указан рил
-                    if self.resolve_reel != 0 and (shot["Reel"] == "" or not shot["Reel"]):
+                    # Если не указан рил, выбран 0 рил и current_counter пуст
+                    if int(self.resolve_reel) != 0 and self.gui.current_counter == 0 and (shot["Reel"] == "" or not shot["Reel"]):
                         self.signals.warnings.emit(f"🔴  Не указан номер рила в шоте {shot['Entity']}")
                         self.failed_names.add(shot['Entity'])
                         self.gui.current_counter += 1
