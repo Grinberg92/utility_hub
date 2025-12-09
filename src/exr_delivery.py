@@ -22,7 +22,8 @@ SETTINGS = {
     "plate_suffix": '_VT',
     "colors": ["Orange", "Yellow", "Lime", "Violet", "Blue"],
     "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
-    "false_extentions": (".mov", ".mp4", ".jpg")
+    "false_extentions": (".mov", ".mp4", ".jpg"),
+    "project_presets": ["aces1.2_smoother_preset", "yrgb_smoother_preset"]
 }
 
 class DvrTimelineObject():
@@ -230,17 +231,43 @@ class DeliveryPipline:
 
         return no_empty_tracks
     
-    def set_project_preset(self) -> bool:
+    def set_project_preset(self, item) -> bool:
         """
         Установка пресета проекта.
         """
-        set_preset_var = self.project.SetPreset(self.project_preset)
-        if set_preset_var is not None:
-            logger.info(f"Применен пресет проекта: {self.project_preset}")
-            return True
+        # Пресет ACES 1.2 RCM для динамического определения цветового пространства ACES
+        # и автоматическое перелючение пресета на YRGB RCM при рендере коптеров .dng.
+        if self.project_preset == SETTINGS["project_presets"][0]:
+            if item.mp_item.GetName().lower().endswith(".dng"):
+                preset = SETTINGS["project_presets"][1]
+                set_preset_var = self.project.SetPreset(preset)
+                if set_preset_var is not None:
+                    logger.info(f"Применен пресет проекта: {preset}")
+                    return True
+                else:
+                    self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
+                    return False
+            else:
+                preset = SETTINGS["project_presets"][0]
+                set_preset_var = self.project.SetPreset(preset)
+                if set_preset_var is not None:
+                    logger.info(f"Применен пресет проекта: {preset}")
+                    return True
+                else:
+                    self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
+                    return False
+                
+        # Только YRGB RCM пресет.
         else:
-            self.signals.error_signal.emit(f"Пресет проекта не применен {self.project_preset}")
-            return False
+            preset = SETTINGS["project_presets"][1]
+            set_preset_var = self.project.SetPreset(preset)
+            if set_preset_var is not None:
+                logger.info(f"Применен пресет проекта: {preset}")
+                return True
+            else:
+                self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
+                return False
+            
     def set_disabled(self, current_track_number):
         '''
         Отключаем все дорожки кроме текущей.
@@ -680,6 +707,7 @@ class DeliveryPipline:
         """
         for job in render_jobs:
             self.project.DeleteRenderJob(job)
+        logger.info(f"Очередь завершенных очередей рендера очищена")
 
     def run(self) -> None:
         """
@@ -710,11 +738,7 @@ class DeliveryPipline:
         if video_tracks == []:
             self.signals.warning_signal.emit("Отсутствуют клипы для обработки")
             return False
-
-        project_preset_var = self.set_project_preset()
-        if not project_preset_var:
-            return False
-        
+    
         if not self.validate(video_tracks):
             return False
 
@@ -746,6 +770,10 @@ class DeliveryPipline:
 
                 # Ставится до установки render preset
                 self.stop_process()
+
+                project_preset_var = self.set_project_preset(item)
+                if not project_preset_var:
+                    return False      
 
                 render_preset_var = self.set_render_preset(handles_value)
                 if not render_preset_var:
@@ -885,8 +913,8 @@ class ExrDelivery(QWidget):
         self.height_input.setFixedWidth(60)
 
         self.preset_combo = QComboBox()
-        self.preset_combo.addItems(["aces1.2_smoother_preset", "yrgb_smoother_preset"])
-        self.preset_combo.setCurrentText("aces1.2_smoother_preset")
+        self.preset_combo.addItems(SETTINGS["project_presets"])
+        self.preset_combo.setCurrentText(SETTINGS["project_presets"][0])
         self.preset_combo.setMinimumWidth(180)
         self.export_cb = QCheckBox("Export .xml")
         self.handle_input = QLineEdit("3")
