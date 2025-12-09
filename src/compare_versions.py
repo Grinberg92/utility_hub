@@ -515,6 +515,7 @@ class VersionCheckerGUI(QWidget):
         self.out_resolve_track = QLineEdit("10")
         self.sheet_name = QLineEdit("Sheet1")
         self.resolve_reel = QLineEdit("0")
+        self.resolve_reel.textChanged.connect(lambda: self.update_fields_state())
         self.column_reel = QLineEdit()
         self.column_shots = QLineEdit()
 
@@ -688,11 +689,26 @@ class VersionCheckerGUI(QWidget):
     def update_fields_state(self):
         """
         Локирует блок Excel при выборе режима .csv.
+        Так же локирует инпут колонки рила при resolve_reel = 0.
         """
         enable_excel = self.xlsx_source.isChecked()
         self.sheet_name.setEnabled(enable_excel)
-        self.column_reel.setEnabled(enable_excel)
         self.column_shots.setEnabled(enable_excel)
+
+        if enable_excel:
+            try:
+                reel_num = int(self.resolve_reel.text().strip())
+            except ValueError:
+                reel_num = None 
+
+            if reel_num == 0:
+                self.column_reel.setEnabled(False)
+                self.column_reel.clear()
+            else:
+                self.column_reel.setEnabled(True)
+
+        else:
+            self.column_reel.setEnabled(False)
 
     def update_result_label(self, forse_reset=False):
         """
