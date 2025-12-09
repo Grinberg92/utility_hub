@@ -2,6 +2,7 @@ import sys
 import re
 import math
 import time
+import os
 from pprint import pformat
 from pathlib import Path
 from timecode import Timecode as tc
@@ -23,7 +24,8 @@ SETTINGS = {
     "colors": ["Orange", "Yellow", "Lime", "Violet", "Blue"],
     "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
     "false_extentions": (".mov", ".mp4", ".jpg"),
-    "project_presets": ["aces1.2_smoother_preset", "yrgb_smoother_preset"]
+    "project_presets": ["aces1.2_smoother_preset", "yrgb_smoother_preset"],
+    "copter_extentions": (".dng")
 }
 
 class DvrTimelineObject():
@@ -625,10 +627,10 @@ class DeliveryPipline:
 
     def is_question_items(self, warnings) -> bool:
         """
-        Обрабатываем false_extentions через диалоговое окно потока gui.
+        Обрабатываем предупреждения через диалоговое окно потока gui.
         """
         text = "\n".join([f"• '{name}' на треке {track}" for name, track in warnings])
-        message = f"Обнаружены проблемные клипы:\n{text}\n\nХотите продолжить?"
+        message = f"Обнаружены клипы, требующие Davinci YRGB Color Management.\nПроверьте настройки цвета, прежде чем продолжить:\n\n{text}\n\nХотите продолжить?"
 
         loop = QEventLoop()
         user_choice = {}
@@ -659,25 +661,36 @@ class DeliveryPipline:
 
                     clip = item.mp_item
 
+                    # Проверка на раасширения (".mov", ".mp4", ".jpg")
                     if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
-                        warnings_question.append((clip.GetName(), track_num))    
+                        warnings_question.append((clip.GetName(), track_num))   
 
+                    # Проверка на коптерное расширение .dng
+                    if clip.GetName().lower().endswith(SETTINGS["copter_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
+                        warnings_question.append((clip.GetName(), track_num))   
+
+                    # Сбор статусов для проверки хотя бы одного ввыделенного клипа на таймлайне
                     if not item.clip_color == SETTINGS["colors"][4]:
                         no_select = False
 
+                    # Проверка на клип, покрашенный в невалидный цвет
                     if item.clip_color not in SETTINGS["colors"]:
                         warnings.append(f"• Не валидный цвет клипа {clip.GetName()} на треке {track_num}")
 
+                    # Проверка на валидность расширения клипа
                     if not clip.GetName().lower().endswith(SETTINGS["extentions"]) and not clip.GetName().lower().endswith(SETTINGS["false_extentions"]):
                         warnings.append(f"• Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
 
+                    # Проверка на валидный ФПС
                     if float(clip.GetClipProperty("FPS")) != float(self.fps):
                         warnings.append(f"• FPS клипа {clip.GetName()} на треке {track_num} не соответствует проектному")
                     
+                    # Проверка на наличие трансформа на клипе
                     if self.detect_transform(item):
                         warnings.append(f"• Уберите трансфомы/скейлы с клипов на треке {track}")
                         break
-
+                    
+                    # Триггер однокадровых клипов и невалидного ретайма
                     try:
                         if not item.clip_color == SETTINGS["colors"][4]:
                             self.get_handles(item, hide_log=False)
@@ -859,6 +872,9 @@ class ConfigValidator:
         if self.mode == "conform":
             if not user_config["render_path"]:
                 self.errors.append("Укажите путь для рендера")
+
+            if not os.path.exists(user_config["render_path"]):
+                self.errors.append("Некорректный путь рендера")
 
             try:
                 int(user_config["resolution_height"])
