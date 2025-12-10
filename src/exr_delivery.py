@@ -522,11 +522,8 @@ class DeliveryPipline:
         except Exception as e:
             self.signals.error_signal.emit(f"Не удалось вычислить разрешение {resolution}: {e}")
             return False, None
-        
-        if resolution != self._last_resolution:
-            self.set_project_resolution(height, width)
 
-        self._last_resolution = resolution
+        self.set_project_resolution(height, width)
 
         render_settings = {
             "SelectAllFrames": False,
