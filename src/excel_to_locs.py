@@ -32,8 +32,8 @@ class LocatorCreator:
         workbook = openpyxl.load_workbook(self.excel_path)
         sheet = workbook[self.sheet_name]
 
-        raw_data = zip(sheet[self.timecode_column][self.start_row:], 
-                    sheet[self.shot_column][self.start_row:])
+        raw_data = zip(sheet[self.timecode_column][self.start_row - 1:], 
+                    sheet[self.shot_column][self.start_row -1:])
         
         # Фильтр на пустые строки
         shot_data = [(tc, sh) for tc, sh in raw_data if tc.value and sh.value]
@@ -63,7 +63,7 @@ class LocatorGUI(QWidget):
         self.sheet_name_input = QLineEdit("")
         self.shot_column_input = QLineEdit("")
         self.timecode_column_input = QLineEdit("")
-        self.start_row_input = QLineEdit("0")
+        self.start_row_input = QLineEdit("1")
 
         # Кнопки
         self.browse_excel_btn = QPushButton("Browse")
@@ -144,6 +144,10 @@ class LocatorGUI(QWidget):
 
         except ValueError:
             QMessageBox.critical(self, "Error", "Shift timecode and Start row must be integers.")
+            return
+
+        if start_row <=0:
+            QMessageBox.critical(self, "Error", "Start row must be a positive number.")
             return
 
         if not excel_path or not output_path:
