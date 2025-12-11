@@ -1231,6 +1231,10 @@ class Autoconform(QWidget, ConformCheckerMixin):
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("""
+                            QFrame {color: #555;
+                                    background-color: #555}
+                                """)
 
         # Правая колонка
         right_vbox = QVBoxLayout()
