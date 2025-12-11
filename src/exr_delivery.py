@@ -5,10 +5,11 @@ import time
 import os
 from pprint import pformat
 from pathlib import Path
+from collections import Counter
 from timecode import Timecode as tc
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox, QTextEdit
+    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox, QFrame
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QEventLoop
 from dvr_tools.logger_config import get_logger
@@ -86,7 +87,7 @@ class NameSetter:
 
     def from_markers(self) -> None:
         """
-        Присвоение имен из маркеров.
+        Присвоение имен из маркеров, согласно шаблону из gui.
         """
         markers = self.get_markers()
 
@@ -97,7 +98,7 @@ class NameSetter:
                 for name, timecode in markers:
                     if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
                         # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["plate_suffix"] + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name_new)
                         logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
                         applied = True
@@ -107,7 +108,7 @@ class NameSetter:
 
     def from_offline(self, items) -> None:
         """
-        Присвоение имен из оффлайн клипов.
+        Присвоение имен из оффлайн клипов, согласно шаблону из gui.
         """
         for track_index in range(2, self.count_of_tracks + 1):
             clips_under = self.timeline.GetItemListInTrack('video', track_index)
@@ -117,7 +118,7 @@ class NameSetter:
                 for item in items:
                     if clip_under.GetStart() == item.GetStart():
                         # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name = item.GetName() + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["plate_suffix"] + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name)
                         logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
                         applied = True
@@ -170,6 +171,9 @@ class NameSetter:
         self.name_from_markers = self.user_config["set_name_from_markers"]
         self.fps = int(self.user_config["fps"])
         self.marker_from = self.user_config["locator_from"]
+        self.prefix = self.user_config["prefix_name"]
+        self.postfix = self.user_config["postfix_name"]
+        self.set_track_id = self.user_config["set_track_id"]
 
         self.count_of_tracks = self.timeline.GetTrackCount('video')
 
@@ -507,8 +511,27 @@ class DeliveryPipline:
         """
         self.project.SetSetting("timelineResolutionHeight", height_res)
         self.project.SetSetting("timelineResolutionWidth", width_res)
+
+    def get_render_path(self, clip: DvrTimelineObject) -> str:
+        """
+        Формирование путей рендера для альтернативной структуры выданных плейтов.
+        """
+        clip_name = clip.timeline_item.GetName()
+        clip_track = self.shots_tracks[clip_name][-1]
+
+        # Путь для аутстудийного пайплайна
+        if self.render_folders_structure != "CGF" and self.count_plate_tracks[clip_name] > 1:
+            base_path = Path(self.render_path) / str(clip_name) / f"{str(clip_track):0>3}"
+            base_path.mkdir(parents=True, exist_ok=True)
+
+        # Путь для CGF пайплайна
+        else:
+            base_path = Path(self.render_path) / str(clip_name)
+            base_path.mkdir(parents=True, exist_ok=True)
+ 
+        return str(base_path)
             
-    def set_render_settings(self, clip, clip_resolution) -> tuple:
+    def set_render_settings(self, clip: DvrTimelineObject, clip_resolution: str) -> tuple:
         '''
         Метод задает настройки для  рендера текущего итема 
         и добавляет текущий render job в очередь.
@@ -529,7 +552,7 @@ class DeliveryPipline:
             "SelectAllFrames": False,
             "MarkIn": clip.clip_start,
             "MarkOut": clip.clip_end,
-            "TargetDir": str(self.render_path),
+            "TargetDir": str(self.get_render_path(clip)),
             "FormatWidth": int(width),
             "FormatHeight": int(height)
             }
@@ -719,6 +742,15 @@ class DeliveryPipline:
             self.project.DeleteRenderJob(job)
         logger.info(f"Очередь завершенных очередей рендера очищена")
 
+    def is_multy_plates(self, timeline) -> dict:
+        """
+        Получаем словарь с количеством повторений шота на таймлайне.
+        """
+        extractor_obj = ResolveTimelineItemExtractor(timeline)
+        timeline_items = [i.GetName() for i in extractor_obj.get_timeline_items(start_track=2, end_track=timeline.GetTrackCount("video")) if i != "" or i is not None]
+        count_plate_tracks = Counter(timeline_items)
+        return count_plate_tracks
+
     def run(self) -> None:
         """
         Логика конвеера рендера.
@@ -736,8 +768,10 @@ class DeliveryPipline:
         self.export_bool = self.user_config["export_xml"]
         self.boe_fix = self.user_config["boe_fix"]
         self.fps = self.user_config["fps"]
+        self.render_folders_structure = self.user_config["render_folders_structure"]
 
         self.rj_to_clear = []
+        self.shots_tracks = {}
         self._last_render_preset = None
         self._last_resolution = None
 
@@ -751,9 +785,11 @@ class DeliveryPipline:
     
         if not self.validate(video_tracks):
             return False
+        
+        self.count_plate_tracks = self.is_multy_plates(self.timeline)
 
         # Цикл по дорожкам(по основному и допплейтам, если таковые имеются).
-        for track in video_tracks:
+        for track_num, track in enumerate(video_tracks, start=1):
 
             track_items = self.get_mediapoolitems(start_track=track, end_track=track)
 
@@ -764,6 +800,8 @@ class DeliveryPipline:
                 
                 if self.skip_item(item):
                     continue
+
+                self.shots_tracks.setdefault(item.timeline_item.GetName(), []).append(track_num)
 
                 logger.debug("\n".join(("\n", f"timline duration: {item.clip_duration}",
                              f"source duration: {item.source_end - item.source_start}",
@@ -852,13 +890,18 @@ class ConfigValidator:
                 "export_xml": self.gui.export_cb.isChecked(),
                 "boe_fix": self.gui.boe_fix_cb.isChecked(),
                 "fps": self.gui.fps_entry.text(),
+                "render_folders_structure": self.gui.render_structure.currentText()
             }
         if self.mode == "names":
             return {"track_number": self.gui.from_track_qline.text().strip(),
                     "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
                     "set_name_from_track": self.gui.from_track_cb.isChecked(),
                     "fps": self.gui.fps_entry.text(),
-                    "locator_from": self.gui.locator_from_combo.currentText()}
+                    "locator_from": self.gui.locator_from_combo.currentText(),
+                    "prefix_name": self.gui.prefix.text() + ("_", "")[self.gui.prefix.text() == ""],
+                    "postfix_name": ("_", "")[self.gui.postfix.text() == ""] + self.gui.postfix.text(),
+                    "set_track_id": self.gui.set_track_id.isChecked()
+                    }
     
     def validate(self, user_config: dict) -> bool:
         """
@@ -899,7 +942,7 @@ class ExrDelivery(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Plate Delivery")
-        self.resize(650, 200)
+        self.resize(660, 450)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
         self.fps_label = QLabel("FPS:")
@@ -925,6 +968,19 @@ class ExrDelivery(QWidget):
         self.height_input = QLineEdit("858")
         self.height_input.setFixedWidth(60)
 
+        self.prefix_label = QLabel("add prefix")
+        self.postfix_label = QLabel("add postfix")
+        self.prefix = QLineEdit("")
+        self.prefix.setMaximumWidth(50)
+        self.prefix.editingFinished.connect(lambda: self.get_shot_name())
+        self.postfix = QLineEdit("")
+        self.postfix.setMaximumWidth(50)
+        self.postfix.editingFinished.connect(lambda: self.get_shot_name())
+        self.shot_name_view = QLabel("###_####")
+        self.set_track_id = QCheckBox("track id")
+        self.set_track_id.stateChanged.connect(lambda: self.get_shot_name())
+        self.set_track_id.setChecked(True)
+
         self.preset_combo = QComboBox()
         self.preset_combo.addItems(SETTINGS["project_presets"])
         self.preset_combo.setCurrentText(SETTINGS["project_presets"][0])
@@ -933,6 +989,25 @@ class ExrDelivery(QWidget):
         self.handle_input = QLineEdit("3")
         self.handle_input.setFixedWidth(40)
         self.boe_fix_cb = QCheckBox("BOE Fix")
+
+        self.separator = QFrame()
+        self.separator.setFrameShape(QFrame.HLine)
+        self.separator.setStyleSheet("""
+                                    QFrame {color: #555;
+                                            background-color: #555}
+                                        """)
+        
+        self.separator_set_name = QFrame()
+        self.separator_set_name.setFrameShape(QFrame.HLine)
+        self.separator_set_name.setStyleSheet("""
+                                    QFrame {color: #555;
+                                            background-color: #555}
+                                        """)
+
+        self.render_structure_label = QLabel("Render folder structure:")
+        self.render_structure = QComboBox()
+        self.render_structure.addItems(["CGF", "Others"])
+        self.render_structure.setMinimumWidth(124)
 
         self.render_path = QLineEdit()
         self.browse_btn = QPushButton("Choose")
@@ -944,11 +1019,13 @@ class ExrDelivery(QWidget):
         layout = QVBoxLayout()
 
         # -- Группа установки имен клипов
-        step2_group = QGroupBox("Set Shot name")
-        step2_group.setMinimumHeight(120)
+        step2_group = QGroupBox("Set name")
+        step2_group.setMinimumHeight(160)
         names_layout = QVBoxLayout()
         input_track_layout = QHBoxLayout()
         btn_layout = QHBoxLayout()
+        shot_name_layout = QHBoxLayout()
+
         input_track_layout.addWidget(self.from_track_cb)
         input_track_layout.addWidget(self.from_track_qline)
         input_track_layout.addSpacing(40)
@@ -960,8 +1037,24 @@ class ExrDelivery(QWidget):
         input_track_layout.addWidget(self.fps_label)
         input_track_layout.addWidget(self.fps_entry)
         input_track_layout.addStretch()
+
+        shot_name_layout.addWidget(self.prefix_label)
+        shot_name_layout.addWidget(self.prefix)
+        shot_name_layout.addSpacing(20)
+        shot_name_layout.addWidget(self.postfix_label)
+        shot_name_layout.addWidget(self.postfix)
+        shot_name_layout.addSpacing(20)
+        shot_name_layout.addWidget(self.set_track_id)
+        shot_name_layout.addSpacing(100)
+        shot_name_layout.addWidget(self.shot_name_view)
+        shot_name_layout.addStretch()
+
         btn_layout.addWidget(self.set_names_btn)
+        
+        names_layout.addSpacing(10)
         names_layout.addLayout(input_track_layout)
+        names_layout.addWidget(self.separator_set_name)
+        names_layout.addLayout(shot_name_layout)
         names_layout.addLayout(btn_layout)
         step2_group.setLayout(names_layout)
         layout.addWidget(step2_group)
@@ -991,6 +1084,14 @@ class ExrDelivery(QWidget):
         preset_layout.addStretch()
         layout.addLayout(preset_layout)
 
+        layout.addWidget(self.separator)
+
+        render_structure_layout = QHBoxLayout()
+        render_structure_layout.addWidget(self.render_structure_label)
+        render_structure_layout.addWidget(self.render_structure)
+        render_structure_layout.addStretch()
+        layout.addLayout(render_structure_layout)
+
         # --- Путь рендера ---
         path_layout = QHBoxLayout()
         path_layout.addWidget(QLabel("Render path:"))
@@ -1011,6 +1112,7 @@ class ExrDelivery(QWidget):
 
     def create_color_palette(self, labels=None):
         palette_group = QGroupBox("")
+        palette_group.setMaximumHeight(100)
 
         main_layout = QVBoxLayout()
         label_layout = QHBoxLayout()
@@ -1088,6 +1190,12 @@ class ExrDelivery(QWidget):
         if folder:
             self.render_path.setText(folder)
 
+    def get_shot_name(self):
+        self.base_shot_name = "###_####"
+        result_shot_name = self.prefix.text() + ("_", "")[self.prefix.text() == ""] + self.base_shot_name + ("_", "")[self.postfix.text() == ""] + self.postfix.text() + ("", "_VT1")[self.set_track_id.isChecked()]
+        self.shot_name_view.setText(result_shot_name)
+
+    
     def run(self, logic_class, mode, button=None):
         """
         :param logic_class: Класс логики, который будет запущен.
