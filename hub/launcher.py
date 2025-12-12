@@ -72,11 +72,6 @@ class HubApp(QWidget):
             description_text="Установка проектного FPS и цвета для исходников по их разрешению",
             script_name="ocf_set_source_color.py"
         )
-        row9 = self.create_button_description_row(
-            button_name="Name from Offline",
-            description_text="Установка имени оффлайн клипа в атрибут клипа на таймлайне",
-            script_name="set_name_from_offline.py"
-        )
         row10 = self.create_button_description_row(
             button_name="EDL Processor",
             description_text="Хаб для работы с маркерами и EDL",
@@ -96,7 +91,6 @@ class HubApp(QWidget):
         resolve_layout.addLayout(row6)
         resolve_layout.addLayout(row7)
         resolve_layout.addLayout(row8)
-        resolve_layout.addLayout(row9)
         resolve_layout.addLayout(row10)
         resolve_layout.addLayout(row11)
 
