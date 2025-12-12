@@ -605,6 +605,12 @@ class DeliveryPipline:
             
             self.timeline.SetTrackEnable("video", track_number, True)
 
+    def burn_in_off(self) -> None:
+        """
+        Отключаем burn in.
+        """
+        self.project.LoadBurnInPreset("python_no_burn_in")
+
     def remove_transform(self, item) -> None:
         """
         Удаляет трансформы и кроппинг с таймлайн итема.
@@ -787,6 +793,8 @@ class DeliveryPipline:
             return False
         
         self.count_plate_tracks = self.is_multy_plates(self.timeline)
+
+        self.burn_in_off()
 
         # Цикл по дорожкам(по основному и допплейтам, если таковые имеются).
         for track_num, track in enumerate(video_tracks, start=1):
