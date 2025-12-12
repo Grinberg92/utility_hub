@@ -214,7 +214,7 @@ class MainWindow(QWidget):
         type_row.addWidget(self.type_combo)
         type_row.addSpacing(12)
         self.type_selector = QComboBox()
-        self.type_selector.addItems(["OCF", "REEL"])
+        self.type_selector.addItems(["OCF", "CC_REEL", "CC_NO_REEL"])
         self.type_selector.setMinimumWidth(100)
         type_row.addWidget(self.type_selector)
         type_row.addSpacing(30)
@@ -295,10 +295,8 @@ class MainWindow(QWidget):
         self.resolve_group.setEnabled(is_resolve)
         self.avid_group.setEnabled(is_avid)
 
-        is_reel = self.type_selector.currentText() == "REEL"
+        is_reel = self.type_selector.currentText() == "CC_REEL"
         self.reels_input.setEnabled(is_reel)
-
-        self.add_proj_folder.setEnabled(self.type_selector.currentText() == "OCF")
 
     def on_error_signal(self, message):
         QMessageBox.critical(self, "Ошибка", message)
@@ -480,7 +478,7 @@ class MainWindow(QWidget):
                 self.recursive_resolve(media_pool, root_folder, RESOLVE_OCF_FOLDER)
 
             # Логика создания Reel структуры
-            elif type_project_resolve == "REEL":
+            elif type_project_resolve == "CC_REEL":
 
                 if self.add_proj_folder.isChecked():
                     reels_folder = f"{project_name.upper()}_CC"
@@ -495,6 +493,21 @@ class MainWindow(QWidget):
                     root_folder = resolve.root_folder
                     self.recursive_resolve(media_pool, root_folder, RESOLVE_REEL_FOLDER)
                     self.set_resolve_preset(project)
+
+            elif type_project_resolve == "CC_NO_REEL":
+
+                if self.add_proj_folder.isChecked():
+                    reels_folder = f"{project_name.upper()}_CC"
+                    project_manager.CreateFolder(reels_folder)
+                    project_manager.OpenFolder(reels_folder)
+
+                project_manager.CreateProject(f"{project_name.upper()}_CC_{date.today().strftime('%Y%m%d')}")
+                resolve = ResolveObjects()
+                project = resolve.project
+                media_pool = resolve.mediapool
+                root_folder = resolve.root_folder
+                self.recursive_resolve(media_pool, root_folder, RESOLVE_REEL_FOLDER)
+                self.set_resolve_preset(project)
 
         except Exception as e:
             self.on_error_signal(f"Не удалось создать структуру папок в Resolve: {e}")
