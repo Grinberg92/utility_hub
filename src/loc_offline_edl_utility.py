@@ -229,7 +229,7 @@ class LogicProcessor:
         
     def create_temp_edl(self) -> None:
         """
-        Создает промежуточный EDL для offline edl и dailies edl.
+        Создает промежуточный EDL для offline edl.
         """
         tmp_path = str(Path(__file__).resolve().parent.parent / "temp_edl.edl")
         result = self.timeline.Export(tmp_path, self.resolve.EXPORT_EDL)
@@ -241,7 +241,7 @@ class LogicProcessor:
         
     def kill_tmp_edl(self, edl_file):
         """
-        Удаляет промежуточный EDL для offline edl и dailies edl.
+        Удаляет промежуточный EDL для offline edl.
         """
         os.remove(edl_file)
 
@@ -278,12 +278,6 @@ class LogicProcessor:
                                     output.write(" ".join(parts) + '\n')
                                     output.write(f'* FROM CLIP NAME: {marker_name}\n\n')
 
-                            # Логика для edl_for_dailies
-                            elif self.dailies_edl:
-                                for name, timecode in markers_list:
-                                    if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
-                                        parts[1] = name
-                                output.write(" ".join(parts) + '\n')
                 logger.info("EDL файл успешно создан.")
                 self.kill_tmp_edl(edl_path)
                 return True
@@ -380,7 +374,6 @@ class LogicProcessor:
         self.marker_from = self.user_config["locator_from"]
         self.timeline_start_tc = self.timeline.GetStartFrame()
         self.offline_edl = self.user_config["offline_checkbox"]
-        self.dailies_edl = self.user_config["dailies_checkbox"]
         self.srt_create_bool = self.user_config["create_srt_checkbox"]
         self.name_from_track = self.user_config["set_name_from_track"]
         self.name_from_markers = self.user_config["set_name_from_markers"]
@@ -461,14 +454,12 @@ class ConfigValidator:
         "output_path": self.gui.output_entry.text(),
         "export_loc": self.gui.export_loc_checkbox.isChecked(),
         "set_markers": self.gui.set_markers_checkbox.isChecked(),
-        "process_edl": (self.gui.offline_clips_checkbox.isChecked() 
-                        or self.gui.edl_for_dailies_checkbox.isChecked()),
+        "process_edl": (self.gui.offline_clips_checkbox.isChecked()),
         "fps": self.gui.fps_entry.text(),
         "locator_output_path": self.gui.save_locators_path_entry.text(),
         "locator_from": self.gui.locator_from_combo.currentText(),
         "track_number": self.gui.track_entry.text().strip(),
         "offline_checkbox": self.gui.offline_clips_checkbox.isChecked(),
-        "dailies_checkbox": self.gui.edl_for_dailies_checkbox.isChecked(),
         "create_srt_checkbox": self.gui.create_srt_cb.isChecked(),
         "set_name_from_track": self.gui.from_track_cb.isChecked(),
         "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
@@ -495,13 +486,12 @@ class ConfigValidator:
         name_from_track = user_config["set_name_from_track"]
         name_from_markers = user_config["set_name_from_markers"]
         offline_edl_cb = user_config["offline_checkbox"]
-        dailies_edl_cb = user_config["dailies_checkbox"]
         create_srt_cb = user_config["create_srt_checkbox"]
         set_markers_cb = user_config["set_markers"]
         edl_from_srt = user_config["create_edl_from_srt"]
 
         if not any([name_from_track, name_from_markers, offline_edl_cb, 
-                    dailies_edl_cb, create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt]):
+                    create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt]):
             self.errors.append("Не выбрана ни одна опция!")
             return
 
@@ -655,15 +645,12 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         # Checkboxes
         checks_layout = QHBoxLayout()
         checks_layout.setAlignment(Qt.AlignLeft)
-        self.offline_clips_checkbox = QCheckBox("EDL for offline")
-        self.edl_for_dailies_checkbox = QCheckBox("EDL for autoconform")
+        self.offline_clips_checkbox = QCheckBox("EDL for offline and autoconform")
         self.create_srt_cb = QCheckBox("EDL to SRT")
         self.srt_to_edl_cb = QCheckBox("SRT to EDL")
         self.create_srt_cb.stateChanged.connect(self.update_fields_state)
         self.srt_to_edl_cb.stateChanged.connect(self.update_fields_state)
         checks_layout.addWidget(self.offline_clips_checkbox)
-        checks_layout.addSpacing(30)
-        checks_layout.addWidget(self.edl_for_dailies_checkbox)
         checks_layout.addSpacing(30)
         checks_layout.addWidget(self.create_srt_cb)
         checks_layout.addSpacing(30)
