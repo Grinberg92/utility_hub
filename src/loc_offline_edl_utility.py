@@ -9,7 +9,7 @@ from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QRadioButton,
-    QLineEdit, QComboBox, QGroupBox, QCheckBox, QPushButton, QSizePolicy, QApplication, QFileDialog)
+    QLineEdit, QComboBox, QGroupBox, QCheckBox, QPushButton, QSizePolicy, QApplication, QFileDialog, QFrame)
 from dataclasses import dataclass
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
@@ -301,7 +301,7 @@ class LogicProcessor:
                 for name, timecode in markers:
                     if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
                         # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name_new = name + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["plate_suffix"] + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name_new)
                         logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
                         applied = True
@@ -321,7 +321,7 @@ class LogicProcessor:
                 for item in items:
                     if clip_under.GetStart() == item.GetStart():
                         # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name = item.GetName() + SETTINGS["plate_suffix"] + str(track_index - 1)
+                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["plate_suffix"] + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name)
                         logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
                         applied = True
@@ -331,7 +331,7 @@ class LogicProcessor:
                     self.warnings.append(
                         f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
 
-    def set_name(self, items) -> bool:
+    def set_name(self, items: list) -> bool:
         """
         Метод устанавливает имя полученное из маркеров или оффлайн клипов на таймлайне Resolve 
         и применяет его в имена клипов по двум принципам.
@@ -381,6 +381,9 @@ class LogicProcessor:
         self.shot_filter = self.user_config["shot_filter"]
         self.center_marker = self.user_config["is_center_marker"]
         self.edl_from_srt_bool = self.user_config["create_edl_from_srt"]
+        self.prefix = self.user_config["prefix_name"]
+        self.postfix = self.user_config["postfix_name"]
+        self.set_track_id = self.user_config["set_track_id"]
 
         self.count_of_tracks = self.timeline.GetTrackCount('video')
         items = self.timeline.GetItemListInTrack('video', self.offline_track)
@@ -466,7 +469,10 @@ class ConfigValidator:
         "offline_track_number": self.gui.from_track_edit.text().strip(),
         "shot_filter": self.gui.filter_shot.isChecked(),
         "is_center_marker": self.gui.to_center_rb.isChecked(),
-        "create_edl_from_srt": self.gui.srt_to_edl_cb.isChecked()
+        "create_edl_from_srt": self.gui.srt_to_edl_cb.isChecked(),
+        "prefix_name": self.gui.prefix.text() + ("_", "")[self.gui.prefix.text() == ""],
+        "postfix_name": ("_", "")[self.gui.postfix.text() == ""] + self.gui.postfix.text(),
+        "set_track_id": self.gui.set_track_id.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -545,8 +551,16 @@ class EDLProcessorGUI(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EDL Processor")
-        self.resize(620, 300)
+        self.resize(670, 300)
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+
+        self.separator_set_name = QFrame()
+        self.separator_set_name.setFrameShape(QFrame.HLine)
+        self.separator_set_name.setStyleSheet("""
+                                    QFrame {color: #555;
+                                            background-color: #555}
+                                        """)
+        
         self.init_ui()
 
     def init_ui(self):
@@ -686,7 +700,8 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         # Set Name group
         set_name_group = QGroupBox("Resolve to clip names")
-        set_name_group.setMinimumHeight(80)
+        set_name_group.setMinimumHeight(130)
+        name_layout = QVBoxLayout()
         set_name_layout = QHBoxLayout()
         set_name_layout.addSpacing(20)
         self.from_track_label = QLabel("")
@@ -699,15 +714,51 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         set_name_layout.addSpacing(60)
         set_name_layout.addWidget(self.from_markers_cb)
         set_name_layout.addStretch()
-        set_name_group.setLayout(set_name_layout)
-        main_layout.addWidget(set_name_group)
 
+        shot_name_layout =QHBoxLayout()
+
+        self.prefix_label = QLabel("add prefix")
+        self.postfix_label = QLabel("add postfix")
+        self.prefix = QLineEdit("")
+        self.prefix.setMaximumWidth(50)
+        self.prefix.editingFinished.connect(lambda: self.get_shot_name())
+        self.postfix = QLineEdit("")
+        self.postfix.setMaximumWidth(50)
+        self.postfix.editingFinished.connect(lambda: self.get_shot_name())
+        self.shot_name_view = QLabel("###_####")
+        self.set_track_id = QCheckBox("track id")
+        self.set_track_id.stateChanged.connect(lambda: self.get_shot_name())
+        self.set_track_id.setChecked(True)
+
+        shot_name_layout.addWidget(self.prefix_label)
+        shot_name_layout.addWidget(self.prefix)
+        shot_name_layout.addSpacing(20)
+        shot_name_layout.addWidget(self.postfix_label)
+        shot_name_layout.addWidget(self.postfix)
+        shot_name_layout.addSpacing(20)
+        shot_name_layout.addWidget(self.set_track_id)
+        shot_name_layout.addSpacing(100)
+        shot_name_layout.addWidget(self.shot_name_view)
+        shot_name_layout.addStretch()
+        
+        name_layout.addSpacing(10)
+        name_layout.addLayout(set_name_layout)
+        name_layout.addWidget(self.separator_set_name)
+        name_layout.addLayout(shot_name_layout)
+        set_name_group.setLayout(name_layout)
+        main_layout.addWidget(set_name_group)
 
         # Start Button
         self.run_button = QPushButton("Start")
         self.run_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.run_button.clicked.connect(self.run_script)
         main_layout.addWidget(self.run_button)
+
+    def get_shot_name(self):
+        self.base_shot_name = "###_####"
+        result_shot_name = self.prefix.text() + ("_", "")[self.prefix.text() == ""] + self.base_shot_name + ("_", "")[self.postfix.text() == ""] + self.postfix.text() + ("", "_VT1")[self.set_track_id.isChecked()]
+        self.shot_name_view.setText(result_shot_name)
+
 
     def select_input_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select EDL file", "", "SRT files (*.srt);; EDL files (*.edl)")
