@@ -512,9 +512,9 @@ class ConfigValidator:
 
         if create_srt_cb and not edl_path:
             self.errors.append("Укажите входной для EDL!")
-
-        if os.path.exists(edl_path):
-            self.errors.append("Указан несуществующий путь к EDL!")
+        else:
+            if not os.path.exists(edl_path):
+                self.errors.append("Указан несуществующий путь к EDL!")
 
         if edl_from_srt and not edl_path:
             self.errors.append("Укажите входной путь для EDL!")
