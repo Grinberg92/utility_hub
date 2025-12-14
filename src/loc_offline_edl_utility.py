@@ -512,12 +512,15 @@ class ConfigValidator:
 
         if create_srt_cb and not edl_path:
             self.errors.append("Укажите входной для EDL!")
-        else:
-            if not os.path.exists(edl_path):
-                self.errors.append("Указан несуществующий путь к EDL!")
+
+        if create_srt_cb and not os.path.exists(edl_path):
+            self.errors.append("Указан несуществующий путь к EDL!")
 
         if edl_from_srt and not edl_path:
             self.errors.append("Укажите входной путь для EDL!")
+
+        if edl_from_srt and not os.path.exists(edl_path):
+            self.errors.append("Указан несуществующий путь к EDL!")
         
         if not locator_output_path and export_loc_cb:
             self.errors.append("Введите путь для сохранения локаторов!")
@@ -529,6 +532,7 @@ class ConfigValidator:
         
         if  resolve.timeline is None:
             self.errors.append("Неудалось получить таймлайн!")
+            return
         
         if set_markers_cb:
             try:
@@ -538,12 +542,13 @@ class ConfigValidator:
             except ValueError:
                 self.errors.append("Номер дорожки должен быть числом!")
 
-        try:
-            offline_track_number = int(offline_track_number)
-            if offline_track_number > resolve.timeline.GetTrackCount("video"):
-                self.errors.append("Указан несуществующий трек")
-        except ValueError:
-            self.errors.append("Номер дорожки должен быть числом!")       
+        if name_from_track:
+            try:
+                offline_track_number = int(offline_track_number)
+                if offline_track_number > resolve.timeline.GetTrackCount("video"):
+                    self.errors.append("Указан несуществующий трек")
+            except ValueError:
+                self.errors.append("Номер дорожки должен быть числом!")       
 
         return not self.errors
 
