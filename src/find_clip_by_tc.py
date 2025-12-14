@@ -29,6 +29,7 @@ class ResolveClipExtractor:
         """      
         target_source_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == target_folder), None)
         if not target_source_folder:
+            self.signals.error_signal.emit(f"Не найден Search bin")
             return None
         else:
             return target_source_folder
@@ -93,16 +94,28 @@ class ResolveClipExtractor:
         self.append_mode = self.user_config["append_mode"]
         self.selected_range = self.user_config["selected_range"]
 
-        resolve = ResolveObjects()
-        media_pool = resolve.mediapool
-        timeline = resolve.timeline
-        root = media_pool.GetRootFolder()
+        try:
+
+            resolve = ResolveObjects()
+            timeline = resolve.timeline
+            if timeline is None:
+                self.signals.error_signal.emit(f"Не найдена таймлиния")
+                return False
+            media_pool = resolve.mediapool
+            root = media_pool.GetRootFolder()  
+            
+        except Exception as e:
+            self.signals.error_signal.emit(f"{e}")
+            return False   
 
         if timeline.GetTrackCount("video") < self.track:
             self.signals.error_signal.emit(f"Трек {self.track} отсутсвует на таймлайне")
             return       
 
         target_media_folder = self.get_target_folder(root, self.search_bin)
+
+        if target_media_folder is None:
+            return
 
         trg_clip = self.find_clips_by_name(target_media_folder, self.target_name)
         if not trg_clip:
@@ -125,6 +138,12 @@ class ResolveClipExtractor:
         if record_frame is None:
             self.signals.error_signal.emit(f"Ошибка нахождения record frame на таймлайне")
             return
+        
+        for tc in [self.start_tc, self.end_tc]:
+            match_timecode = re.search(r"\d\d:\d\d:\d\d:\d\d", tc)
+            if match_timecode is None:
+                self.signals.error_signal.emit(f"Не корректный формат таймкода")
+                return
 
         if self.selected_range:
             start_frame = self.get_frame(trg_clip, self.start_tc)
