@@ -756,6 +756,28 @@ class DeliveryPipline:
         timeline_items = [i.GetName() for i in extractor_obj.get_timeline_items(start_track=2, end_track=timeline.GetTrackCount("video")) if i != "" or i is not None]
         count_plate_tracks = Counter(timeline_items)
         return count_plate_tracks
+    
+    def is_connect_project(self) -> bool:
+        """
+        Проверяет все ли объекты резолв получены для дальнейшей работы.
+        """
+        if self.resolve is None:
+            self.signals.error_signal.emit("Не найден Резолв")
+            return False
+        
+        if self.media_pool is None:
+            self.signals.error.emit("Не найден медиапул")
+            return False
+        
+        if self.timeline is None:
+            self.signals.error_signal.emit("Не найдена таймлиния")
+            return False
+        
+        if self.project is None:
+            self.signals.error_signal.emit("Не найден проект")
+            return False
+        
+        return True
 
     def run(self) -> None:
         """
@@ -780,6 +802,9 @@ class DeliveryPipline:
         self.shots_tracks = {}
         self._last_render_preset = None
         self._last_resolution = None
+
+        if not self.is_connect_project():
+            return False
 
         self.timeline.DuplicateTimeline(self.timeline.GetName() + "_with_transform")
         self.project.SetCurrentTimeline(self.timeline)
