@@ -97,6 +97,11 @@ class EDLFilterApp(QMainWindow):
             logger.warning("Сначала выберите файл EDL")
             return
         
+        if os.path.exists(self.edl_path):
+            QMessageBox.warning(self, "Warning", "Указан несуществующий путь к EDL файлу")
+            logger.warning("Сначала выберите файл EDL")
+            return
+        
         if not self.ids_edit.toPlainText().strip():
             QMessageBox.warning(self, "Warning", "Добавьте input shots")
             logger.warning("Добавьте input shots")
