@@ -381,14 +381,19 @@ class VersionComparer:
         self.pattern_real_shot = self.config['patterns']["compare_versions_shot_no_prefix_mask"]
 
         try:
+
             resolve = ResolveObjects()
             timeline = resolve.timeline
+            if timeline is None:
+                self.signals.error_signal.emit(f"Не найдена таймлиния")
+                return False
             valid = self.is_valid_track(timeline)
             if not valid:
-                return False
+                return False 
+            
         except Exception as e:
             self.signals.error_signal.emit(f"{e}")
-            return False       
+            return False     
             
         all_timeline_items = self.get_timeline_items(self.in_track, self.out_track, timeline)
 
@@ -397,7 +402,7 @@ class VersionComparer:
         control_table = self.read_column_from_excel() if self.xlsx_source else self.read_column_from_csv()
         logger.debug(f"Данные плейлиста полученные из контрольного документа:\n{control_table}")
         if not control_table:
-            self.signals.error_signal.emit(f"В контрольном документе отсутствуют данные")
+            self.signals.warning_signal.emit(f"В контрольном документе отсутствуют данные")
             return False
 
         compare_logic = self.is_compare(timeline_items, control_table)
