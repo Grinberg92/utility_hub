@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QTextEdit, QPushButton, QFileDialog, QMessageBox
 )
+from PyQt5.QtCore import Qt
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from common_tools.edl_parsers import detect_edl_parser
@@ -49,6 +50,7 @@ class EDLFilterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EDL Filter")
+        self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.resize(600, 200)
 
         self.fps = 24
