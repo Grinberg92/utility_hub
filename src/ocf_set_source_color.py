@@ -13,6 +13,7 @@ from PyQt5.QtCore import Qt
 from threading import Thread
 import sys
 from dvr_tools.css_style import apply_style
+from dvr_tools.resolve_utils import ResolveObjects
 
 logger = get_logger(__file__)
 
@@ -37,7 +38,7 @@ class GUI(QtWidgets.QWidget):
     def init_ui(self):
         layout = QtWidgets.QVBoxLayout()
 
-        # === Ряд с чекбоксами и FPS-инпутом ===
+        # Ряд с чекбоксами и FPS-инпутом
         options_layout = QtWidgets.QHBoxLayout()
 
         self.checkbox_color = QtWidgets.QCheckBox("Set resolution color")
@@ -47,7 +48,7 @@ class GUI(QtWidgets.QWidget):
         # FPS label + input в одном layout
         fps_layout = QtWidgets.QHBoxLayout()
         fps_label = QtWidgets.QLabel("FPS:")
-        fps_label.setContentsMargins(0, 0, 2, 0)  # Минимальный отступ
+        fps_label.setContentsMargins(0, 0, 2, 0)
         self.fps_entry = QtWidgets.QLineEdit()
         self.fps_entry.setFixedWidth(40)
         self.fps_entry.setText("24")
@@ -72,14 +73,14 @@ class GUI(QtWidgets.QWidget):
         self.checkbox_excel.stateChanged.connect(self.update_input_state)
         self.checkbox_fps.stateChanged.connect(self.update_input_state)
 
-        # === Ряд с шириной и высотой ===
+        # Ряд с шириной и высотой
         resolution_layout = QtWidgets.QHBoxLayout()
         resolution_layout.setContentsMargins(0, 0, 0, 0)
-        resolution_layout.setSpacing(5)  # Уменьшаем отступ между виджетами
+        resolution_layout.setSpacing(5)  
 
         self.width_entry = QtWidgets.QLineEdit("2048")
         self.width_entry.setPlaceholderText("Widthа")
-        self.width_entry.setMaximumWidth(80)  # или setFixedWidth
+        self.width_entry.setMaximumWidth(80) 
 
         self.separator = QtWidgets.QLabel("x")
 
@@ -96,37 +97,36 @@ class GUI(QtWidgets.QWidget):
         resolution_widget = QtWidgets.QWidget()
         resolution_widget.setLayout(resolution_layout)
 
-        # --- Путь рендера ---
+        # Путь рендера
         path_layout = QtWidgets.QHBoxLayout()
         self.path_input = QtWidgets.QLineEdit()
         self.browse_btn = QtWidgets.QPushButton("Choose")
         self.browse_btn.clicked.connect(self.select_file)
-        path_layout.addWidget(QtWidgets.QLabel("Excel Path:"))
+        path_layout.addWidget(QtWidgets.QLabel("Excel output path:"))
         path_layout.addWidget(self.path_input)
         path_layout.addWidget(self.browse_btn)
 
-        # === Кнопка запуска ===
+        # Кнопка запуска
         self.run_button = QtWidgets.QPushButton("Start")
         self.run_button.clicked.connect(self.on_run_clicked)
 
-        # === Добавление в layout ===
+        # Добавление в layout
         layout.addLayout(options_layout)
         layout.addWidget(resolution_widget, alignment=QtCore.Qt.AlignCenter)
         layout.addLayout(path_layout)
         layout.addWidget(self.run_button)
 
         self.setLayout(layout)
-        self.update_input_state()  # Инициализируем доступность FPS поля
+        self.update_input_state() 
 
     def select_file(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self,
             "Выбор файла Excel",
             filter="Excel Files (*.xlsx);;All Files (*)",
-            directory="Exel_Resolution_Spreadsheet.xlsx"  # имя по умолчанию
+            directory="Exel_Resolution_Spreadsheet.xlsx" 
         )
         if path:
-            # Убедимся, что расширение есть
             if not path.endswith(".xlsx"):
                 path += ".xlsx"
             self.path_input.setText(path)
@@ -172,6 +172,23 @@ class GUI(QtWidgets.QWidget):
         self.output_res_height = self.height_entry.text()
         self.output_res_width = self.width_entry.text()
 
+        try:
+            int(self.fps_input)
+        except ValueError:
+            QMessageBox.warning(self, "Предупреждение", "Значение FPS должно быть положительным числом")
+            logger.warning("Значение FPS должно быть положительным числом")
+            self.run_button.setEnabled(True)
+            return  
+
+        try:
+            int(self.output_res_height)
+            int(self.output_res_width)
+        except ValueError:
+            QMessageBox.warning(self, "Предупреждение", "Значение width/height должно быть положительным числом")
+            logger.warning("Значение width/height должно быть положительным числом")
+            self.run_button.setEnabled(True)
+            return           
+
         if not self.exel_folder and self.create_excel:
             QMessageBox.warning(self, "Предупреждение", "Пожалуйста, укажите путь для таблицы")
             logger.warning("Пожалуйста, укажите путь для таблицы")
@@ -191,6 +208,26 @@ class GUI(QtWidgets.QWidget):
             self.run_da_vinci_script(fps_value, create_exel=self.create_excel, run_coloring=self.run_coloring)
         finally:
             self.run_button.setEnabled(True)
+
+    def get_api_resolve(self) -> ResolveObjects:
+        """
+        Проверка подключения к API Resolve и получение основного объекта Resolve.
+        """
+        try:
+            resolve = ResolveObjects().resolve
+            return ResolveObjects()
+        except RuntimeError as re:
+            raise
+
+    def is_connect_project(self) -> bool:
+        """
+        Проверяет все ли объекты резолв получены для дальнейшей работы.
+        """
+        if self.media_pool is None:
+            self.error_signal.emit("Не найден медиапул")
+            return False
+        
+        return True
 
     def run_da_vinci_script(self, fps_value, create_exel, run_coloring=True):
         """Основная логика скрипта для DaVinci Resolve"""
@@ -382,11 +419,18 @@ class GUI(QtWidgets.QWidget):
             export_to_exel(table_data_list)
 
         try:
-            resolve = dvr.scriptapp("Resolve")
-            project = resolve.GetProjectManager().GetCurrentProject()
-            media_pool = project.GetMediaPool()
+            try:
+                self.resolve_api = self.get_api_resolve()
+            except Exception as e:
+                self.error_signal.emit("Ошибка", str(e))
+                return
 
-            target_bin = self.find_target_bin(media_pool)  # Ищем папку OCF
+            self.media_pool = self.resolve_api.mediapool
+
+            if not self.is_connect_project():
+                return False
+
+            target_bin = self.find_target_bin(self.media_pool)  # Ищем папку OCF
             if not target_bin:
                 self.finished_signal.emit("Ошибка", "Папка OCF не найдена.")
                 logger.critical('Папка OCF не найдена.')
