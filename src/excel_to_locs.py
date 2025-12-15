@@ -1,6 +1,7 @@
 import openpyxl
 from timecode import Timecode as tc
 import sys
+import os
 from PyQt5.QtWidgets import (
     QApplication, QWidget,  QPushButton, QVBoxLayout,
     QFileDialog, QLineEdit, QMessageBox, QFormLayout
@@ -152,6 +153,10 @@ class LocatorGUI(QWidget):
 
         if not excel_path or not output_path:
             QMessageBox.warning(self, "Missing Info", "Please select both input and output files.")
+            return
+
+        if not os.path.exists(excel_path):
+            QMessageBox.warning(self, "Missing Info", "Uncorrect excel file path.")
             return
 
         try:
