@@ -155,15 +155,42 @@ class NameSetter:
         
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
-            return False    
+            return False 
+
+    def is_connect_project(self) -> bool:
+        """
+        Проверяет все ли объекты резолв получены для дальнейшей работы.
+        """
+        if self.resolve is None:
+            self.signals.error_signal.emit("Не найден Резолв")
+            return False
+        
+        if self.media_pool is None:
+            self.signals.error.emit("Не найден медиапул")
+            return False
+        
+        if self.timeline is None:
+            self.signals.error_signal.emit("Не найдена таймлиния")
+            return False
+        
+        return True   
 
     def run(self) -> None:
         """
         Основная логика.
         """
-        resolve = self.get_api_resolve()
-        self.timeline = resolve.timeline
-        self.media_pool = resolve.mediapool
+        try:
+            self.resolve_api = self.get_api_resolve()
+        except Exception as e:
+            self.signals.error_signal.emit(str(e))
+            return False
+        
+        self.resolve = self.resolve_api.resolve
+        self.media_pool = self.resolve_api.mediapool
+        self.timeline = self.resolve_api.timeline
+
+        if not self.is_connect_project():
+            return False
         self.timeline_start_tc = self.timeline.GetStartFrame()
 
         self.track_number = int(self.user_config["track_number"])
@@ -193,6 +220,7 @@ class NameSetter:
         self.signals.success_signal.emit("Имена успешно применены!")
 
 class DeliveryPipline:
+
     """
     Конвеер создания render jobs и их последующего рендера.
     """
@@ -783,11 +811,6 @@ class DeliveryPipline:
         """
         Логика конвеера рендера.
         """
-        self.resolve_api = self.get_api_resolve()
-        self.resolve = self.resolve_api.resolve
-        self.media_pool = self.resolve_api.mediapool
-        self.timeline = self.resolve_api.timeline
-        self.project = self.resolve_api.project
         self.project_preset = self.user_config["project_preset"]
         self.frame_handles = int(self.user_config["handles"])
         self.height_res_glob = self.user_config["resolution_height"]
@@ -802,6 +825,17 @@ class DeliveryPipline:
         self.shots_tracks = {}
         self._last_render_preset = None
         self._last_resolution = None
+
+        try:
+            self.resolve_api = self.get_api_resolve()
+        except Exception as e:
+            self.signals.error_signal.emit(str(e))
+            return False
+        
+        self.resolve = self.resolve_api.resolve
+        self.media_pool = self.resolve_api.mediapool
+        self.timeline = self.resolve_api.timeline
+        self.project = self.resolve_api.project
 
         if not self.is_connect_project():
             return False
