@@ -312,11 +312,17 @@ class MainWindow(QWidget):
         QMessageBox.information(self, "Успех", message)
         logger.info(message)
 
-    def choose_project(self):
+    def explorer_choose_project(self):
         if self.explorer_project_name_cb.currentText().strip() != "Select project":
             return self.explorer_project_name_cb.currentText().strip()
         else:
             return self.explorer_project_name.text().strip()
+        
+    def resolve_choose_project(self):
+        if self.resolve_project_name_cb.currentText().strip() != "Select project":
+            return self.resolve_project_name_cb.currentText().strip()
+        else:
+            return self.resolve_project_name.text().strip()
 
     def run(self):
         """
@@ -324,7 +330,7 @@ class MainWindow(QWidget):
         """
         if self.explorer_radio.isChecked():
             disk = self.disk_selector.currentText()
-            project_name = self.choose_project()
+            project_name = self.explorer_choose_project()
             if not project_name:
                 self.on_warning_signal("Пожалуйста, укажите имя проекта для Explorer.")
                 return
@@ -340,7 +346,7 @@ class MainWindow(QWidget):
         elif self.resolve_radio.isChecked():
 
             type_proj = self.type_selector.currentText()
-            project_name = self.resolve_project_name.text().strip()
+            project_name = self.resolve_choose_project()
 
             if not project_name:
                 self.on_warning_signal("Пожалуйста, укажите имя проекта для Resolve.")
