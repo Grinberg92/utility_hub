@@ -132,11 +132,6 @@ class ColorGradeApplyApp(QMainWindow):
         self.resize(390, 200)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
-        self.resolve = DaVinciResolveScript.scriptapp("Resolve")
-        self.project_manager = self.resolve.GetProjectManager()
-        self.project = None
-        self.timeline = None
-
         self.lut_list = {
             None: "No LUT",
             "/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/VFX IO/AP0_to_AlexaLogC_v2.cube": "AP0_to_AlexaLogC_v2",
@@ -144,7 +139,6 @@ class ColorGradeApplyApp(QMainWindow):
         }
 
         self.init_ui()
-        self.refresh_timeline_data()
 
     def init_ui(self):
         central_widget = QWidget()
@@ -180,11 +174,6 @@ class ColorGradeApplyApp(QMainWindow):
         layout.addLayout(lut_layout)
 
         # --- Кнопки ---
-
-        self.refresh_button = QPushButton("Refresh timeline")
-        self.refresh_button.clicked.connect(self.refresh_timeline_data)
-        layout.addWidget(self.refresh_button)
-
         self.apply_button = QPushButton("Start")
         self.apply_button.clicked.connect(self.start_transfer)
         layout.addWidget(self.apply_button)
@@ -192,22 +181,25 @@ class ColorGradeApplyApp(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
-    def refresh_timeline_data(self):
+    def get_timeline_data(self):
         try:
             resolve = ResolveObjects()
         except RuntimeError:
-            self.show_error("Нет подключения к API Resolve.")
+            self.show_error("Ошибка","Нет подключения к API Resolve.")
+            return False
 
         self.project = resolve.project
         self.timeline = resolve.timeline
 
         if not self.project:
             self.show_error("Ошибка", "Проект не найден.")
-            return
+            return False
 
         if not self.timeline:
             self.show_error("Ошибка", "Таймлайн не найден.")
-            return
+            return False
+        
+        return True
         
     def is_cc_target(self, target_track) -> bool:
         """
@@ -241,6 +233,9 @@ class ColorGradeApplyApp(QMainWindow):
     def start_transfer(self):
 
         logger.debug("Запуск скрипта")
+
+        if not self.get_timeline_data():
+            return
         
         try:
             source_track_in = int(self.source_track_in_input.text())
@@ -270,9 +265,10 @@ class ColorGradeApplyApp(QMainWindow):
 
         logger.debug("\n".join(("SetUp:", f"Source track in: {source_track_in}", f"Source track out: {source_track_in}", f"Target track: {target_track}", f"Select LUT: {selected_lut}")))
         self.worker = TransferWorker(self, source_track_in, source_track_out, target_track, selected_lut)
-        self.apply_button.setEnabled(False)
+        self.worker.started.connect(lambda: self.apply_button.setEnabled(False))
         self.worker.finished.connect(lambda: self.apply_button.setEnabled(True))
         self.worker.error.connect(lambda msg: self.show_error("Ошибка", msg))
+        self.worker.error.connect(lambda: self.apply_button.setEnabled(True))
         self.worker.success.connect(lambda msg: self.show_info("Успех", msg))
         self.worker.start()
 
