@@ -859,7 +859,7 @@ class ResolveGUI(QWidget):
         right_layout.setAlignment(Qt.AlignRight)
         right_layout.addWidget(self.label_root)
         self.source_root_folder.setFixedWidth(180)
-        self.source_root_folder.editingFinished.connect(self.load_subfolders_list)
+        self.source_root_folder.returnPressed.connect(self.load_subfolders_list)
         right_layout.addWidget(self.source_root_folder)
         right_layout.addWidget(self.add_all_extensions)
         right_layout.addSpacing(10)
@@ -891,9 +891,9 @@ class ResolveGUI(QWidget):
         self.get_render_preset_list()
         self.get_timeline_lut_preset()
         self.update_lut_projects()
-        self.load_subfolders_list()
         self.load_burn_in()
-
+        self.load_subfolders_list()
+        
     def is_connect_resolve(self):
         """
         Проверка подключения к Resolve и получение базовых объектов.
@@ -901,8 +901,15 @@ class ResolveGUI(QWidget):
         try:
             self.resolve = ResolveObjects()
             self.project = self.resolve.project
+
+            if self.project is None:
+                self.on_error_signal(f"Не найден проект!")
+                return
+            
             self.media_pool = self.resolve.mediapool
-            self.timeline = self.resolve.timeline
+            if self.media_pool is None:
+                self.on_error_signal(f"Не найден медиапул!")
+                return
 
         except RuntimeError as re:
             self.on_error_signal(str(re))
@@ -1003,12 +1010,15 @@ class ResolveGUI(QWidget):
         """
         Метод загружает сабфолдеры из папки 'source_root_folder' в CheckableComboBox.
         """
+        self.is_connect_resolve()
+        
         root_folder = self.media_pool.GetRootFolder()
         source_root_folder = self.source_root_folder.text()
         ocf_folder = next((f for f in root_folder.GetSubFolderList() if f.GetName() == source_root_folder), None)
 
         if not ocf_folder:
             self.on_error_signal(f"Папка '{source_root_folder}' не найдена")
+            self.subfolders_list.clear_items()
             return
 
         self.subfolders_list.clear_items()
