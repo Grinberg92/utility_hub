@@ -196,7 +196,7 @@ class GUI(QtWidgets.QWidget):
             return 
 
         logger.debug("\n".join((f"SetUp:", f"Set color: {self.run_coloring}", f"Set FPS: {self.set_fps}",
-                               f"FPS: {self.fps_entry}", f"Create Excel: {self.create_excel}",
+                               f"FPS: {self.fps_input}", f"Create Excel: {self.create_excel}",
                                f"Resolution: {self.output_res_width}x{self.output_res_height}",
                                f"Excel Path: {self.exel_folder}")))
         
@@ -204,7 +204,7 @@ class GUI(QtWidgets.QWidget):
 
     def run_script_wrapper(self):
         try:
-            fps_value = self.fps_entry.text() if self.set_fps else None
+            fps_value = self.fps_input if self.set_fps else None
             self.run_da_vinci_script(fps_value, create_exel=self.create_excel, run_coloring=self.run_coloring)
         finally:
             self.run_button.setEnabled(True)
