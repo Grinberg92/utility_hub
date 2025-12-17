@@ -147,31 +147,36 @@ class VersionComparer:
             sheet = workbook[self.sheet_name]
             self.count_global_excel(sheet)
 
-            if self.gui.current_counter == 0:
+            if self.gui.current_counter == 0 and int(self.resolve_reel) != 0:
                 self.check_reel_excel(sheet)
             
             # Проверка, указан ли номер рила или рил = 0
             is_reel = int(self.resolve_reel) != 0
 
             shots_column = sheet[self.column_shots]
-            reels_column = sheet[self.column_reel]
 
-            # Получаем кортж в соответствие с тем указан ли номер рила или рил = 0
-            reel_shot = ([(None, shot) for shot in shots_column], list(zip(reels_column, shots_column)))[is_reel]
+            # Вычисляем столбцы в соответствие с тем указан ли номер рила или рил = 0
+            if is_reel:
+                reels_column = sheet[self.column_reel]
+                reel_shot = zip(reels_column, shots_column)
+            else:
+                reel_shot = ((None, shot) for shot in shots_column)
             
             column_data = {}
             # Считываем данные из списка кортежей (рил, шот)
             for reel, shot in reel_shot:
-                if (not is_reel) or (reel.value is not None):
-                    if (not is_reel) or re.search(self.resolve_reel, str(reel.value)):
-                        if shot.value is not None and shot.value != '':
-                            try:
-                                column_data[re.search(self.pattern_short, shot.value).group(0).lower()] = re.search(self.pattern_long, shot.value).group(0).lower()
-                                dublicate_shot.append(re.search(self.pattern_short, shot.value).group(0).lower())
-                            except AttributeError:
-                                self.signals.warnings.emit(f"🔴  Имя {shot.value} не опознано")
-                                self.failed_names.add(f"🔴  Имя {shot.value} не опознано")
-                                self.gui.current_counter += 1
+                if (not is_reel) or (reel.value is not None and reel.value != ''):  # Проверяем что ячейка рила не пустая, если он не равен 0
+                    if (not is_reel) or re.search(self.resolve_reel, str(reel.value)):  # Проверяем соответствие рила если он не равен 0
+                        if shot.value is not None and shot.value != '':  # Проверяем что ячейка шота не пустая
+                            match_shot = re.search(self.pattern_long, shot.value)  # Проаеряем что шот соответствует паттерну имени шота
+                            if match_shot:
+                                try:
+                                    column_data[re.search(self.pattern_short, shot.value).group(0).lower()] = match_shot.group(0).lower()
+                                    dublicate_shot.append(re.search(self.pattern_short, shot.value).group(0).lower())
+                                except AttributeError:
+                                    self.signals.warnings.emit(f"🔴  Имя {shot.value} не опознано")
+                                    self.failed_names.add(f"🔴  Имя {shot.value} не опознано")
+                                    self.gui.current_counter += 1
 
             self.is_dublicate(dublicate_shot)
             return column_data 
@@ -495,7 +500,10 @@ class ConfigValidator:
         except ValueError:
             self.errors.append("Значения должны быть целыми числами")
 
-        if any(list(map(lambda x: x == '', (user_config["sheet_name"], user_config["column_reel"], user_config["column_shots"])))) and user_config['xlsx_source']:
+        if user_config["resolve_reel"] != "0" and any(list(map(lambda x: x == '', (user_config["sheet_name"], user_config["column_reel"], user_config["column_shots"])))) and user_config['xlsx_source']:
+            self.errors.append("Указаны не все значения для блока Excel Data")
+
+        if user_config["resolve_reel"] == "0" and any(list(map(lambda x: x == '', (user_config["sheet_name"], user_config["column_shots"])))) and user_config['xlsx_source']:
             self.errors.append("Указаны не все значения для блока Excel Data")
 
         return not self.errors
