@@ -17,6 +17,10 @@ from dvr_tools.resolve_utils import ResolveObjects
 
 logger = get_logger(__file__)
 
+SETTINGS = {"clip_color": ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
+                                'Apricot', 'Olive', 'Violet', 'Blue', 'Pink', 'Tan', 'Beige',
+                                'Brown', 'Chocolate']}
+
 class GUI(QtWidgets.QWidget):
 
     finished_signal = QtCore.pyqtSignal(str, str)
@@ -27,9 +31,6 @@ class GUI(QtWidgets.QWidget):
         self.setWindowTitle('OCF Color and FPS')
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.resize(450, 130)
-        self.clip_color_list = ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
-                                'Apricot', 'Olive', 'Violet', 'Blue', 'Pink', 'Tan', 'Beige',
-                                'Brown', 'Chocolate']
 
         self.init_ui()
         self.finished_signal.connect(self.show_message_box)
@@ -391,7 +392,7 @@ class GUI(QtWidgets.QWidget):
             target_resolution_width = int(self.output_res_width)
 
             # Получили сортировку и цвета такие же как для расцветовки OCF
-            data_zip = list(zip(self.clip_color_list, sorted(data.items(), key=lambda x: len(x[1]), reverse=True)))
+            data_zip = list(zip(SETTINGS["clip_color"], sorted(data.items(), key=lambda x: len(x[1]), reverse=True)))
 
             # Сбор всех возможных разрешений и данных для экспорта в таблицу
             table_data_list = []
@@ -471,7 +472,7 @@ class GUI(QtWidgets.QWidget):
             # Опционально запускаем присваивание цвета клипам в медиапуле и устанавливаем проектный FPS
             if run_coloring:
                 # Сортировка по количеству клипов в группе разрешения
-                sorted_clip_list = list(zip(self.clip_color_list, {res: clips for res, clips in sorted(clips_dict.items(), key=lambda x: len(x[1]), reverse=True) if res != ""}))
+                sorted_clip_list = list(zip(SETTINGS["clip_color"], {res: clips for res, clips in sorted(clips_dict.items(), key=lambda x: len(x[1]), reverse=True) if res != ""}))
 
                 # Установка отдельного цвета на каждую группу разрешений
                 for color, res in sorted_clip_list:
