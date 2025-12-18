@@ -53,7 +53,7 @@ STRUCTURE_001_FOLDER = {
 
 STRUCTURE_003_TRANSCODE_PROJECTS = {
     "Autoconform": {},
-    "Check": {},
+    "Check_versions": {},
     "Reports": {},
     "tmp": {},
 }
