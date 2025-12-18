@@ -9,7 +9,7 @@ import OpenEXR
 import opentimelineio as otio
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QTextEdit, QComboBox, QScrollBar, QFileDialog, QCheckBox, QFrame, QSizePolicy, QMessageBox,
+    QLineEdit, QTextEdit, QComboBox, QFileDialog, QCheckBox, QFrame, QMessageBox,
     QGroupBox, QRadioButton, QButtonGroup
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -21,7 +21,7 @@ from dvr_tools.resolve_utils import ResolveObjects, get_resolve_shot_list
 from config.config_loader import load_config
 from config.config import get_config
 from config.global_config import GLOBAL_CONFIG
-from common_tools.edl_parsers import EDLParser_v3, EDLParser_v23, detect_edl_parser
+from common_tools.edl_parsers import detect_edl_parser
 
 logger = get_logger(__file__)
 

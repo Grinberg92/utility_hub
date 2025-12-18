@@ -15,7 +15,7 @@ from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_utils import ResolveObjects
 from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
-from common_tools.edl_parsers import EDLParser_v23, EDLParser_v3, detect_edl_parser
+from common_tools.edl_parsers import detect_edl_parser
 
 logger = get_logger(__file__)
 
