@@ -21,7 +21,7 @@ from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
 logger = get_logger(__file__)
 
 SETTINGS = {
-    "plate_suffix": '_VT',
+    "track_postfix": '_VT',
     "colors": ["Orange", "Yellow", "Lime", "Violet", "Blue"],
     "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
     "false_extentions": (".mov", ".mp4", ".jpg"),
@@ -98,7 +98,7 @@ class NameSetter:
                 for name, timecode in markers:
                     if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
                         # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["plate_suffix"] + str(track_index - 1))[self.set_track_id]
+                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["track_postfix"] + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name_new)
                         logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
                         applied = True
@@ -118,7 +118,7 @@ class NameSetter:
                 for item in items:
                     if clip_under.GetStart() == item.GetStart():
                         # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["plate_suffix"] + str(track_index - 1))[self.set_track_id]
+                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["track_postfix"] + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name)
                         logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
                         applied = True
