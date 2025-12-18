@@ -17,6 +17,9 @@ from dvr_tools.resolve_utils import ResolveObjects
 logger = get_logger(__file__)
 
 REEL_PRESET = "reel_settings_preset"
+SETTINGS = {"shotgun_projects_path_win": r"T:\projects",
+            "shotgun_projects_path_mac": r"/Volumes/transfer/projects",
+            "resolve_projects_name": ["OCF", "CC_REEL", "CC_NO_REEL"]}
 
 FILE_COPY_SOURCE = r"\\stor-di-2\arch\000_FOR_EDITORS\Patterns\AVID\AVID_PROJ\bins_to_AVID_PROJ"
 
@@ -151,7 +154,8 @@ class MainWindow(QWidget):
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.resize(570, 280)
 
-        self.projects = os.listdir((r"T:\projects", r"/Volumes/transfer/projects")[sys.platform != "win32"] )
+        self.projects = os.listdir((SETTINGS["shotgun_projects_path_win"], 
+                                    SETTINGS["shotgun_projects_path_mac"])[sys.platform != "win32"] )
         self.projects.insert(0, "Select project")
 
         self.setup_ui()
@@ -214,7 +218,7 @@ class MainWindow(QWidget):
         type_row.addWidget(self.type_combo)
         type_row.addSpacing(12)
         self.type_selector = QComboBox()
-        self.type_selector.addItems(["OCF", "CC_REEL", "CC_NO_REEL"])
+        self.type_selector.addItems(SETTINGS["resolve_projects_name"])
         self.type_selector.setMinimumWidth(100)
         type_row.addWidget(self.type_selector)
         type_row.addSpacing(30)
