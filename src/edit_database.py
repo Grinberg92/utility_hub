@@ -302,13 +302,13 @@ class ShotRestorer(QObject):
                         if base_shot_data["src_name"] == target_edit_data.edl_source_name and self.overlap_range(
                             self.fps,
                             base_shot_data["src_in"], base_shot_data["src_out"],
-                            target_edit_data.edl_source_in, target_edit_data.edl_source_out
+                            target_edit_data.edl_source_in, target_edit_data.edl_source_out_src
                         ):  
                             self.create_and_export_avid_loc((target_edit_data, base_shot_data["shot_name"]))
 
                             o.write(f"{target_edit_data.edl_record_id} {base_shot_data['shot_name']} "
                                     f"{target_edit_data.edl_track_type} {target_edit_data.edl_transition} "
-                                    f"{target_edit_data.edl_source_in} {target_edit_data.edl_source_out} "
+                                    f"{target_edit_data.edl_source_in} {target_edit_data.edl_source_out_src} "
                                     f"{target_edit_data.edl_record_in} {target_edit_data.edl_record_out}")
                             o.write(f'\n* FROM CLIP NAME: {base_shot_data["shot_name"]}\n\n')
 
@@ -365,7 +365,7 @@ class EDLInit(QObject):
                             track_type=data.edl_track_type,
                             transition=data.edl_transition,
                             src_in=data.edl_source_in,
-                            src_out=data.edl_source_out,
+                            src_out=data.edl_source_out_src,
                             rec_in=data.edl_record_in,
                             rec_out=data.edl_record_out,
                             src_name=data.edl_source_name,
