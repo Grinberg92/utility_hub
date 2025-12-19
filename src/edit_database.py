@@ -804,6 +804,16 @@ class EDLGui(QWidget):
         fps_layout.addStretch()
         layout.addLayout(fps_layout)
 
+        # Project name input
+        project_layout = QHBoxLayout()
+        project_layout.addStretch()
+        self.project_combo = QComboBox()
+        self.project_combo.addItems(self.get_project())
+        self.project_combo.setFixedWidth(300)
+        project_layout.addWidget(self.project_combo)
+        project_layout.addStretch()
+        layout.addLayout(project_layout)
+
         # Create project
         create_project_layout = QHBoxLayout()
         create_project_layout.addStretch()
@@ -814,16 +824,6 @@ class EDLGui(QWidget):
         create_project_layout.addWidget(self.project_edit_name)
         create_project_layout.addStretch()
         layout.addLayout(create_project_layout)
-
-        # Project name input
-        project_layout = QHBoxLayout()
-        project_layout.addStretch()
-        self.project_combo = QComboBox()
-        self.project_combo.addItems(self.get_project())
-        self.project_combo.setFixedWidth(300)
-        project_layout.addWidget(self.project_combo)
-        project_layout.addStretch()
-        layout.addLayout(project_layout)
 
         # EDL path input
         path_layout = QHBoxLayout()
@@ -1715,7 +1715,7 @@ class EDLGui(QWidget):
         """
         Создает новый фолдер(проект)
         """
-        new_project = self.project_edit_name.text()
+        new_project = self.project_edit_name.text().lower()
         base_path = Path({"win32": SETTINGS["project_path_win"], 
                         "darwin": SETTINGS["project_path_mac"]}[sys.platform])
         new_project_path = base_path / new_project
