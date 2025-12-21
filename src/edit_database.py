@@ -19,6 +19,8 @@ from timecode import Timecode as tc
 from dvr_tools.css_style import apply_style
 from common_tools.edl_parsers import detect_edl_parser
 from dvr_tools.logger_config import get_logger
+from config.config_loader import load_config
+from config.config import get_config
 
 logger = get_logger(__file__)
 
@@ -329,12 +331,13 @@ class EDLInit(QObject):
     finished = pyqtSignal(str) 
     error = pyqtSignal(str) 
 
-    def __init__(self, fps: int, edl_path: str, project: str, update_status: bool):
+    def __init__(self, fps: int, edl_path: str, project: str, update_status: bool, settings_config: dict):
         super().__init__()
         self.fps = fps
         self.edl_path = edl_path
         self.project = project
         self.update_status = update_status
+        self.settings_config = settings_config
 
     def run(self) -> None:
         """
@@ -358,19 +361,22 @@ class EDLInit(QObject):
 
         try:
             for data in parser_data:
-                db.add_shot(project=self.project,
-                            shot_name=data.edl_shot_name,
-                            edit_name=data.edl_edit_name,
-                            shot_id=data.edl_record_id,
-                            track_type=data.edl_track_type,
-                            transition=data.edl_transition,
-                            src_in=data.edl_source_in,
-                            src_out=data.edl_source_out_src,
-                            rec_in=data.edl_record_in,
-                            rec_out=data.edl_record_out,
-                            src_name=data.edl_source_name,
-                            update_status=self.update_status
-                            )
+                match =  re.match(self.settings_config["patterns"]["shot_name_no_version"], data.edl_shot_name)
+                print(self.settings_config["patterns"]["shot_name_no_version"], data.edl_shot_name)
+                if match:
+                    db.add_shot(project=self.project,
+                                shot_name=data.edl_shot_name,
+                                edit_name=data.edl_edit_name,
+                                shot_id=data.edl_record_id,
+                                track_type=data.edl_track_type,
+                                transition=data.edl_transition,
+                                src_in=data.edl_source_in,
+                                src_out=data.edl_source_out_src,
+                                rec_in=data.edl_record_in,
+                                rec_out=data.edl_record_out,
+                                src_name=data.edl_source_name,
+                                update_status=self.update_status
+                                )
 
             db.save()
             db.backup()
@@ -809,6 +815,7 @@ class EDLGui(QWidget):
         project_layout.addStretch()
         self.project_combo = QComboBox()
         self.project_combo.addItems(self.get_project())
+        self.project_combo.currentTextChanged.connect(self.get_project_settings)
         self.project_combo.setFixedWidth(300)
         project_layout.addWidget(self.project_combo)
         project_layout.addStretch()
@@ -1193,6 +1200,14 @@ class EDLGui(QWidget):
         self.load_json_from_path(db_path)
 
         return tab
+    
+    def get_project_settings(self):
+        """
+        Получаем проектный конфиг
+        """
+        project_name = self.project_combo.currentText()
+        load_config(project_name)
+        self.config = get_config()
 
     def set_row_height(self, height: int):
         """
@@ -1472,7 +1487,7 @@ class EDLGui(QWidget):
         update_status = (answer == QMessageBox.Yes)
 
         self.thread = QThread()
-        self.worker = EDLInit(fps, edl_path, project, update_status) 
+        self.worker = EDLInit(fps, edl_path, project, update_status, self.config) 
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)
