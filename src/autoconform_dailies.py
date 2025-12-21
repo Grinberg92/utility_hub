@@ -1743,7 +1743,8 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         if forse_reset:
             self.otio_counter = 0
         else:
-            self.otio_counter += self.count_otio_clips(otio_path) # self.otio_counter: Количетсво шотов на таймлайне OTIO
+            if otio_path != "":
+                self.otio_counter += self.count_otio_clips(otio_path) # self.otio_counter: Количетсво шотов на таймлайне OTIO
         self.in_folder_counter = self.count_clips_on_storage(shots_path, extension) # self.folder_counter: Общее количество шотов в целевой папке shots_path
 
         self.result_label.setText(f'Processed  {self.otio_counter}  from  {self.in_folder_counter}  shots')
