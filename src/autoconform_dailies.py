@@ -6,13 +6,18 @@ from pprint import pformat
 from pathlib import Path
 from timecode import Timecode as tc
 import OpenEXR
+from threading import Thread
+import signal
+from datetime import datetime as dt
 import opentimelineio as otio
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QTextEdit, QComboBox, QFileDialog, QCheckBox, QFrame, QMessageBox,
-    QGroupBox, QRadioButton, QButtonGroup
+    QLineEdit, QComboBox, QFileDialog, QCheckBox, QFrame, QMessageBox,
+    QGroupBox, QRadioButton, QButtonGroup, QTextBrowser
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal,  QUrl
+from PyQt5.QtGui import QPalette, QColor
+
 from pymediainfo import MediaInfo
 from functools import cached_property
 from dvr_tools.logger_config import get_logger
@@ -108,13 +113,13 @@ class OTIOCreator:
     
     def is_miss_frames(self, shot_name, frames_list) -> bool: 
         """
-        Функция проверяет есть ли битые кадры в секвенции.
+        Метод проверяет есть ли потерянные кадры в секвенции.
         Работает только с секвенциями.
         """
         frames_numbers_list = [int(re.search(self.frame_mask, i).group(0).split(".")[0]) for i in frames_list]  
         if not all(frames_numbers_list[i] + 1 == frames_numbers_list[i + 1] 
                    for i in range(len(frames_numbers_list) - 1)):
-            message = f"🔴  Шот {shot_name} имеет пропущенные фреймы. Необходимо добавить шот вручную."
+            message = f"🔴  Шот {shot_name} имеет потерянные фреймы. Необходимо добавить шот вручную."
             self.send_warning(message)
             logger.warning(message)
             self.gui.otio_counter += 1
@@ -351,10 +356,9 @@ class OTIOCreator:
         if not self.is_correct_fps(shot):
             return False
 
-        self.is_drop_frames(shot.frames_list, shot.path, shot.name)
+        #self.is_drop_frames(shot.frames_list, shot.path, shot.name)
 
         return True
-
 
     def get_shot(self, edl_shot_name, shot_path=None):
         """
@@ -1050,6 +1054,108 @@ class ConformCheckerMixin:
 
         self.update_result_label()
 
+class EXRCheckerMixin:
+    """
+    Методы для работы с потоком проверщика EXR.
+    """
+    def _read_stdout(self, output_path: str):
+        """
+        Читка потока вывода дочернего процесса.
+        """
+        if not self.sequence_check_proc:
+            return
+
+        try:
+            self.sequence_check_proc.wait()
+
+            if self.fatal_error:
+                return
+            
+            success = self.sequence_check_proc.returncode
+            if success == 1:
+                url = Path(output_path).resolve().as_uri()
+                self._append_log(
+                    f'🔴  Обнаружены ошибки. Посмотреть отчет: <a href="{url}">{url}</a>')
+            elif success == 0:
+                self._append_log(
+                    f'🟢  Ошибок не обнаружено')
+            elif success == 2:
+                self._append_log(
+                    f'🟡  Не валидное расширение для проверки')            
+
+        except Exception as e:
+            self.error_signal.emit(f"Ошибка чтения stdout: {e}")
+
+        finally:
+            self.sequence_check_proc = None
+            self.check_sequence.setEnabled(True)
+
+    def _read_stderr(self):
+        """
+        Читка потока ошибок дочернего процесса.
+        """
+        if not self.sequence_check_proc or not self.sequence_check_proc.stderr:
+            return
+        
+        try:
+            error = self.sequence_check_proc.stderr.read()
+            if error.strip():
+                self.fatal_error = True
+                self.error_signal.emit(error)
+        except Exception as e:
+            self.error_signal.emit(f"Ошибка чтения stderr: {e}")
+
+    def stop_exr_check(self):
+        """
+        Безопасное завершение дочернего процесса при жестком закрытии GUI родительского процесса.
+        """
+        if self.sequence_check_proc and self.sequence_check_proc.poll() is None:
+            try:
+                if sys.platform == "win32":
+                    self.sequence_check_proc.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    self.sequence_check_proc.terminate()
+
+                self.sequence_check_proc.wait(timeout=5)
+            except Exception:
+                self.sequence_check_proc.kill()
+            finally:
+                self.sequence_check_proc = None
+
+    def get_output_path(self) -> str:
+        """
+        Получение пути к отчету проверки секвенций.
+        """
+        timestamp_file = dt.now().strftime("%Y%m%d_%H%M%S")
+        date_folder = dt.now().strftime("%Y%m%d")
+
+        output_path = (
+            Path(
+                {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"],
+                "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+            )
+            / self.project_menu.currentText().strip()
+            / GLOBAL_CONFIG["output_folders"]["sequence_checker"] / date_folder
+            / f"sequence_check_report_{timestamp_file}.txt"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        return output_path
+
+    def get_module_path(self) -> str:
+        """
+        Получение пути к модулю логики проверки секвенций.
+        """
+        checker_module_path = (Path(__file__).resolve().parent.parent
+            / "src"
+            / "sequence_checker.py"
+        )
+
+        return checker_module_path
+
+    def _append_log(self, text: str):
+        self.warning_signal.emit(text)
+
 class ConfigValidator:
     """
     Класс собирает и валидирует пользовательские данные.
@@ -1107,8 +1213,9 @@ class ConfigValidator:
     def get_errors(self) -> list:
         return self.errors
 
-class Autoconform(QWidget, ConformCheckerMixin):
+class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
     warning_signal = pyqtSignal(str)
+    error_signal = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -1116,7 +1223,12 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.resize(710, 820)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
-        self.warning_signal.connect(self.appent_warning_field)
+        self.warning_signal.connect(self.append_warning_field)
+        self.error_signal.connect(self.on_error_signal)
+
+        self.sequence_check_proc: subprocess.Popen | None = None
+        self.seq_check_stdout_thread = None
+        self.seq_check_stderr_thread = None
 
         self.frame_rate = 24
         self.frame_rate_label = QLabel("FPS:")
@@ -1146,16 +1258,21 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.full_conform_mode = QRadioButton()
         self.full_conform_mode.setProperty("mode","full_logic")
 
+        self.check_sequence = QPushButton("Shots Errors Check")
+        self.check_sequence.clicked.connect(self.start_exr_check)
+
         self.init_ui()
 
     def init_ui(self):
         main_layout = QVBoxLayout()
 
         # Поле предупреждений
-        self.warning_field = QTextEdit()
+        self.warning_field = QTextBrowser()
         self.warning_field.setReadOnly(True)
         self.warning_field.setMinimumHeight(250)
-        self.warning_field.setPlainText("Здесь будут показаны предупреждения программы.\n")
+        self.warning_field.setPlaceholderText("Здесь будут показаны предупреждения программы.")
+        self.warning_field.setOpenLinks(False)
+        self.warning_field.anchorClicked.connect(self.open_in_file_manager)
         main_layout.addWidget(self.warning_field)
 
         # Логика
@@ -1334,6 +1451,9 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.button_import.clicked.connect(self.resolve_import_timeline)
         main_layout.addWidget(self.button_import)
 
+        # Кнопка проверки EXR
+        main_layout.addWidget(self.check_sequence)
+
         # Статус обрабортки шотов
         result_label_layout = QHBoxLayout()
         result_label_layout.addWidget(self.result_label)
@@ -1346,7 +1466,7 @@ class Autoconform(QWidget, ConformCheckerMixin):
         # Кнопка Logs
         bottom_layout = QHBoxLayout()
         self.button_logs = QPushButton("Open logs")
-        self.button_logs.clicked.connect(self.open_logs)
+        self.button_logs.clicked.connect(self.open_in_file_manager)
         bottom_layout.addWidget(self.button_logs)
         bottom_layout.addStretch()
         main_layout.addLayout(bottom_layout)
@@ -1362,6 +1482,50 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.update_ui_state()
         self.update_result_label()
         self.project_ui_state()
+
+    def start_exr_check(self) -> None:
+        """
+        Старт потока для проверки корректности секвенции шота.
+        """
+        self.check_sequence.setEnabled(False)
+        self.fatal_error = False
+
+        sequences_path = self.shots_input.text().strip()
+        if not sequences_path:
+            self.on_warning_signal("Укажите путь к папке с шотами")
+            self.check_sequence.setEnabled(True)
+            return
+
+        output_path = self.get_output_path()
+        checker_module_path = self.get_module_path()
+
+        try:
+            self.sequence_check_proc = subprocess.Popen(
+                [sys.executable, str(checker_module_path), sequences_path, str(output_path), self.format_menu.currentText().lower()],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+
+            self.warning_signal.emit("🟢  Запуск проверки секвенций шотов")
+
+            self.seq_check_stdout_thread = Thread(
+                target=self._read_stdout,
+                args=(output_path,),
+                daemon=True
+            )
+            self.seq_check_stdout_thread.start()
+
+            self.seq_check_stderr_thread = Thread(
+                target=self._read_stderr,
+                daemon=True
+            )
+            self.seq_check_stderr_thread.start()
+            
+        except Exception as e:
+            self.on_error_signal(f"Ошибка запуска проверки: {e}")
+            self.check_sequence.setEnabled(True)
 
     def precheck_shots(self):
         """
@@ -1519,15 +1683,13 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.main_process.success_signal.connect(self.on_success_signal)
         self.main_process.warning_signal.connect(self.on_warning_signal)
         self.main_process.info_signal.connect(self.on_info_signal)
-        self.main_process.warnings.connect(self.appent_warning_field)
+        self.main_process.warnings.connect(self.append_warning_field)
         self.main_process.start()
 
-    def appent_warning_field(self, message):
+    def append_warning_field(self, message):
         """
         Добавляет уведомления и ошибки в warning_field через сигналы.
         """
-        if self.warning_field.toPlainText().strip().startswith("Здесь будут показаны предупреждения программы."):
-            self.warning_field.clear()
         self.warning_field.append(message)
 
     def on_error_signal(self, message):
@@ -1548,19 +1710,21 @@ class Autoconform(QWidget, ConformCheckerMixin):
         QMessageBox.information(self, "Info", message)
         logger.info(message)
 
-    def open_logs(self):
+    def open_in_file_manager(self, url:QUrl=None):
         """
-        Метод открывает лог-файл.
+        Метод открывает ссылку bp GUI или файл в файловом менеджере.
         """
-        log_file_path = self.is_OS(self.config["paths"]["log_path"])
-
+        if not url:
+            path = self.is_OS(self.config["paths"]["log_path"])
+        else:
+            path = Path(url.toLocalFile()) 
         try:
             if sys.platform == 'win32': 
-                os.startfile(log_file_path)
+                os.startfile(path)
             else: 
                 subprocess.Popen(['open', log_file_path])
         except Exception as e:
-            self.on_error_signal(self, "Error", f"Ошибка при открытии файла логов: {e}")
+            self.on_error_signal(self, "Error", f"Ошибка при открытии файла: {e}")
 
     def reset_counter(self):
         """
@@ -1583,7 +1747,6 @@ class Autoconform(QWidget, ConformCheckerMixin):
         self.in_folder_counter = self.count_clips_on_storage(shots_path, extension) # self.folder_counter: Общее количество шотов в целевой папке shots_path
 
         self.result_label.setText(f'Processed  {self.otio_counter}  from  {self.in_folder_counter}  shots')
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
