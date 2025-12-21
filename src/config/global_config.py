@@ -21,5 +21,8 @@ GLOBAL_CONFIG = {
         "compare_versions_shot_no_versions_mask": r'(?<![A-Za-z0-9])(?:[A-Za-z]+_)?\d{3,4}[A-Za-z]?_\d{1,4}[A-Za-z]?(?![A-Za-z0-9/])', # Короткое имя только prk_001_0010, 001_0010, 001_001c
         "compare_versions_shot_soft_mask": r'(.+_)?\d{1,4}[a-zA-Z]?_\d{1,4}[a-zA-Z]?_.+', # Легкая маска, для отбрасывания .exr файлов которые не относятся к шотам. Например титры
         "compare_versions_shot_no_prefix_mask": r'\d{3,4}[a-zA-Z]?_\d{1,4}[a-zA-Z]?' # Чистый номер без префиксов, если таковые есть 001_0010
+    },
+    "output_folders": {
+        "sequence_checker": "sequence_checker"
     }   
 }
