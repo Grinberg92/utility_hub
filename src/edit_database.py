@@ -361,8 +361,7 @@ class EDLInit(QObject):
 
         try:
             for data in parser_data:
-                match =  re.match(self.settings_config["patterns"]["shot_name_no_version"], data.edl_shot_name)
-                print(self.settings_config["patterns"]["shot_name_no_version"], data.edl_shot_name)
+                match =  re.match(self.settings_config["patterns"]["compare_versions_shot_no_versions_mask"], data.edl_shot_name)
                 if match:
                     db.add_shot(project=self.project,
                                 shot_name=data.edl_shot_name,
