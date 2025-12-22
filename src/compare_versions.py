@@ -80,7 +80,7 @@ class VersionComparer:
         # идем от верхних треков к нижним
         for track_index in range(end_track, start_track - 1, -1):
             for clip in timeline.GetItemListInTrack('video', track_index):
-                if re.search(self.pattern_real_shot, clip.GetName()):
+                if re.search(self.pattern_shot_number, clip.GetName()):
                     start = clip.GetStart()
                     end = start + clip.GetDuration()
 
