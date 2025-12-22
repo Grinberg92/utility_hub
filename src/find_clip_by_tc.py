@@ -1,6 +1,6 @@
 import sys
 import re
-from timecode import Timecode as tc
+from timecode import Timecode
 from pprint import pformat
 from PyQt5 import QtWidgets, QtCore
 from dvr_tools.resolve_utils import ResolveObjects
@@ -58,7 +58,7 @@ class ResolveClipExtractor:
         Высчитываем фрейм таймкода в Resolve используя метаданные клипа.
         Из входящего таймкода из инпута вычитаем стартовый таймкод клипа полученный из метаданных.
         """
-        frame = tc(24, timecode).frames - tc(24, clip.GetClipProperty("Start TC")).frames
+        frame = Timecode(24, timecode).frames - Timecode(24, clip.GetClipProperty("Start TC")).frames
         return frame
 
     def get_last_rec_frame(self, timeline, track) -> int:
@@ -78,7 +78,7 @@ class ResolveClipExtractor:
         """
         start = int(clip.GetClipProperty("Start"))
         end = int(clip.GetClipProperty("End")) + 1
-        print(start, end, int(tc(24, in_tc).frames), int(tc(24, out_tc).frames))
+        print(start, end, int(Timecode(24, in_tc).frames), int(Timecode(24, out_tc).frames))
         frames = [self.get_frame(clip, x) for x in [in_tc, out_tc]]
         return all(start <= f <= end for f in frames)
 
@@ -133,7 +133,7 @@ class ResolveClipExtractor:
             record_frame = self.get_last_rec_frame(timeline, self.track)
         else:
             # Берем фрейм по плейхеду на таймлайне
-            record_frame = tc(24, timeline.GetCurrentTimecode()).frames - 1
+            record_frame = Timecode(24, timeline.GetCurrentTimecode()).frames - 1
 
         if record_frame is None:
             self.signals.error_signal.emit(f"Ошибка нахождения record frame на таймлайне")
