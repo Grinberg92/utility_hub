@@ -3,7 +3,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from timecode import Timecode as tc
 
-class EDLParser_v23_new:
+class EDLParser_v23:
     """
     Класс-итератор. Итерируется по EDL файлу, обрабатывая строки с ретаймом (M2).
     """
@@ -250,7 +250,7 @@ def detect_edl_parser(fps, edl_path=None, lines=None):
                 return EDLParser(fps, lines=lines, convert_src_out=False)
             if "*loc" in string.lower():
                 return EDLParser(fps, lines=lines, convert_src_out=True)
-        return EDLParser_v23_new(fps, lines=lines)
+        return EDLParser_v23(fps, lines=lines)
         
     elif edl_path is not None:
         with open(edl_path, "r", encoding="utf-8") as f:
@@ -259,4 +259,4 @@ def detect_edl_parser(fps, edl_path=None, lines=None):
                     return EDLParser(fps, edl_path=edl_path, convert_src_out=False)
                 if "*loc" in string.lower():
                     return EDLParser(fps, edl_path=edl_path, convert_src_out=True)
-            return EDLParser_v23_new(fps, edl_path=edl_path)
+            return EDLParser_v23(fps, edl_path=edl_path)
