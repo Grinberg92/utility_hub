@@ -1075,7 +1075,7 @@ class EXRCheckerMixin:
             if success == 1:
                 url = Path(output_path).resolve().as_uri()
                 self._append_log(
-                    f'🔴  Обнаружены ошибки. Посмотреть отчет: <a href="{url}">{url}</a>')
+                    f'🔴  Обнаружены ошибки. Посмотреть отчет: <a href="{url}">{url}</a></span>')
             elif success == 0:
                 self._append_log(
                     f'🟢  Ошибок не обнаружено')
