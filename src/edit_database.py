@@ -3,33 +3,49 @@ import re
 import sys
 import os
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from collections import Counter
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
 from datetime import datetime as dt, date as d
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSize, QModelIndex
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSize, QUrl
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QPushButton,  QApplication, QFileDialog, QWidget, QTextEdit, 
-    QTabWidget, QComboBox,  QTreeView, QHeaderView)
+    QTabWidget, QComboBox,  QTreeView, QHeaderView, QTextBrowser)
 from timecode import Timecode as tc
 from dvr_tools.css_style import apply_style
 from common_tools.edl_parsers import detect_edl_parser
 from dvr_tools.logger_config import get_logger
 from config.config_loader import load_config
 from config.config import get_config
+from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
 SETTINGS = {
     "data_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/projects_data.json",
     "data_path_win": r"J:\003_transcode_to_vfx\projects\Others\projects_data.json",
-    "project_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/",
-    "project_path_win": r"J:\003_transcode_to_vfx\projects" 
 }
+
+def get_output_path(project: str, ext: str, report_name: str) -> str:
+    """
+    Получение пути к бекапу отчета проверки секвенций.
+    """
+    date = dt.now().strftime("%Y%m%d")
+
+    output_path = (
+        Path(
+            {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"],
+            "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+        )
+        / project
+        / GLOBAL_CONFIG["output_folders"]["edit_database"] / date
+        / f"{report_name}_{date}.{ext}"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    return output_path
 
 class EditDatabase:
     """
@@ -214,13 +230,12 @@ class ShotRestorer(QObject):
     error = pyqtSignal(str) 
 
     def __init__(self, fps: int, project: str, edit_name: str, 
-                 target_edit_path: str, output_path: str, logic: str):
+                 target_edit_path: str, logic: str):
         super().__init__()
         self.fps = fps
         self.project = project
         self.edit_name = edit_name
         self.target_edit = target_edit_path
-        self.output_path = output_path
         self.logic = logic
 
     def timecode_to_frame(self, fps, timecode: str) -> int:
@@ -255,12 +270,14 @@ class ShotRestorer(QObject):
             rec_in = self.timecode_to_frame(self.fps, shot_data.edl_record_in)
             rec_out = self.timecode_to_frame(self.fps, shot_data.edl_record_out)
             path = Path(str(self.target_edit).replace(".edl", f"_AVID_LOC_{d.today()}.txt"))
+            backup_path = get_output_path(self.project, "txt", os.path.basename(self.target_edit).replace(".edl", f"_AVID_LOC"))
             
-            with open(path, "a", encoding='utf8') as output:
+            with open(path, "a", encoding='utf8') as o, open(backup_path, "a", encoding='utf8') as ob:
                 timecode = int((rec_in + (rec_in + (rec_out - rec_in))) / 2)
                 # Используется спец табуляция для корректного импорта в AVID
-                output_string = f'PGM	{self.frame_to_timecode(self.fps, timecode)}	V3	yellow	{shot_name}'
-                output.write(output_string + "\n")
+                output_string = f'PGM	{self.frame_to_timecode(self.fps, timecode)}	V3	yellow	{shot_name}\n'
+                o.write(output_string)
+                ob.write(output_string)
         except:
             message = f"Не удалось создать маркер для шота {shot_name}"
             logger.debug(message)
@@ -295,8 +312,9 @@ class ShotRestorer(QObject):
             target_edit = detect_edl_parser(self.fps, edl_path=self.target_edit)
             
             output_path = Path(str(self.target_edit).replace(".edl", f"_restored_rasshot_{d.today()}.edl"))
+            backup_path = get_output_path(self.project, "edl", os.path.basename(self.target_edit).replace(".edl", f"_restored_rasshot"))
             
-            with open(output_path, "w", encoding="utf-8") as o:
+            with open(output_path, "w", encoding="utf-8") as o, open(backup_path, "w", encoding="utf-8") as ob:
                 processed_shots_tmp = {}
                 for target_edit_data in target_edit:
                     for _, base_shot_data in base_edit.items():
@@ -308,11 +326,15 @@ class ShotRestorer(QObject):
                         ):  
                             self.create_and_export_avid_loc((target_edit_data, base_shot_data["shot_name"]))
 
-                            o.write(f"{target_edit_data.edl_record_id} {base_shot_data['shot_name']} "
+                            str1 = (f"{target_edit_data.edl_record_id} {base_shot_data['shot_name']} "
                                     f"{target_edit_data.edl_track_type} {target_edit_data.edl_transition} "
                                     f"{target_edit_data.edl_source_in} {target_edit_data.edl_source_out} "
                                     f"{target_edit_data.edl_record_in} {target_edit_data.edl_record_out}")
-                            o.write(f'\n* FROM CLIP NAME: {base_shot_data["shot_name"]}\n\n')
+                            str2 = f'\n* FROM CLIP NAME: {base_shot_data["shot_name"]}\n\n'
+                            o.write(str1)
+                            ob.write(str1)
+                            o.write(str2)
+                            ob.write(str2)
 
                             processed_shots_tmp.setdefault(base_shot_data["shot_name"], []).append(target_edit_data)
                             break
@@ -320,6 +342,7 @@ class ShotRestorer(QObject):
             if processed_shots_tmp:                  
                 self.show_duplicates(processed_shots_tmp)
 
+            logger.info(f"Сохранены файлы: \n{output_path}\n{backup_path}")
             self.finished.emit(f"Обработка завершена!")
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
@@ -412,6 +435,13 @@ class EDLComparator(QObject):
         Переводит фреймы в значения таймкодов.
         """
         return str(tc(fps, frames=frames))
+    
+    def out_hyper(self, file_path: str) -> None:
+        """
+        Выводит в GUI ссылку на аутпут документ.
+        """
+        url = Path(file_path).resolve().as_uri()
+        self.progress.emit(f'Посмотреть отчет: <a href="{url}">{url}</a></span>')
 
     def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out, shot_name) -> bool:
         """
@@ -432,7 +462,6 @@ class EDLComparator(QObject):
             end_diff = targ_out - base_out   # Сдвиг конца
 
             if start_diff == 0 and end_diff == 0:
-                self.progress.emit(f"Шот {shot_name} не изменился")
                 self.reedit_data.setdefault('No changes', []).append(shot_name)
 
             elif (
@@ -440,15 +469,9 @@ class EDLComparator(QObject):
                 (start_diff > 0 and end_diff == 0) or
                 (start_diff == 0 and end_diff < 0)
                     ):
-                self.progress.emit(
-                    f"Шот {shot_name} уменьшился: начало {(~start_diff + 1)}, конец {end_diff}"
-                )
                 self.reedit_data.setdefault('Less', []).append((shot_name, ~start_diff + 1, end_diff))
 
             else:
-                self.progress.emit(
-                    f"Шот {shot_name} увеличился: начало {(~start_diff + 1)}, конец {end_diff}"
-                )
                 self.reedit_data.setdefault('More', []).append((shot_name, ~start_diff + 1, end_diff))
 
             return True
@@ -458,20 +481,16 @@ class EDLComparator(QObject):
         """
         Провеяем ушли ли шоты из нового монтажа.
         """
-        self.progress.emit(f"\nУшедшие шоты:\n")
         for be_shot in self.base_edit:
             if be_shot not in self.target_edit.keys():
-                self.progress.emit(f"Шот {be_shot} ушел из монтажа")
                 self.reedit_data.setdefault('Leave', []).append(be_shot)
 
     def is_new(self) -> None:
         """
         Проверяем появились ли новые шоты в новом монтаже.
         """
-        self.progress.emit(f"\nНовые шоты:\n")
         for te_shot in self.target_edit:
             if te_shot not in self.base_edit.keys():
-                self.progress.emit(f"Появился новый шот - {te_shot}")
                 self.reedit_data.setdefault('New', []).append(te_shot)
 
     def export_to_excel(self) -> None:
@@ -528,21 +547,13 @@ class EDLComparator(QObject):
                 max_len = max(len(str(cell.value)) for cell in ws[letter] if cell.value)
                 ws.column_dimensions[letter].width = max_len + 2
 
-            base_path = {
-                "win32": SETTINGS["project_path_win"],
-                "darwin": SETTINGS["project_path_mac"]
-            }[sys.platform]
-
-            timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
-
-            file_dir = Path(base_path) / self.project / "reedit_reports"
-            file_dir.mkdir(parents=True, exist_ok=True)
-
-            filepath = file_dir / f"{self.project}_reedit_report_{timestamp}.xlsx"
+            filepath = get_output_path(self.project, "xlsx", "reedit_report")
 
             wb.save(filepath)
 
-            logger.info(f"Excel экспортирован: {filepath}")
+            logger.info(f"Сохранен Excel файл: {filepath}")
+
+            return filepath
         
         except Exception as e:
             raise 
@@ -551,7 +562,6 @@ class EDLComparator(QObject):
         """
         Ищем пересекающиеся номера шотов и сравниваем значения.
         """
-        self.progress.emit(f"Найденые пересечения:\n")
         for _, base_shot_data in self.base_edit.items():
             for _, target_shot_data in self.target_edit.items():
                 # Сравниваем по именам шотов
@@ -567,10 +577,8 @@ class EDLComparator(QObject):
                         ):
                             break
                         else:
-                            self.progress.emit(f"У шота {base_shot_data['shot_name']} полность изменилась фаза")
                             self.reedit_data.setdefault('Phase changed', []).append(base_shot_data['shot_name'])
                     else:
-                        self.progress.emit(f"У шота {base_shot_data['shot_name']} изменился дубль")
                         self.reedit_data.setdefault('Take changed', []).append(base_shot_data['shot_name'])
 
     def run(self) -> None:
@@ -599,7 +607,9 @@ class EDLComparator(QObject):
 
             self.is_new()
             
-            self.export_to_excel()
+            result_path = self.export_to_excel()
+            
+            self.out_hyper(result_path)
 
             self.finished.emit(f"Обработка успешно завершена!")
         except Exception as e:
@@ -777,7 +787,7 @@ class EDLGui(QWidget):
         tabs = QTabWidget()
         tabs.addTab(self.init_tab(), "Init Edit")
         tabs.addTab(self.restore_tab(), "Restore shots")
-        tabs.addTab(self.analyse_tab(), "Compare Edits")
+        tabs.addTab(self.compare_tab(), "Compare Edits")
         tabs.addTab(self.check_phase_tab(), "Max Range")
         tabs.addTab(self.view_database(), "View Database")
 
@@ -907,17 +917,6 @@ class EDLGui(QWidget):
         target_layout.addWidget(browse_button)
         layout.addLayout(target_layout)
 
-        # Result
-        result_layout = QHBoxLayout()
-        result_layout.addWidget(QLabel("Result:"))
-        result_layout.addSpacing(28)
-        self.restore_result_input = QLineEdit()
-        result_browse_button = QPushButton("Choose")
-        result_browse_button.clicked.connect(self.browse_restore_result)
-        result_layout.addWidget(self.restore_result_input)
-        result_layout.addWidget(result_browse_button)
-        layout.addLayout(result_layout)
-
         # Run button
         self.run_button = QPushButton("Start")
         self.run_button.clicked.connect(self.start_restore)
@@ -932,7 +931,7 @@ class EDLGui(QWidget):
         tab.setLayout(layout)
         return tab
     
-    def analyse_tab(self):
+    def compare_tab(self):
         tab = QWidget()
         layout = QVBoxLayout()
 
@@ -947,14 +946,14 @@ class EDLGui(QWidget):
         layout.addLayout(fps_layout)
 
         # Project
-        analyse_project_layout = QHBoxLayout()
-        analyse_project_layout.addStretch()
-        self.analyse_project_cb = QComboBox()
-        self.analyse_project_cb.setFixedWidth(300)
-        self.analyse_project_cb.addItems(self.get_project())
-        analyse_project_layout.addWidget(self.analyse_project_cb)
-        analyse_project_layout.addStretch()
-        layout.addLayout(analyse_project_layout)
+        compare_project_layout = QHBoxLayout()
+        compare_project_layout.addStretch()
+        self.compare_project_cb = QComboBox()
+        self.compare_project_cb.setFixedWidth(300)
+        self.compare_project_cb.addItems(self.get_project())
+        compare_project_layout.addWidget(self.compare_project_cb)
+        compare_project_layout.addStretch()
+        layout.addLayout(compare_project_layout)
 
         # Base Edit
         base_edit_layout = QHBoxLayout()
@@ -965,15 +964,15 @@ class EDLGui(QWidget):
         self.base_logic_combo.addItems(["Based on", "Actual", "Edit"])
         base_edit_layout.addWidget(self.base_logic_combo, 1)
 
-        self.analyse_base_edit_cb = QComboBox()
-        self.analyse_base_edit_cb.setMinimumWidth(250)
-        base_edit_layout.addWidget(self.analyse_base_edit_cb, 1)
+        self.compare_base_edit_cb = QComboBox()
+        self.compare_base_edit_cb.setMinimumWidth(250)
+        base_edit_layout.addWidget(self.compare_base_edit_cb, 1)
 
-        self.analyse_project_cb.currentTextChanged.connect(
-            lambda _: self.get_edit(self.analyse_project_cb, self.analyse_base_edit_cb, self.base_logic_combo)
+        self.compare_project_cb.currentTextChanged.connect(
+            lambda _: self.get_edit(self.compare_project_cb, self.compare_base_edit_cb, self.base_logic_combo)
         )
         self.base_logic_combo.currentTextChanged.connect(
-            lambda _: self.get_edit(self.analyse_project_cb, self.analyse_base_edit_cb, self.base_logic_combo)
+            lambda _: self.get_edit(self.compare_project_cb, self.compare_base_edit_cb, self.base_logic_combo)
         )
 
         layout.addLayout(base_edit_layout)
@@ -986,28 +985,30 @@ class EDLGui(QWidget):
         self.target_logic_combo.addItems(["Based on", "Actual", "Edit"])
         target_edit_layout.addWidget(self.target_logic_combo, 1)
 
-        self.analyse_target_edit_cb = QComboBox()
-        self.analyse_target_edit_cb.setMinimumWidth(250)
-        target_edit_layout.addWidget(self.analyse_target_edit_cb, 1)
+        self.compare_target_edit_cb = QComboBox()
+        self.compare_target_edit_cb.setMinimumWidth(250)
+        target_edit_layout.addWidget(self.compare_target_edit_cb, 1)
 
-        self.analyse_project_cb.currentTextChanged.connect(
-            lambda _: self.get_edit(self.analyse_project_cb, self.analyse_target_edit_cb, self.target_logic_combo)
+        self.compare_project_cb.currentTextChanged.connect(
+            lambda _: self.get_edit(self.compare_project_cb, self.compare_target_edit_cb, self.target_logic_combo)
         )
         self.target_logic_combo.currentTextChanged.connect(
-            lambda _: self.get_edit(self.analyse_project_cb, self.analyse_target_edit_cb, self.target_logic_combo)
+            lambda _: self.get_edit(self.compare_project_cb, self.compare_target_edit_cb, self.target_logic_combo)
         )
 
         layout.addLayout(target_edit_layout)
 
         # Run button
-        self.analyse_start_btn = QPushButton("Start")
-        self.analyse_start_btn.clicked.connect(self.start_comparison)
-        layout.addWidget(self.analyse_start_btn)
+        self.compare_start_btn = QPushButton("Start")
+        self.compare_start_btn.clicked.connect(self.start_comparison)
+        layout.addWidget(self.compare_start_btn)
 
         # Log
-        self.log = QTextEdit()
+        self.log = QTextBrowser()
         self.log.setPlaceholderText("Compare report")
         self.log.setReadOnly(True)
+        self.log.setOpenLinks(False)
+        self.log.anchorClicked.connect(self.open_in_file_manager)
         layout.addWidget(self.log)
 
         tab.setLayout(layout)
@@ -1200,6 +1201,20 @@ class EDLGui(QWidget):
 
         return tab
     
+    def open_in_file_manager(self, url:QUrl):
+        """
+        Метод открывает файл в файловом менеджере.
+        """
+        try:
+            path = Path(url.toLocalFile())
+
+            if sys.platform == 'win32': 
+                os.startfile(path)
+            else: 
+                subprocess.Popen(['open', path])
+        except Exception as e:
+            self.on_error(self, "Error", f"Ошибка при открытии файла: {e}")
+    
     def get_project_settings(self):
         """
         Получаем проектный конфиг
@@ -1370,11 +1385,6 @@ class EDLGui(QWidget):
 
         self.select_found_item(self.current_found)
 
-    def browse_restore_result(self):
-        path = QFileDialog.getExistingDirectory(self, "Select New Edit")
-        if path:
-            self.restore_result_input.setText(path)
-
     def browse_restore_new(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select New Edit", "", "EDL files (*.edl)")
         if path:
@@ -1435,8 +1445,11 @@ class EDLGui(QWidget):
             edit_cb.clear()
 
     def get_project(self):
-        project_path = {"win32": SETTINGS["project_path_win"], 
-            "darwin": SETTINGS["project_path_mac"]}[sys.platform] 
+        """
+        Метод получает список проектов из корневого каталога.
+        """
+        project_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
+            "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform] 
         if os.path.exists(project_path):
             projects_list = sorted([i for i in os.listdir(Path(project_path)) if os.path.isdir(Path(project_path) / i)])
             projects_list.insert(0, "Select Project")
@@ -1541,14 +1554,8 @@ class EDLGui(QWidget):
         if not os.path.isfile(target_edit_path):
             self.on_error("Укажите корректный путь к Target Edit")
             return None
-        
-        result_path = self.restore_result_input.text().strip()
-        if not result_path:
-            self.on_error("Укажите путь для сохранения EDL")
-            return None
-        
-        
-        return fps, project, edit_name, target_edit_path, result_path, logic
+               
+        return fps, project, edit_name, target_edit_path, logic
 
     def start_restore(self):
         """
@@ -1558,10 +1565,10 @@ class EDLGui(QWidget):
         if not inputs:
             return
 
-        fps, project, edit_name, target_edit_path, result_path, logic = inputs
+        fps, project, edit_name, target_edit_path, logic = inputs
 
         self.thread = QThread()
-        self.worker = ShotRestorer(fps, project, edit_name, target_edit_path, result_path, logic)
+        self.worker = ShotRestorer(fps, project, edit_name, target_edit_path, logic)
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)
@@ -1582,9 +1589,9 @@ class EDLGui(QWidget):
         """
         Валидация пользовательских данных из таба Compare Edits.
         """
-        project = self.analyse_project_cb.currentText().strip()
-        base_edit = self.analyse_base_edit_cb.currentText().strip()
-        target_edit = self.analyse_target_edit_cb.currentText().strip()
+        project = self.compare_project_cb.currentText().strip()
+        base_edit = self.compare_base_edit_cb.currentText().strip()
+        target_edit = self.compare_target_edit_cb.currentText().strip()
         base_logic = self.base_logic_combo.currentText().strip()
         target_logic = self.target_logic_combo.currentText().strip()
 
@@ -1635,7 +1642,7 @@ class EDLGui(QWidget):
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)
-        self.analyse_start_btn.setEnabled(False)
+        self.compare_start_btn.setEnabled(False)
         self.worker.finished.connect(self.on_finished)
         self.worker.error.connect(self.on_error)
         self.worker.progress.connect(self.log.append)
@@ -1643,8 +1650,8 @@ class EDLGui(QWidget):
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
-        self.thread.finished.connect(lambda: self.analyse_start_btn.setEnabled(True))
-        self.worker.error.connect(lambda: self.analyse_start_btn.setEnabled(True))
+        self.thread.finished.connect(lambda: self.compare_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda: self.compare_start_btn.setEnabled(True))
         self.worker.error.connect(lambda: self.thread.quit())
 
         self.thread.start()
@@ -1730,8 +1737,8 @@ class EDLGui(QWidget):
         Создает новый фолдер(проект)
         """
         new_project = self.project_edit_name.text().lower()
-        base_path = Path({"win32": SETTINGS["project_path_win"], 
-                        "darwin": SETTINGS["project_path_mac"]}[sys.platform])
+        base_path = Path({"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
+                        "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform])
         new_project_path = base_path / new_project
         new_project_path.mkdir(exist_ok=True)
 
