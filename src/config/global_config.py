@@ -29,6 +29,7 @@ GLOBAL_CONFIG = {
         "shot_name_no_version": r'([a-zA-Z]{3,4}_)?\d{3,4}[a-zA-Z]?_\d{1,4}'
     },
     "output_folders": {
-        "sequence_checker": "sequence_checker"
-    }   
+        "sequence_checker": "sequence_checker",
+        "edit_database": "edit_database"
+    }
 }
