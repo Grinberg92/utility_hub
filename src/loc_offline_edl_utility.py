@@ -702,6 +702,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.create_srt_cb = QCheckBox("EDL to SRT")
         self.srt_to_edl_cb = QCheckBox("SRT to EDL")
         self.convert_edl = QCheckBox("EDL_v3 to EDL_v23")
+        self.offline_clips_checkbox.stateChanged.connect(self.update_fields_state)
         self.create_srt_cb.stateChanged.connect(self.update_fields_state)
         self.srt_to_edl_cb.stateChanged.connect(self.update_fields_state)
         self.convert_edl.stateChanged.connect(self.update_fields_state)
@@ -731,7 +732,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         output_label = QLabel("Save result:")
         output_layout = QHBoxLayout()
         self.output_entry = QLineEdit()
+        self.output_entry.setEnabled(False)
         self.output_btn = QPushButton("Choose")
+        self.output_btn.setEnabled(False)
         self.output_btn.clicked.connect(self.select_output_file)
         output_layout.addWidget(self.output_entry)
         output_layout.addWidget(self.output_btn)
@@ -840,6 +843,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         self.output_entry.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
         self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
+
+        self.output_entry.setEnabled(self.offline_clips_checkbox.isChecked())
+        self.output_btn.setEnabled(self.offline_clips_checkbox.isChecked())
 
     def run_script(self):
         self.validator = ConfigValidator(self)
