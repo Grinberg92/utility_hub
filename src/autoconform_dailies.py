@@ -1722,7 +1722,7 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
             if sys.platform == 'win32': 
                 os.startfile(path)
             else: 
-                subprocess.Popen(['open', log_file_path])
+                subprocess.Popen(['open', path])
         except Exception as e:
             self.on_error_signal(self, "Error", f"Ошибка при открытии файла: {e}")
 
