@@ -10,12 +10,10 @@ from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QRadioButton,
     QLineEdit, QComboBox, QGroupBox, QCheckBox, QPushButton, QSizePolicy, QApplication, QFileDialog, QFrame)
-from dataclasses import dataclass
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_utils import ResolveObjects
-from dvr_tools.timeline_exctractor import ResolveTimelineItemExtractor
-from common_tools.edl_parsers import detect_edl_parser
+from common_tools.edl_parsers import detect_edl_parser, EDLParser
 
 logger = get_logger(__file__)
 
@@ -245,41 +243,42 @@ class LogicProcessor:
         """
         os.remove(edl_file)
 
+    def create_output_edl(self, shot: EDLParser, output, marker_name:list=None) -> None:
+        """
+        Метод формирует аутпут файл в формате, пригодном для отображения оффлайн клипов в Resolve и AVID.
+        """
+        shot_name = marker_name if marker_name is not None else shot.edl_shot_name
+
+        output.write(f"{shot.edl_record_id} {shot_name} "
+                f"{shot.edl_track_type} {shot.edl_transition} "
+                f"{shot.edl_source_in} {shot.edl_source_out} "
+                f"{shot.edl_record_in} {shot.edl_record_out}")
+        output.write(f'\n* FROM CLIP NAME: {shot_name}\n\n')
+
     def process_edl(self) -> bool:
         """
         Выводит EDL для дейлизов и EDL с оффлайн клипами.
         """
         try:
-            markers_list = self.get_markers()
+            markers = self.get_markers()
             
-            edl_path = self.create_temp_edl()
-            if edl_path:
+            tmp_edl = self.create_temp_edl()
+            if tmp_edl:
 
-                with open(edl_path, "r", encoding='utf8') as edl_file:
-                    title = [next(edl_file) for _ in range(2)]
-                    lines = edl_file.readlines()
-
+                parser = detect_edl_parser(fps=self.fps, edl_path=tmp_edl)
                 with open(self.output_path, "w", encoding='utf8') as output:
-                    output.write("".join(title) + "\n")
-                    for line in lines:
-                        if re.search(r'^\d+\s', line.strip()):  
-                            parts = line.split()
-                            edl_timeline_start_tc = parts[6]
-                            edl_timeline_end_tc = parts[7]
 
-                            # Логика для offline_clips
-                            if self.offline_edl:
-                                marker_name = None
-                                for name, timecode in markers_list:
-                                    if tc(self.fps, edl_timeline_start_tc).frames <= tc(self.fps, timecode).frames <= tc(self.fps, edl_timeline_end_tc).frames:
-                                        marker_name = name
-                                if marker_name is not None:
-                                    parts[1] = marker_name
-                                    output.write(" ".join(parts) + '\n')
-                                    output.write(f'* FROM CLIP NAME: {marker_name}\n\n')
+                    for shot in parser:
+                        if self.offline_edl:
+                            marker_name = None
+                            for name, timecode in markers:
+                                if tc(self.fps, shot.edl_record_in).frames <= tc(self.fps, timecode).frames <= tc(self.fps, shot.edl_record_out).frames:
+                                    marker_name = name
+                            if marker_name is not None:
+                                self.create_output_edl(shot, output, marker_name)
 
                 logger.info("EDL файл успешно создан.")
-                self.kill_tmp_edl(edl_path)
+                self.kill_tmp_edl(tmp_edl)
                 return True
             else:
                 return False
@@ -309,7 +308,7 @@ class LogicProcessor:
                 if not applied:
                     self.warnings.append(f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
 
-    def from_offline(self, items) -> None:
+    def from_offline(self, items: list) -> None:
         """
         Присвоение имен из оффлайн клипов.
         """
@@ -358,8 +357,26 @@ class LogicProcessor:
         
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
-            return False    
+            return False   
 
+    def convert_v3_to_v23(self, edl_path: str) -> None:
+        """
+        Конвертация EDLv3 с маркерами в EDLv23 с оффлайн клипами (для AVID).
+        """
+        output_path = Path(str(edl_path).replace(".edl", "_converted_to_v23.edl"))
+        try:
+            parser = detect_edl_parser(fps=self.fps, edl_path=edl_path)
+
+            with open(output_path, 'a', encoding="utf-8") as output:
+                for shot in parser:
+                    self.create_output_edl(shot, output)
+            logger.info("EDL файл успешно создан.")
+            return True
+
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка конвертации EDL: {e}")
+            return False
+            
     def run(self) -> bool:
         self.timeline = ResolveObjects().timeline
         self.resolve = ResolveObjects().resolve
@@ -384,6 +401,7 @@ class LogicProcessor:
         self.prefix = self.user_config["prefix_name"]
         self.postfix = self.user_config["postfix_name"]
         self.set_track_id = self.user_config["set_track_id"]
+        self.convert_edl = self.user_config["convert_edl"]
 
         self.count_of_tracks = self.timeline.GetTrackCount('video')
         items = self.timeline.GetItemListInTrack('video', self.offline_track)
@@ -412,6 +430,11 @@ class LogicProcessor:
         if self.edl_from_srt_bool:
             edl_from_srt_var = self.edl_from_srt(self.edl_path)
             if not edl_from_srt_var:
+                return False
+            
+        if self.convert_edl:
+            convert_edl_var = self.convert_v3_to_v23(self.edl_path)
+            if not convert_edl_var:
                 return False
             
         if self.name_from_markers or self.name_from_track:
@@ -472,7 +495,8 @@ class ConfigValidator:
         "create_edl_from_srt": self.gui.srt_to_edl_cb.isChecked(),
         "prefix_name": self.gui.prefix.text() + ("_", "")[self.gui.prefix.text() == ""],
         "postfix_name": ("_", "")[self.gui.postfix.text() == ""] + self.gui.postfix.text(),
-        "set_track_id": self.gui.set_track_id.isChecked()
+        "set_track_id": self.gui.set_track_id.isChecked(),
+        "convert_edl": self.gui.convert_edl.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -495,9 +519,10 @@ class ConfigValidator:
         create_srt_cb = user_config["create_srt_checkbox"]
         set_markers_cb = user_config["set_markers"]
         edl_from_srt = user_config["create_edl_from_srt"]
+        convert_edl = user_config["convert_edl"]
 
         if not any([name_from_track, name_from_markers, offline_edl_cb, 
-                    create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt]):
+                    create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt, convert_edl]):
             self.errors.append("Не выбрана ни одна опция!")
             return
 
@@ -524,6 +549,12 @@ class ConfigValidator:
         
         if not locator_output_path and export_loc_cb:
             self.errors.append("Введите путь для сохранения локаторов!")
+
+        if convert_edl and not edl_path:
+            self.errors.append("Укажите входной путь для EDL!")
+
+        if convert_edl and not os.path.exists(edl_path):
+            self.errors.append("Указан несуществующий путь к EDL!")
 
         try:
             fps = int(fps)
@@ -575,12 +606,12 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
 
-        # FPS + Locator From (по центру, в одной строке)
+        # FPS + Locator From
         fps_layout = QHBoxLayout()
         fps_layout.addStretch()
         fps_layout.setAlignment(QtCore.Qt.AlignCenter)
 
-        fps_label = QLabel("Project FPS:")
+        fps_label = QLabel("FPS:")
         self.fps_entry = QLineEdit("24")
         self.fps_entry.setFixedWidth(50)
 
@@ -659,24 +690,28 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         block1_group.setLayout(block1_group_layout)
         main_layout.addWidget(block1_group)
 
-        # Offline/Dailies + Input/Output paths 
-        block2_group = QGroupBox("Resolve to EDL")
+        # Converter
+        block2_group = QGroupBox("Converter")
         block2_group_layout = QVBoxLayout()
         block2_group_layout.addSpacing(20)
 
         # Checkboxes
         checks_layout = QHBoxLayout()
         checks_layout.setAlignment(Qt.AlignLeft)
-        self.offline_clips_checkbox = QCheckBox("EDL for offline and autoconform")
+        self.offline_clips_checkbox = QCheckBox("Resolve markers to EDL_v23")
         self.create_srt_cb = QCheckBox("EDL to SRT")
         self.srt_to_edl_cb = QCheckBox("SRT to EDL")
+        self.convert_edl = QCheckBox("EDL_v3 to EDL_v23")
         self.create_srt_cb.stateChanged.connect(self.update_fields_state)
         self.srt_to_edl_cb.stateChanged.connect(self.update_fields_state)
+        self.convert_edl.stateChanged.connect(self.update_fields_state)
         checks_layout.addWidget(self.offline_clips_checkbox)
         checks_layout.addSpacing(30)
         checks_layout.addWidget(self.create_srt_cb)
         checks_layout.addSpacing(30)
         checks_layout.addWidget(self.srt_to_edl_cb)
+        checks_layout.addSpacing(30)
+        checks_layout.addWidget(self.convert_edl)
         block2_group_layout.addLayout(checks_layout)
 
         # Input path
@@ -799,13 +834,12 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.input_entry.setEnabled(self.create_srt_cb.isChecked())
         self.input_btn.setEnabled(self.create_srt_cb.isChecked())
 
-        input_enabled = self.create_srt_cb.isChecked() or self.srt_to_edl_cb.isChecked()
+        input_enabled = self.create_srt_cb.isChecked() or self.srt_to_edl_cb.isChecked() or self.convert_edl.isChecked()
         self.input_entry.setEnabled(input_enabled)
         self.input_btn.setEnabled(input_enabled)
 
-        self.output_entry.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked())))
-        self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked())))
-
+        self.output_entry.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
+        self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
 
     def run_script(self):
         self.validator = ConfigValidator(self)
