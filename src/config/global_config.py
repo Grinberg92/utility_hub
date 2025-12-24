@@ -30,6 +30,10 @@ GLOBAL_CONFIG = {
     },
     "output_folders": {
         "sequence_checker": "sequence_checker",
-        "edit_database": "edit_database"
+        "edit_database": "edit_database",
+        "edl_processor": "edl_processor",
+        "autoconform": "autoconform",
+        "compare_versions": "compare_versions",
+        "ocf_color_and_fps": "resolutions_table" 
     }
 }
