@@ -219,7 +219,7 @@ class LogicProcessor:
                         o.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
                         o.write(f"* FROM CLIP NAME: {shot_name}\n")
 
-            logger.info("EDL файл из SRT успешно создан: {result_path}")
+            logger.info(f"EDL файл из SRT успешно создан: {result_path}")
             return True
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания EDL файлов из SRT {e}")
@@ -300,7 +300,8 @@ class LogicProcessor:
                 for name, timecode in markers:
                     if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
                         # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["track_postfix"] + str(track_index - 1))[self.set_track_id]
+                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["track_postfix"] + 
+                                                                        str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name_new)
                         logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
                         applied = True
@@ -320,7 +321,8 @@ class LogicProcessor:
                 for item in items:
                     if clip_under.GetStart() == item.GetStart():
                         # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["track_postfix"] + str(track_index - 1))[self.set_track_id]
+                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["track_postfix"] + 
+                                                                              str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name)
                         logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
                         applied = True
@@ -802,12 +804,15 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
     def get_shot_name(self):
         self.base_shot_name = "###_####"
-        result_shot_name = self.prefix.text() + ("_", "")[self.prefix.text() == ""] + self.base_shot_name + ("_", "")[self.postfix.text() == ""] + self.postfix.text() + ("", "_VT1")[self.set_track_id.isChecked()]
+        prefix = self.prefix.text() + ("_", "")[self.prefix.text() == ""]
+        postfix = ("_", "")[self.postfix.text() == ""] + self.postfix.text()
+        track_id = ("", "_VT1")[self.set_track_id.isChecked()]
+        result_shot_name = prefix + self.base_shot_name + postfix + track_id
         self.shot_name_view.setText(result_shot_name)
 
 
     def select_input_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select EDL file", "", "SRT files (*.srt);; EDL files (*.edl)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select file", "", "EDL files (*.edl);; SRT files (*.srt)")
         if file_path:
             self.input_entry.setText(file_path)
 
@@ -819,7 +824,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
             self.save_locators_path_entry.setText(file_path)
 
     def select_output_file(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save As", "", "SRT files (*.srt);;EDL files (*.edl));;All Files (*)")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save As", "", "EDL files (*.edl);; SRT files (*.srt);;All Files (*)")
         if file_path:
             self.output_entry.setText(file_path)
 
@@ -841,8 +846,10 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.input_entry.setEnabled(input_enabled)
         self.input_btn.setEnabled(input_enabled)
 
-        self.output_entry.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
-        self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
+        self.output_entry.setEnabled(not any((self.srt_to_edl_cb.isChecked(), 
+                                              self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
+        self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), 
+                                            self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
 
         self.output_entry.setEnabled(self.offline_clips_checkbox.isChecked())
         self.output_btn.setEnabled(self.offline_clips_checkbox.isChecked())
