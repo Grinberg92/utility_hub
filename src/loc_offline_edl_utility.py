@@ -7,6 +7,7 @@ import sys
 import os
 from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
+from datetime import datetime as dt
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QRadioButton,
     QLineEdit, QComboBox, QGroupBox, QCheckBox, QPushButton, QSizePolicy, QApplication, QFileDialog, QFrame)
@@ -14,6 +15,9 @@ from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_utils import ResolveObjects
 from common_tools.edl_parsers import detect_edl_parser, EDLParser
+from config.config_loader import load_config
+from config.config import get_config
+from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
@@ -23,13 +27,32 @@ SETTINGS = {
     "track_postfix": '_VT',
 }
 
+def get_output_path(project: str, ext: str, report_name: str) -> str:
+    """
+    Получение пути к бекапу отчета проверки секвенций.
+    """
+    date = dt.now().strftime("%Y%m%d")
+
+    output_path = (
+        Path(
+            {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"],
+            "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+        )
+        / project
+        / GLOBAL_CONFIG["output_folders"]["edl_processor"] / date
+        / f"{report_name}_{date}.{ext}"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    return output_path
+
 class LogicProcessor:
     """
     Класс работы с логикой.
     """
-    def __init__(self, user_config, signals):
+    def __init__(self, user_config, signals, project_name):
         self.user_config = user_config
         self.signals = signals
+        self.project_name = project_name
 
     def timecode_to_frame(self, timecode)-> int:
         """
@@ -77,7 +100,7 @@ class LogicProcessor:
                 clip_name = clip.GetName()
 
                 if self.shot_filter:
-                    if re.search(SETTINGS["shot_name"], clip_name):
+                    if re.search(self.config["patterns"]["compare_versions_shot_no_versions_mask"], clip_name):
                         if self.center_marker:
                             clip_start = int((clip.GetStart() + (clip.GetStart() + clip.GetDuration())) / 2) - self.timeline_start_tc
                         else:
@@ -112,18 +135,22 @@ class LogicProcessor:
                 return
             
             path = Path(self.locator_output_path) / f"{self.timeline.GetName()}.txt"
-            with open(path, "a", encoding='utf8') as output:
+            backup_path = get_output_path(self.project_name, "txt", f"{self.timeline.GetName()}_AVID_LOC")
+
+            with open(path, "a", encoding='utf8') as o, open(backup_path, "a", encoding='utf8') as ob:
 
                 for name, timecode in markers_list:
                     if self.shot_filter:
-                        if re.match(SETTINGS["shot_name"], name, re.IGNORECASE) or name in SETTINGS["exceptions"]:
+                        if re.match(self.config["patterns"]["compare_versions_shot_no_versions_mask"], name, re.IGNORECASE) or name in SETTINGS["exceptions"]:
                             # Используется спец табуляция для корректного импорта в AVID
                             output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
-                            output.write(output_string + "\n")
+                            o.write(output_string + "\n")
+                            ob.write(output_string + "\n")
                     else:
                         # Используется спец табуляция для корректного импорта в AVID
                         output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
-                        output.write(output_string + "\n")
+                        o.write(output_string + "\n")
+                        ob.write(output_string + "\n")
             logger.info("Локаторы успешно созданы.")
             return True
         
@@ -168,8 +195,9 @@ class LogicProcessor:
         """
         try:
             result_path = Path(str(edl_path).replace(".edl", "_converted.srt"))
+            backup_path = get_output_path(self.project_name, "edl", os.path.basename(edl_path).replace(".edl", f"_converted"))
             items_data = self.get_edl_data()
-            with open(result_path, "a" ,encoding="utf-8") as o:
+            with open(result_path, "a" ,encoding="utf-8") as o, open(backup_path, "a" ,encoding="utf-8") as ob:
                 for index, data in enumerate(items_data, start=1):
                     name, start_tc, end_tc = data
                     index_str = index
@@ -177,6 +205,8 @@ class LogicProcessor:
                     name_str = name
 
                     o.write(f"{index_str}\n{timecode_str}\n{name_str}\n\n")
+                    ob.write(f"{index_str}\n{timecode_str}\n{name_str}\n\n")
+
             logger.info(f"SRT файл успешно создан: {result_path}")
             return True
         except Exception as e:
@@ -200,6 +230,7 @@ class LogicProcessor:
         """
         try:
             result_path = Path(str(srt_path).replace(".srt", "_converted.edl"))
+            backup_path = get_output_path(self.project_name, "srt", os.path.basename(srt_path).replace(".srt", f"_converted"))
 
             with open(srt_path, 'r', encoding='utf-8') as input:
                 srt = input.read().strip().split('\n\n')
@@ -214,10 +245,12 @@ class LogicProcessor:
                     src_in = "00:00:00:00"
                     src_out = self.frame_to_timecode(self.timecode_to_frame(src_in) + rec_duration)
                     shot_name = shot_name.strip("<b>").strip("</b>")
-                    with open(result_path, 'a', encoding='utf-8') as o:
+                    with open(result_path, 'a', encoding='utf-8') as o, open(backup_path, 'a', encoding='utf-8') as ob:
                         # Жестко придерживаться табуляции, что бы корректно принимал AVID
                         o.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
+                        ob.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
                         o.write(f"* FROM CLIP NAME: {shot_name}\n")
+                        ob.write(f"* FROM CLIP NAME: {shot_name}\n")
 
             logger.info(f"EDL файл из SRT успешно создан: {result_path}")
             return True
@@ -249,24 +282,27 @@ class LogicProcessor:
         """
         shot_name = marker_name if marker_name is not None else shot.edl_shot_name
 
-        output.write(f"{shot.edl_record_id} {shot_name} "
+        str1 = (f"{shot.edl_record_id} {shot_name} "
                 f"{shot.edl_track_type} {shot.edl_transition} "
                 f"{shot.edl_source_in} {shot.edl_source_out} "
                 f"{shot.edl_record_in} {shot.edl_record_out}")
-        output.write(f'\n* FROM CLIP NAME: {shot_name}\n\n')
+        str2 = f'\n* FROM CLIP NAME: {shot_name}\n'
+        output.write(str1)
+        output.write(str2)
 
     def process_edl(self) -> bool:
         """
-        Выводит EDL для дейлизов и EDL с оффлайн клипами.
+        Выводит EDL c оффлайн клипами.
         """
         try:
             markers = self.get_markers()
+            backup_path = get_output_path(self.project_name, "edl", f'{self.project_name}_offline_edl')
             
             tmp_edl = self.create_temp_edl()
             if tmp_edl:
 
                 parser = detect_edl_parser(fps=self.fps, edl_path=tmp_edl)
-                with open(self.output_path, "w", encoding='utf8') as output:
+                with open(self.output_path, "w", encoding='utf8') as o, open(backup_path, "w", encoding='utf8') as ob:
 
                     for shot in parser:
                         if self.offline_edl:
@@ -275,7 +311,8 @@ class LogicProcessor:
                                 if tc(self.fps, shot.edl_record_in).frames <= tc(self.fps, timecode).frames <= tc(self.fps, shot.edl_record_out).frames:
                                     marker_name = name
                             if marker_name is not None:
-                                self.create_output_edl(shot, output, marker_name)
+                                self.create_output_edl(shot, o, marker_name)
+                                self.create_output_edl(shot, ob, marker_name)
 
                 logger.info("EDL файл успешно создан.")
                 self.kill_tmp_edl(tmp_edl)
@@ -365,13 +402,16 @@ class LogicProcessor:
         """
         Конвертация EDLv3 с маркерами в EDLv23 с оффлайн клипами (для AVID).
         """
-        output_path = Path(str(edl_path).replace(".edl", "_converted_to_v23.edl"))
         try:
+            output_path = Path(str(edl_path).replace(".edl", "_converted_to_v23.edl"))
+            backup_path = get_output_path(self.project_name, "edl", os.path.basename(edl_path).replace(".edl", f"_converted_to_v23"))
             parser = detect_edl_parser(fps=self.fps, edl_path=edl_path)
 
-            with open(output_path, 'a', encoding="utf-8") as output:
+            with open(output_path, 'a', encoding="utf-8") as o, open(backup_path, 'a', encoding="utf-8") as ob:
                 for shot in parser:
-                    self.create_output_edl(shot, output)
+                    if re.search(self.config["patterns"]["compare_versions_shot_no_versions_mask"], shot.edl_shot_name):
+                        self.create_output_edl(shot, o)
+                        self.create_output_edl(shot, ob)
             logger.info("EDL файл успешно создан.")
             return True
 
@@ -404,6 +444,9 @@ class LogicProcessor:
         self.postfix = self.user_config["postfix_name"]
         self.set_track_id = self.user_config["set_track_id"]
         self.convert_edl = self.user_config["convert_edl"]
+
+        load_config(self.project_name)
+        self.config = get_config()
 
         self.count_of_tracks = self.timeline.GetTrackCount('video')
         items = self.timeline.GetItemListInTrack('video', self.offline_track)
@@ -455,12 +498,13 @@ class LogicWorker(QThread):
     warning_signal = pyqtSignal(str)
     info_signal = pyqtSignal(str)
 
-    def __init__(self, parent, user_config):
+    def __init__(self, parent, user_config, project_name):
         super().__init__(parent)
         self.user_config = user_config
+        self.project_name = project_name
 
     def run(self):
-        logic = LogicProcessor(self.user_config, self)
+        logic = LogicProcessor(self.user_config, self, self.project_name)
         success = logic.run()
         if success:
             self.success_signal.emit("Процесс успешно завершен!")
@@ -498,7 +542,8 @@ class ConfigValidator:
         "prefix_name": self.gui.prefix.text() + ("_", "")[self.gui.prefix.text() == ""],
         "postfix_name": ("_", "")[self.gui.postfix.text() == ""] + self.gui.postfix.text(),
         "set_track_id": self.gui.set_track_id.isChecked(),
-        "convert_edl": self.gui.convert_edl.isChecked()
+        "convert_edl": self.gui.convert_edl.isChecked(),
+        "project": self.gui.project_menu.currentText() != "Select Project"
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -522,6 +567,8 @@ class ConfigValidator:
         set_markers_cb = user_config["set_markers"]
         edl_from_srt = user_config["create_edl_from_srt"]
         convert_edl = user_config["convert_edl"]
+        project = user_config["project"]
+        shot_filter = user_config["shot_filter"]
 
         if not any([name_from_track, name_from_markers, offline_edl_cb, 
                     create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt, convert_edl]):
@@ -557,6 +604,9 @@ class ConfigValidator:
 
         if convert_edl and not os.path.exists(edl_path):
             self.errors.append("Указан несуществующий путь к EDL!")
+
+        if not project and (process_edl or create_srt_cb or edl_from_srt or convert_edl or export_loc_cb or shot_filter):
+            self.errors.append("Выберите проект!")
 
         try:
             fps = int(fps)
@@ -629,6 +679,13 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         fps_layout.addWidget(self.locator_from_combo)
         fps_layout.addStretch()
         main_layout.addLayout(fps_layout)
+
+        project_layout = QHBoxLayout()
+        self.project_menu = QComboBox()
+        self.project_menu.setMaximumWidth(290)
+        self.project_menu.addItems(self.get_project())
+        project_layout.addWidget(self.project_menu)
+        main_layout.addLayout(project_layout)
 
         # Locators / Track / Export Locators
         block1_group = QGroupBox("Resolve to markers")
@@ -802,6 +859,20 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.run_button.clicked.connect(self.run_script)
         main_layout.addWidget(self.run_button)
 
+    def get_project(self):
+            """
+            Метод получает список проектов из корневого каталога.
+            """
+            project_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
+                "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform] 
+            if os.path.exists(project_path):
+                projects_list = sorted([i for i in os.listdir(Path(project_path)) if os.path.isdir(Path(project_path) / i)])
+                projects_list.insert(0, "Select Project")
+                return projects_list
+            else:
+                self.on_error_signal("Путь к папке проекта не обнаружен")
+                return
+
     def get_shot_name(self):
         self.base_shot_name = "###_####"
         prefix = self.prefix.text() + ("_", "")[self.prefix.text() == ""]
@@ -864,7 +935,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
 
         logger.info(f"\n\nSetUp:\n{pformat(self.user_config)}\n") 
 
-        self.main_process = LogicWorker(self, self.user_config)
+        self.main_process = LogicWorker(self, self.user_config, self.project_menu.currentText())
         self.run_button.setEnabled(False)
         self.main_process.finished.connect(lambda : self.run_button.setEnabled(True))
         self.main_process.error_signal.connect(self.on_error_signal)
