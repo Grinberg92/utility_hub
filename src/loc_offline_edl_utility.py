@@ -21,11 +21,8 @@ from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
-SETTINGS = {
-    "shot_name": r"^(?:[A-Za-z]{3,4}_)?[A-Za-z0-9]{3,4}_[A-Za-z0-9]{3,4}$",
-    "exceptions": ["RETIME WARNING"],
-    "track_postfix": '_VT',
-}
+EXCEPTIONS = GLOBAL_CONFIG["scripts_settings"]["edl_processor"]["exceptions"]
+TRACK_POSTFIX = GLOBAL_CONFIG["scripts_settings"]["edl_processor"]["track_postfix"]
 
 def get_output_path(project: str, ext: str, report_name: str) -> str:
     """
@@ -142,7 +139,7 @@ class LogicProcessor:
 
                 for name, timecode in markers_list:
                     if self.shot_filter:
-                        if re.match(self.config["patterns"]["compare_versions_shot_no_versions_mask"], name, re.IGNORECASE) or name in SETTINGS["exceptions"]:
+                        if re.match(self.config["patterns"]["compare_versions_shot_no_versions_mask"], name, re.IGNORECASE) or name in EXCEPTIONS:
                             # Используется спец табуляция для корректного импорта в AVID
                             output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
                             o.write(output_string + "\n")
@@ -340,7 +337,7 @@ class LogicProcessor:
                 for name, timecode in markers:
                     if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
                         # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["track_postfix"] + 
+                        name_new = self.prefix + name + self.postfix + ("", TRACK_POSTFIX + 
                                                                         str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name_new)
                         logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
@@ -361,7 +358,7 @@ class LogicProcessor:
                 for item in items:
                     if clip_under.GetStart() == item.GetStart():
                         # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["track_postfix"] + 
+                        name = self.prefix + item.GetName() + self.postfix + ("", TRACK_POSTFIX + 
                                                                               str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name)
                         logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
