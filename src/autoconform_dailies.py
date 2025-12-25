@@ -30,6 +30,14 @@ from common_tools.edl_parsers import detect_edl_parser
 
 logger = get_logger(__file__)
 
+LOG_PATH = {"win32": GLOBAL_CONFIG["paths"]["log_path_win"], 
+                        "darwin": GLOBAL_CONFIG["paths"]["log_path_mac"]}[sys.platform]
+ROOT_PROJECTS = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
+                        "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+SHOTS_PATH = {"win32": GLOBAL_CONFIG["scripts_settings"]["autoconform"]["shots_path_win"], 
+                        "darwin": GLOBAL_CONFIG["scripts_settings"]["autoconform"]["shots_path_mac"]}[sys.platform]
+OUTPUT_FOLDER = GLOBAL_CONFIG["output_folders"]["autoconform"]
+
 class OTIOCreator:
     """
     Класс создания OTIO таймлайна.
@@ -1603,39 +1611,27 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
             self.otio_button.setEnabled(True)
             self.button_logs.setEnabled(True)
 
-    def is_OS(self, path):
-        '''
-        Метод конвертирует путь под платформу.
-
-        :return result_path: Конвертированный под платформу путь.
-        '''
-        platform = {"win32": self.config["paths"]["init_project_root_win"], 
-                    "darwin": self.config["paths"]["init_project_root_mac"]}[sys.platform]
-        result_path = Path(platform) / path
-        return result_path
-
     def get_project(self):
         """
         Метод получает список проектов.
         """
-        base_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
-                    "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+        base_path = ROOT_PROJECTS
         project_list = sorted([i for i in os.listdir(Path(base_path)) if os.path.isdir(Path(base_path) / i)])
         project_list.insert(0, "Select Project")
         return project_list
 
     def select_edl(self):
-        init_dir = str(self.is_OS(f'{self.config["paths"]["project_path"]}/{self.project_menu.currentText()}/'))
+        init_dir = Path(ROOT_PROJECTS) / self.project_menu.currentText() / str(OUTPUT_FOLDER)
+        init_dir.mkdir(parents=True, exist_ok=True)
         path, _ = QFileDialog.getOpenFileName(self, 
                                               "Choose EDL file", 
-                                              init_dir, 
+                                              str(init_dir), 
                                               "EDL files (*.edl)")
         if path:
             self.edl_input.setText(path)
 
     def select_shots_folder(self):
-        init_dir = {"win32": self.config["paths"]["init_shots_root_win"], 
-                    "darwin": self.config["paths"]["init_shots_root_mac"]}[sys.platform]
+        init_dir = SHOTS_PATH
         path = QFileDialog.getExistingDirectory(self, 
                                                 "Choose Shots Folder",
                                                 init_dir)
@@ -1644,10 +1640,11 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
 
     def save_otio(self):
 
-        init_dir = str(self.is_OS(f'{self.config["paths"]["project_path"]}/{self.project_menu.currentText()}/'))
+        init_dir = Path(ROOT_PROJECTS) / self.project_menu.currentText() / str(OUTPUT_FOLDER)
+        init_dir.mkdir(parents=True, exist_ok=True)
         path, _ = QFileDialog.getSaveFileName(self, 
                                               "Save OTIO file", 
-                                              init_dir, 
+                                              str(init_dir), 
                                               "OTIO files (*.otio)")
         if path:
             self.otio_input.setText(path)
@@ -1715,7 +1712,7 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         Метод открывает ссылку bp GUI или файл в файловом менеджере.
         """
         if not url:
-            path = self.is_OS(self.config["paths"]["log_path"])
+            path = LOG_PATH
         else:
             path = Path(url.toLocalFile()) 
         try:
