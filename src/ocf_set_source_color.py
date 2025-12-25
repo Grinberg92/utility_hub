@@ -14,12 +14,12 @@ from threading import Thread
 import sys
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveObjects
+from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
-SETTINGS = {"clip_color": ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
-                                'Apricot', 'Olive', 'Violet', 'Blue', 'Pink', 'Tan', 'Beige',
-                                'Brown', 'Chocolate']}
+COLOR = GLOBAL_CONFIG["scripts_settings"]["ocf_color_and_fps"]["clip_color"]
+EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["ocf_color_and_fps"]["extentions"]
 
 class GUI(QtWidgets.QWidget):
 
@@ -392,7 +392,7 @@ class GUI(QtWidgets.QWidget):
             target_resolution_width = int(self.output_res_width)
 
             # Получили сортировку и цвета такие же как для расцветовки OCF
-            data_zip = list(zip(SETTINGS["clip_color"], sorted(data.items(), key=lambda x: len(x[1]), reverse=True)))
+            data_zip = list(zip(COLOR, sorted(data.items(), key=lambda x: len(x[1]), reverse=True)))
 
             # Сбор всех возможных разрешений и данных для экспорта в таблицу
             table_data_list = []
@@ -442,13 +442,14 @@ class GUI(QtWidgets.QWidget):
             clips = self.get_clips_from_bin(target_bin)
 
             for clip in clips:
-                if clip.GetName() != '' and clip.GetName().lower().endswith((".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine")):
+                if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS):
                     # Находит анаморф, вычисляет ширину по аспекту
                     if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
-                        if float(clip.GetClipProperty("FPS")) != float(fps_value) and self.set_fps:
-                            clip.SetClipProperty("FPS", "24")
-                            logger.debug(f"Изменен FPS на {fps_value} для клипа {clip.GetName()}")
+                        if self.set_fps:
+                            if float(clip.GetClipProperty("FPS")) != float(fps_value):
+                                clip.SetClipProperty("FPS", "24")
+                                logger.debug(f"Изменен FPS на {fps_value} для клипа {clip.GetName()}")
 
                         aspect = clip.GetClipProperty('PAR')
                         width, height = clip.GetClipProperty('Resolution').split('x')
@@ -457,9 +458,10 @@ class GUI(QtWidgets.QWidget):
                         spreadsheet_info_dict.setdefault((resolution, aspect), []).append(clip) # Данные для таблицы
                     else:
                         # Меняем FPS если не соответствует проектному и не выбрано создание таблицы
-                        if float(clip.GetClipProperty("FPS")) != float(fps_value) and self.set_fps:
-                            clip.SetClipProperty("FPS", "24")
-                            logger.debug(f"Изменен FPS на {fps_value} для клипа {clip.GetName()}")
+                        if self.set_fps:
+                            if float(clip.GetClipProperty("FPS")) != float(fps_value):
+                                clip.SetClipProperty("FPS", "24")
+                                logger.debug(f"Изменен FPS на {fps_value} для клипа {clip.GetName()}")
 
                         aspect = clip.GetClipProperty('PAR')
                         clips_dict.setdefault(clip.GetClipProperty('Resolution'), []).append(clip)
@@ -472,7 +474,7 @@ class GUI(QtWidgets.QWidget):
             # Опционально запускаем присваивание цвета клипам в медиапуле и устанавливаем проектный FPS
             if run_coloring:
                 # Сортировка по количеству клипов в группе разрешения
-                sorted_clip_list = list(zip(SETTINGS["clip_color"], {res: clips for res, clips in sorted(clips_dict.items(), key=lambda x: len(x[1]), reverse=True) if res != ""}))
+                sorted_clip_list = list(zip(COLOR, {res: clips for res, clips in sorted(clips_dict.items(), key=lambda x: len(x[1]), reverse=True) if res != ""}))
 
                 # Установка отдельного цвета на каждую группу разрешений
                 for color, res in sorted_clip_list:
