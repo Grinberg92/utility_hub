@@ -31,11 +31,44 @@ GLOBAL_CONFIG = {
         "shot_name_no_version": r'([a-zA-Z]{3,4}_)?\d{3,4}[a-zA-Z]?_\d{1,4}'
     },
     "output_folders": {
+
         "sequence_checker": "sequence_checker",
         "edit_database": "edit_database",
         "edl_processor": "edl_processor",
         "autoconform": "autoconform",
         "compare_versions": "compare_versions",
         "ocf_color_and_fps": "resolutions_table" 
+    },
+    "scripts_settings": {
+        "exr_delivery": {
+                "track_postfix": '_VT',
+                "colors": ["Orange", "Yellow", "Lime", "Violet", "Blue"],
+                "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
+                "false_extentions": (".mov", ".mp4", ".jpg"),
+                "project_presets": ["aces1.2_smoother_preset", "yrgb_smoother_preset"],
+                "copter_extentions": (".dng")
+                    },
+        "edl_processor": {
+                "exceptions": ["RETIME WARNING"],
+                "track_postfix": '_VT'
+                    },
+        "ocf_color_and_fps": {"clip_color": ['Orange', 'Yellow', 'Lime', 'Teal', 'Green', 'Purple', 'Navy',
+                                'Apricot', 'Olive', 'Violet', 'Blue', 'Pink', 'Tan', 'Beige',
+                                'Brown', 'Chocolate'],
+                            "extentions": (".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine")
+                    },
+        "proxy_render": {
+                "burn_in_win_path": r"J:\003_transcode_to_vfx\projects\Others\burn_in_presets",
+                "burn_in_mac_path": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/burn_in_presets",
+                "lut_path_win": r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY',
+                "lut_path_mac": r'/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/',
+                "timeline_preset_path_win": r"J:\003_transcode_to_vfx\projects\Others\timeline_presets",
+                "timeline_preset_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/timeline_presets/",
+                "all_extentions": (".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine"),
+                "standart_extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
+                "excepted_extentions": ('.mov', '.mp4', '.jpg')
+            },
+        "compare_versions": {"extentions": ('.exr', '.mov', '.jpg')},
+        "get_shot": {"extentions": (".exr", ".jpg", ".tif", ".tiff", ".png")}
     }
 }
