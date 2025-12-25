@@ -24,10 +24,8 @@ from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
-SETTINGS = {
-    "data_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/projects_data.json",
-    "data_path_win": r"J:\003_transcode_to_vfx\projects\Others\projects_data.json",
-}
+DATA_PATH = {"win32": GLOBAL_CONFIG["paths"]["editdatabase_path_win"], 
+                        "darwin": GLOBAL_CONFIG["paths"]["editdatabase_path_mac"]}[sys.platform]
 
 def get_output_path(project: str, ext: str, report_name: str) -> str:
     """
@@ -300,9 +298,7 @@ class ShotRestorer(QObject):
         Основная логика.
         """
         try:
-            db_path = {"win32": SETTINGS["data_path_win"], 
-                        "darwin": SETTINGS["data_path_mac"]}[sys.platform]
-            db = EditDatabase(db_path, self.project)
+            db = EditDatabase(DATA_PATH, self.project)
 
             if self.logic == "Edit":
                 base_edit = db.get_shots_by_edit(self.project, self.edit_name)
@@ -367,8 +363,8 @@ class EDLInit(QObject):
         Основная логика.
         """
         try:
-            db_path = {"win32": SETTINGS["data_path_win"], 
-                        "darwin": SETTINGS["data_path_mac"]}[sys.platform]
+            db_path = DATA_PATH
+
         except Exception as e:
             self.error.emit(f"Ошибка получения пути к базе данных: {e}")
         
@@ -587,9 +583,7 @@ class EDLComparator(QObject):
         """
         self.reedit_data = {}
         try:
-            db_path = {"win32": SETTINGS["data_path_win"], 
-                        "darwin": SETTINGS["data_path_mac"]}[sys.platform]
-            db = EditDatabase(db_path, self.project)
+            db = EditDatabase(DATA_PATH, self.project)
 
             if self.base_logic == "Edit":
                 self.base_edit = db.get_shots_by_edit(self.project, self.base_edit_name)
@@ -752,9 +746,7 @@ class PhaseChecker(QObject):
         Основная логика.
         """
         try:
-            db_path = {"win32": SETTINGS["data_path_win"], 
-                        "darwin": SETTINGS["data_path_mac"]}[sys.platform]
-            db = EditDatabase(db_path, self.project)
+            db = EditDatabase(DATA_PATH, self.project)
 
             base_edit = db.get_shots_by_edit(self.project, self.base_edit)
             target_edits = db.get_shots_by_edits(self.project, self.target_edits)
@@ -1190,15 +1182,10 @@ class EDLGui(QWidget):
 
         self.data = None
 
-        db_path = {
-            "win32": SETTINGS["data_path_win"],
-            "darwin": SETTINGS["data_path_mac"]
-        }[sys.platform]
-
-        if not os.path.exists(db_path):
+        if not os.path.exists(DATA_PATH):
             return tab
 
-        self.load_json_from_path(db_path)
+        self.load_json_from_path(DATA_PATH)
 
         return tab
     
@@ -1430,11 +1417,7 @@ class EDLGui(QWidget):
                 edit_cb.addItem("Select Edit")
                 return
 
-            db_path = {
-                "win32": SETTINGS["data_path_win"],
-                "darwin": SETTINGS["data_path_mac"]
-            }[sys.platform]
-            db = EditDatabase(db_path, project_name)
+            db = EditDatabase(DATA_PATH, project_name)
 
             edits_list = db.get_edits(project_name) or []
             edits_list.insert(0, "Select Edit")
@@ -1512,10 +1495,7 @@ class EDLGui(QWidget):
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(lambda: self.init_start_btn.setEnabled(True))
-        self.thread.finished.connect(lambda: self.load_json_from_path({
-                                                                        "win32": SETTINGS["data_path_win"],
-                                                                        "darwin": SETTINGS["data_path_mac"]
-                                                                    }[sys.platform]))
+        self.thread.finished.connect(lambda: self.load_json_from_path(DATA_PATH))
         self.worker.error.connect(lambda: self.init_start_btn.setEnabled(True))
         self.worker.error.connect(lambda: self.thread.quit())
 

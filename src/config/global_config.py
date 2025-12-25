@@ -6,12 +6,14 @@ GLOBAL_CONFIG = {
     "paths": {
         "root_projects_mac": r"/Volumes/share2/003_transcode_to_vfx/projects",
         "root_projects_win": r"J:/003_transcode_to_vfx/projects",
-        "project_path": "003_transcode_to_vfx/projects/",
-        "log_path": "003_transcode_to_vfx/projects/log.log",
-        "init_project_root_win": "J:/",
-        "init_project_root_mac": "/Volumes/share2/",
-        "init_shots_root_win": "R:/",
-        "init_shots_root_mac": "/Volumes/RAID/",
+        "project_path": r"003_transcode_to_vfx/projects/",
+        "log_path": r"003_transcode_to_vfx/projects/log.log",
+        "init_project_root_win": r"J:/",
+        "init_project_root_mac": r"/Volumes/share2/",
+        "init_shots_root_win": r"R:/",
+        "init_shots_root_mac": r"/Volumes/RAID/",
+        "editdatabase_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/projects_data.json",
+        "editdatabase_path_win": r"J:\003_transcode_to_vfx\projects\Others\projects_data.json",
     },
     "patterns": {
         "frame_number": r'(\d+)(?:\.|_)\w+$',               # для кадров [1001.exr] или [1001_exr]
