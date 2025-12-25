@@ -268,9 +268,9 @@ class DeliveryPipline:
         Установка пресета проекта.
         """
         # Пресет ACES 1.2 RCM для динамического определения цветового пространства ACES
-        # и автоматическое перелючение пресета на YRGB RCM при рендере коптеров .dng.
+        # и автоматическое перелючение пресета на YRGB RCM при рендере .dng, .mov, .mp4, .jpg .
         if self.project_preset == RESOLVE_PROJECT_PRESETS[0]:
-            if item.mp_item.GetName().lower().endswith(".dng"):
+            if item.mp_item.GetName().lower().endswith(COPTER_EXTENTIONS) or item.mp_item.GetName().lower().endswith(FALSE_EXTENTIONS):
                 preset = RESOLVE_PROJECT_PRESETS[1]
                 set_preset_var = self.project.SetPreset(preset)
                 if set_preset_var is not None:
