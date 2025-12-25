@@ -3,33 +3,39 @@
 """
   
 GLOBAL_CONFIG = {
+    
     "paths": {
         "root_projects_mac": r"/Volumes/share2/003_transcode_to_vfx/projects",
         "root_projects_win": r"J:/003_transcode_to_vfx/projects",
-        "project_path": r"003_transcode_to_vfx/projects/",
-        "log_path": r"003_transcode_to_vfx/projects/log.log",
-        "init_project_root_win": r"J:/",
-        "init_project_root_mac": r"/Volumes/share2/",
-        "init_shots_root_win": r"R:/",
-        "init_shots_root_mac": r"/Volumes/RAID/",
+        "log_path_win": r"J:/003_transcode_to_vfx/projects/log.log",
+        "log_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/log.log",
         "editdatabase_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/projects_data.json",
         "editdatabase_path_win": r"J:\003_transcode_to_vfx\projects\Others\projects_data.json",
     },
+
     "patterns": {
-        "frame_number": r'(\d+)(?:\.|_)\w+$',               # для кадров [1001.exr] или [1001_exr]
-        "shot_name": r'(\.|_)\d+\.\w+$',                   # 015_3030_comp_v002.1004.exr и 015_3030_comp_v002_1004.exr
-        "shot_name_split": r'(.+?)([\._])\[(\d+)-\d+\]\.\w+$', # Парсинг имени секвенции. Префикс, суффикс и стартовый фрэйм
+        # для кадров [1001.exr] или [1001_exr]
+        "frame_number": r'(\d+)(?:\.|_)\w+$',
+
+        # 015_3030_comp_v002.1004.exr и 015_3030_comp_v002_1004.exr
+        "shot_name": r'(\.|_)\d+\.\w+$',
+
+        # Парсинг имени секвенции. Префикс, суффикс и стартовый фрэйм
+        "shot_name_split": r'(.+?)([\._])\[(\d+)-\d+\]\.\w+$',
 
         # Имя с версией 001_0010_comp_v001; prk_001_0010_comp_v001; tst_0010_comp_v001; prk_001a_001a_comp_v001
         "compare_versions_shot_versions_mask": r'(?<!\d)(?:[a-zA-Z]+_)*(?:\d{3,4}[a-zA-Z]?|[a-zA-Z]{3,4})_\d{1,4}[a-zA-Z]?(?:_[a-zA-Z]+)*?(_[a-zA-Z]+)?_[vV]?\d+(?!\d)', 
+
         # Короткое имя только prk_001_0010, 001_0010, 001_001c, 001a_001c, tst_0010
         "compare_versions_shot_no_versions_mask": r'(?<![A-Za-z0-9])(?:[A-Za-z]+_)?(?:\d{3,4}[a-zA-Z]?|[a-zA-Z]{3,4})_\d{1,4}[A-Za-z]?(?![A-Za-z0-9/])', 
+
         # Легкая маска, для отбрасывания .exr файлов которые не относятся к шотам. Например титры
         "compare_versions_shot_soft_mask": r'(.+_)?(?:\d{3,4}[a-zA-Z]?|[a-zA-Z]{3,4})_\d{1,4}[a-zA-Z]?_.+', 
+
         # Чистый номер без префиксов, если таковые есть 001_0010
         "compare_versions_shot_no_prefix_mask": r'(?:\d{3,4}[a-zA-Z]?|[a-zA-Z]{3,4})_\d{1,4}[a-zA-Z]?', 
-        "shot_name_no_version": r'([a-zA-Z]{3,4}_)?\d{3,4}[a-zA-Z]?_\d{1,4}'
     },
+
     "output_folders": {
 
         "sequence_checker": "sequence_checker",
@@ -39,7 +45,10 @@ GLOBAL_CONFIG = {
         "compare_versions": "compare_versions",
         "ocf_color_and_fps": "resolutions_table" 
     },
-    "scripts_settings": {
+
+    "scripts_settings":{
+        "autoconform": {"shots_path_win": r"R:/",
+                        "shots_path_mac": r"/Volumes/RAID/"},
         "exr_delivery": {
                 "track_postfix": '_VT',
                 "colors": ["Orange", "Yellow", "Lime", "Violet", "Blue"],
