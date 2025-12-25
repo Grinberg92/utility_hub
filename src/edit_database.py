@@ -318,8 +318,8 @@ class ShotRestorer(QObject):
 
                         if base_shot_data["src_name"] == target_edit_data.edl_source_name and self.overlap_range(
                             self.fps,
-                            base_shot_data["src_in"], base_shot_data["src_out"],
-                            target_edit_data.edl_source_in, target_edit_data.edl_source_out
+                            base_shot_data["src_in"], base_shot_data["src_out_full"],
+                            target_edit_data.edl_source_in, target_edit_data.edl_source_out_src
                         ):  
                             self.create_and_export_avid_loc((target_edit_data, base_shot_data["shot_name"]))
 
@@ -327,7 +327,7 @@ class ShotRestorer(QObject):
                                     f"{target_edit_data.edl_track_type} {target_edit_data.edl_transition} "
                                     f"{target_edit_data.edl_source_in} {target_edit_data.edl_source_out} "
                                     f"{target_edit_data.edl_record_in} {target_edit_data.edl_record_out}")
-                            str2 = f'\n* FROM CLIP NAME: {base_shot_data["shot_name"]}\n\n'
+                            str2 = f'\n* FROM CLIP NAME: {base_shot_data["shot_name"]}\n'
                             o.write(str1)
                             ob.write(str1)
                             o.write(str2)
@@ -581,6 +581,8 @@ class EDLComparator(QObject):
                 with open(output_path, 'a', encoding="utf-8") as o:
                     self.create_output_edl(shot_data, o)
 
+            logger.info(f"Сформирован EDL файл: {output_path}")
+
     def find_cross(self) -> None:
         """
         Ищем пересекающиеся номера шотов и сравниваем значения.
@@ -594,8 +596,8 @@ class EDLComparator(QObject):
                         # Проверяем на предмет пересечения диапазонов
                         if self.overlap_range(
                             self.fps,
-                            base_shot_data["src_in"], base_shot_data["src_out"],
-                            target_shot_data["src_in"], target_shot_data["src_out"],
+                            base_shot_data["src_in"], base_shot_data["src_out_full"],
+                            target_shot_data["src_in"], target_shot_data["src_out_full"],
                             base_shot_data["shot_name"], target_shot_data
                         ):
                             break
@@ -711,14 +713,14 @@ class PhaseChecker(QObject):
 
             # Выбираем минимальный src_in и максимальный src_out
             min_src_in_edit = min(shot_data, key=lambda x: self.timecode_to_frame(x["src_in"]))
-            max_src_out_edit = max(shot_data, key=lambda x: self.timecode_to_frame(x["src_out"]))
+            max_src_out_edit = max(shot_data, key=lambda x: self.timecode_to_frame(x["src_out_full"]))
 
             # Вычитаем 1 кадр из src_out для корректного отображения в интерфейсе программы
-            src_out = self.frame_to_timecode(self.timecode_to_frame(max_src_out_edit['src_out']) - 1)
+            src_out = self.frame_to_timecode(self.timecode_to_frame(max_src_out_edit['src_out_full']) - 1)
             self.progress.emit(f"Полный диапазон кадров шота {shot_name}: {min_src_in_edit['src_in']} - {src_out}")
 
             edit_donor["src_in"] = min_src_in_edit["src_in"]
-            edit_donor["src_out"] = max_src_out_edit["src_out"]
+            edit_donor["src_out_full"] = max_src_out_edit["src_out_full"]
 
             # Обновляем rec_in/rec_out
             if rec_in_data:
@@ -728,7 +730,7 @@ class PhaseChecker(QObject):
 
             edit_donor["rec_out"] = self.get_rec_out(
                 edit_donor["src_in"],
-                edit_donor["src_out"],
+                edit_donor["src_out_full"],
                 edit_donor["rec_in"]
             )
 
@@ -746,13 +748,13 @@ class PhaseChecker(QObject):
         Ищет только те случаи, когда в trg_data_list есть диапазоны шире чем в базовом.
         """
         base_src_in = self.timecode_to_frame(base_data["src_in"])
-        base_src_out = self.timecode_to_frame(base_data["src_out"])
+        base_src_out = self.timecode_to_frame(base_data["src_out_full"])
         shot_name = base_data["shot_name"]
 
         warnings = []
         for trg_data in trg_data_list:
             trg_src_in = self.timecode_to_frame(trg_data["src_in"])
-            trg_src_out = self.timecode_to_frame(trg_data["src_out"])
+            trg_src_out = self.timecode_to_frame(trg_data["src_out_full"])
 
             overlap_start = max(base_src_in, trg_src_in)
             overlap_end = min(base_src_out, trg_src_out)
