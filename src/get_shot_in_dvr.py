@@ -61,8 +61,11 @@ class GetShotDvr(QWidget):
         layout.addWidget(self.selected_project)
 
         # Чекбоксы
+        self.resolve_add = QCheckBox("Add to Resolve")
+        self.resolve_add.setChecked(True)
         self.is_append = QCheckBox("Add to timeline")
         self.is_normalize = QCheckBox("Set normalize")
+        layout.addWidget(self.resolve_add)
         layout.addWidget(self.is_append)
         layout.addWidget(self.is_normalize)
 
@@ -193,15 +196,19 @@ class GetShotDvr(QWidget):
         shot_name = os.path.basename(shot_path)
 
         frames_list = self.copy_sequence_files(shot_path, progress_signal)
-        if frames_list:
-            logger.debug(f"Шот {os.path.basename(frames_list[0])} скопирован и импортирован")
-            self.media_pool.ImportMedia(frames_list)
 
-        if self.is_append.isChecked():
-            for item in self.cur_bin.GetClipList():
-                if re.search(shot_name, item.GetName()):
-                    self.append_to_timeline(item)
-                    logger.debug(f"Шот {item.GetName()} добавлен на таймлайн")
+        if self.resolve_add.isChecked():
+            if frames_list:
+                logger.debug(f"Шот {os.path.basename(frames_list[0])} скопирован и импортирован")
+                self.media_pool.ImportMedia(frames_list)
+
+            if self.is_append.isChecked():
+                for item in self.cur_bin.GetClipList():
+                    if re.search(shot_name, item.GetName()):
+                        self.append_to_timeline(item)
+                        logger.debug(f"Шот {item.GetName()} добавлен на таймлайн")
+        else:
+            return
 
     def get_timeline_item(self, mediapool_item):
         for tmln_item in self.timeline.GetItemListInTrack("video", 1):
