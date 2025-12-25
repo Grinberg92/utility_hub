@@ -16,18 +16,16 @@ from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveObjects
 from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
-
+from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
-SETTINGS = {
-    "track_postfix": '_VT',
-    "colors": ["Orange", "Yellow", "Lime", "Violet", "Blue"],
-    "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
-    "false_extentions": (".mov", ".mp4", ".jpg"),
-    "project_presets": ["aces1.2_smoother_preset", "yrgb_smoother_preset"],
-    "copter_extentions": (".dng")
-}
+TRACK_POSTFIX = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["track_postfix"]
+COLORS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["colors"]
+EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["extentions"]
+FALSE_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["false_extentions"]
+RESOLVE_PROJECT_PRESETS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["project_presets"]
+COPTER_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["copter_extentions"]
 
 class DvrTimelineObject():
     """
@@ -98,7 +96,7 @@ class NameSetter:
                 for name, timecode in markers:
                     if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
                         # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name_new = self.prefix + name + self.postfix + ("", SETTINGS["track_postfix"] + str(track_index - 1))[self.set_track_id]
+                        name_new = self.prefix + name + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name_new)
                         logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
                         applied = True
@@ -118,7 +116,7 @@ class NameSetter:
                 for item in items:
                     if clip_under.GetStart() == item.GetStart():
                         # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
-                        name = self.prefix + item.GetName() + self.postfix + ("", SETTINGS["track_postfix"] + str(track_index - 1))[self.set_track_id]
+                        name = self.prefix + item.GetName() + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
                         clip_under.SetName(name)
                         logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
                         applied = True
@@ -271,9 +269,9 @@ class DeliveryPipline:
         """
         # Пресет ACES 1.2 RCM для динамического определения цветового пространства ACES
         # и автоматическое перелючение пресета на YRGB RCM при рендере коптеров .dng.
-        if self.project_preset == SETTINGS["project_presets"][0]:
+        if self.project_preset == RESOLVE_PROJECT_PRESETS[0]:
             if item.mp_item.GetName().lower().endswith(".dng"):
-                preset = SETTINGS["project_presets"][1]
+                preset = RESOLVE_PROJECT_PRESETS[1]
                 set_preset_var = self.project.SetPreset(preset)
                 if set_preset_var is not None:
                     logger.info(f"Применен пресет проекта: {preset}")
@@ -282,7 +280,7 @@ class DeliveryPipline:
                     self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
                     return False
             else:
-                preset = SETTINGS["project_presets"][0]
+                preset = RESOLVE_PROJECT_PRESETS[0]
                 set_preset_var = self.project.SetPreset(preset)
                 if set_preset_var is not None:
                     logger.info(f"Применен пресет проекта: {preset}")
@@ -293,7 +291,7 @@ class DeliveryPipline:
                 
         # Только YRGB RCM пресет.
         else:
-            preset = SETTINGS["project_presets"][1]
+            preset = RESOLVE_PROJECT_PRESETS[1]
             set_preset_var = self.project.SetPreset(preset)
             if set_preset_var is not None:
                 logger.info(f"Применен пресет проекта: {preset}")
@@ -490,18 +488,18 @@ class DeliveryPipline:
         resolution = None
 
         # Стандартное разрешение от final delivery res
-        if clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][0]:
+        if clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS + FALSE_EXTENTIONS) and clip_color == COLORS[0]:
             resolution = self.standart_resolution(clip)
         # 1.5-кратное увеличение разрешение от стандартного
-        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][1]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS + FALSE_EXTENTIONS) and clip_color == COLORS[1]:
             resolution = self.scale_1_5_resolution(clip)
         
         # 2-кратное увеличение разрешение от стандартного(условный 4К)
-        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][2]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS + FALSE_EXTENTIONS) and clip_color == COLORS[2]:
             resolution = self.scale_2_resolution(clip)
             
         # Полное съемочное разрешение
-        elif clip.GetName() != '' and clip.GetName().lower().endswith(SETTINGS["extentions"] + SETTINGS["false_extentions"]) and clip_color == SETTINGS["colors"][3]:
+        elif clip.GetName() != '' and clip.GetName().lower().endswith(EXTENTIONS + FALSE_EXTENTIONS) and clip_color == COLORS[3]:
             resolution = self.full_resolution(clip)
 
         return resolution
@@ -601,7 +599,7 @@ class DeliveryPipline:
         Пропускает итем, для последующей обработки вручную, при условии,
         что у клипа установлен дефолтный цвет 'Blue'.
         """
-        if item.clip_color == SETTINGS["colors"][4]:
+        if item.clip_color == COLORS[4]:
             return True
 
     def start_render(self, render_job) -> bool:
@@ -716,23 +714,23 @@ class DeliveryPipline:
                     clip = item.mp_item
 
                     # Проверка на раасширения (".mov", ".mp4", ".jpg")
-                    if clip.GetName().lower().endswith(SETTINGS["false_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
+                    if clip.GetName().lower().endswith(FALSE_EXTENTIONS) and not item.clip_color == COLORS[4]:
                         warnings_question.append((clip.GetName(), track_num))   
 
                     # Проверка на коптерное расширение .dng
-                    if clip.GetName().lower().endswith(SETTINGS["copter_extentions"]) and not item.clip_color == SETTINGS["colors"][4]:
+                    if clip.GetName().lower().endswith(COPTER_EXTENTIONS) and not item.clip_color == COLORS[4]:
                         warnings_question.append((clip.GetName(), track_num))   
 
                     # Сбор статусов для проверки хотя бы одного ввыделенного клипа на таймлайне
-                    if not item.clip_color == SETTINGS["colors"][4]:
+                    if not item.clip_color == COLORS[4]:
                         no_select = False
 
                     # Проверка на клип, покрашенный в невалидный цвет
-                    if item.clip_color not in SETTINGS["colors"]:
+                    if item.clip_color not in COLORS:
                         warnings.append(f"• Не валидный цвет клипа {clip.GetName()} на треке {track_num}")
 
                     # Проверка на валидность расширения клипа
-                    if not clip.GetName().lower().endswith(SETTINGS["extentions"]) and not clip.GetName().lower().endswith(SETTINGS["false_extentions"]):
+                    if not clip.GetName().lower().endswith(EXTENTIONS) and not clip.GetName().lower().endswith(FALSE_EXTENTIONS):
                         warnings.append(f"• Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
 
                     # Проверка на валидный ФПС
@@ -746,7 +744,7 @@ class DeliveryPipline:
                     
                     # Триггер однокадровых клипов и невалидного ретайма
                     try:
-                        if not item.clip_color == SETTINGS["colors"][4]:
+                        if not item.clip_color == COLORS[4]:
                             self.get_handles(item, hide_log=False)
                     except ZeroDivisionError:
                         warnings.append(f"• Фриз-фрейм или однокадровый клип '{clip.GetName()}' на треке {track_num} должен рендериться без захлестов")
@@ -1049,8 +1047,8 @@ class ExrDelivery(QWidget):
         self.set_track_id.setChecked(True)
 
         self.preset_combo = QComboBox()
-        self.preset_combo.addItems(SETTINGS["project_presets"])
-        self.preset_combo.setCurrentText(SETTINGS["project_presets"][0])
+        self.preset_combo.addItems(RESOLVE_PROJECT_PRESETS)
+        self.preset_combo.setCurrentText(RESOLVE_PROJECT_PRESETS[0])
         self.preset_combo.setMinimumWidth(180)
         self.export_cb = QCheckBox("Export .xml")
         self.handle_input = QLineEdit("3")
