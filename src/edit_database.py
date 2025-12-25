@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel,
     QTabWidget, QComboBox,  QTreeView, QHeaderView, QTextBrowser)
 from timecode import Timecode as tc
 from dvr_tools.css_style import apply_style
-from common_tools.edl_parsers import detect_edl_parser
+from common_tools.edl_parsers import detect_edl_parser, EDLParser
 from dvr_tools.logger_config import get_logger
 from config.config_loader import load_config
 from config.config import get_config
@@ -27,7 +27,7 @@ logger = get_logger(__file__)
 DATA_PATH = {"win32": GLOBAL_CONFIG["paths"]["editdatabase_path_win"], 
                         "darwin": GLOBAL_CONFIG["paths"]["editdatabase_path_mac"]}[sys.platform]
 
-def get_output_path(project: str, ext: str, report_name: str) -> str:
+def get_output_path(project: str, ext: str, report_name: str, subfolder=None) -> str:
     """
     Получение пути к бекапу отчета проверки секвенций.
     """
@@ -39,7 +39,7 @@ def get_output_path(project: str, ext: str, report_name: str) -> str:
             "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
         )
         / project
-        / GLOBAL_CONFIG["output_folders"]["edit_database"] / date
+        / GLOBAL_CONFIG["output_folders"]["edit_database"] / date / (subfolder if subfolder is not None else "")
         / f"{report_name}_{date}.{ext}"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,7 +67,7 @@ class EditDatabase:
             self.data[project] = {}
 
     def add_shot(self, project: str, shot_name: str, edit_name: str, shot_id: str, track_type: str, transition: str, 
-                 src_in: str, src_out: str, rec_in: str, rec_out: str, src_name: str, update_status) -> None:
+                 src_in: str, src_out: str, src_out_full: str, rec_in: str, rec_out: str, src_name: str, update_status) -> None:
         """
         Добавляет новый монтаж шота.
         Проверяет существует ли проект или нет.
@@ -90,6 +90,7 @@ class EditDatabase:
             "transition": transition,
             "src_in": src_in,
             "src_out": src_out,
+            "src_out_full": src_out_full,
             "rec_in": rec_in,
             "rec_out": rec_out,
             "is_actual": update_status,
@@ -389,7 +390,8 @@ class EDLInit(QObject):
                                 track_type=data.edl_track_type,
                                 transition=data.edl_transition,
                                 src_in=data.edl_source_in,
-                                src_out=data.edl_source_out_src,
+                                src_out=data.edl_source_out,
+                                src_out_full=data.edl_source_out_src,
                                 rec_in=data.edl_record_in,
                                 rec_out=data.edl_record_out,
                                 src_name=data.edl_source_name,
@@ -439,7 +441,7 @@ class EDLComparator(QObject):
         url = Path(file_path).resolve().as_uri()
         self.progress.emit(f'Посмотреть отчет: <a href="{url}">{url}</a></span>')
 
-    def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out, shot_name) -> bool:
+    def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out, shot_name, target_shot_data) -> bool:
         """
         Сравнивает диапазоны таймкодов.
         Возвращает bool есть ли пересечение.
@@ -466,9 +468,11 @@ class EDLComparator(QObject):
                 (start_diff == 0 and end_diff < 0)
                     ):
                 self.reedit_data.setdefault('Less', []).append((shot_name, ~start_diff + 1, end_diff))
+                self.reedit_data_edl.setdefault('Less', []).append(target_shot_data)
 
             else:
                 self.reedit_data.setdefault('More', []).append((shot_name, ~start_diff + 1, end_diff))
+                self.reedit_data_edl.setdefault('More', []).append(target_shot_data)
 
             return True
         return False
@@ -488,6 +492,7 @@ class EDLComparator(QObject):
         for te_shot in self.target_edit:
             if te_shot not in self.base_edit.keys():
                 self.reedit_data.setdefault('New', []).append(te_shot)
+                self.reedit_data_edl.setdefault('New', []).append(self.target_edit[te_shot])
 
     def export_to_excel(self) -> None:
         """
@@ -553,6 +558,28 @@ class EDLComparator(QObject):
         
         except Exception as e:
             raise 
+        
+    def create_output_edl(self, shot: EDLParser, output) -> None:
+        """
+        Метод формирует аутпут файл в формате, пригодном для отображения оффлайн клипов в Resolve и AVID.
+        """
+        str1 = (f"{shot['id']} {shot['shot_name']} "
+                f"{shot['track_type']} {shot['transition']} "
+                f"{shot['src_in']} {shot['src_out']} "
+                f"{shot['rec_in']} {shot['rec_out']}")
+        str2 = f"\n* FROM CLIP NAME: {shot['shot_name']}\n"
+        output.write(str1)
+        output.write(str2)
+
+    def sort_output(self, reedit_data: dict) -> None:
+        """
+        Сортирует аутпут в зависимости от категории изменений.
+        """
+        for status, data in reedit_data.items():
+            for shot_data in data:
+                output_path = get_output_path(self.project, 'edl', status , subfolder='reedit_edl')
+                with open(output_path, 'a', encoding="utf-8") as o:
+                    self.create_output_edl(shot_data, o)
 
     def find_cross(self) -> None:
         """
@@ -569,19 +596,20 @@ class EDLComparator(QObject):
                             self.fps,
                             base_shot_data["src_in"], base_shot_data["src_out"],
                             target_shot_data["src_in"], target_shot_data["src_out"],
-                            base_shot_data["shot_name"]
+                            base_shot_data["shot_name"], target_shot_data
                         ):
                             break
                         else:
-                            self.reedit_data.setdefault('Phase changed', []).append(base_shot_data['shot_name'])
+                            self.reedit_data_edl.setdefault('Phase changed', []).append(base_shot_data)
                     else:
-                        self.reedit_data.setdefault('Take changed', []).append(base_shot_data['shot_name'])
+                        self.reedit_data_edl.setdefault('Take changed', []).append(base_shot_data)
 
     def run(self) -> None:
         """
         Основная логика.
         """
         self.reedit_data = {}
+        self.reedit_data_edl = {}
         try:
             db = EditDatabase(DATA_PATH, self.project)
 
@@ -602,6 +630,8 @@ class EDLComparator(QObject):
             self.is_new()
             
             result_path = self.export_to_excel()
+
+            self.sort_output(self.reedit_data_edl)
             
             self.out_hyper(result_path)
 
