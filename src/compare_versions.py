@@ -1,6 +1,6 @@
 import sys
 from collections import Counter
-from datetime import date, datetime as dt
+from datetime import datetime as dt
 from pprint import pformat
 import os
 import openpyxl
@@ -22,7 +22,7 @@ from dvr_tools.resolve_utils import ResolveObjects
 
 logger = get_logger(__file__)
 
-EXTENTIONS = ('.exr', '.mov', '.jpg')
+EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["compare_versions"]["extentions"]
 
 class VersionComparer:
 
