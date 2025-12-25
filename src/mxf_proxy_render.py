@@ -6,8 +6,7 @@ import math
 import time
 from pprint import pformat
 from pathlib import Path
-import DaVinciResolveScript as dvr
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import (QComboBox, QListView, QLineEdit, QRadioButton,
                              QCheckBox, QLabel, QMessageBox, QWidget, QVBoxLayout,
                              QGroupBox, QHBoxLayout, QPushButton, QSizePolicy, QFileDialog)
@@ -16,20 +15,19 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveTimelineItemExtractor, ResolveObjects
+from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
-SETTINGS = {
-    "burn_in_win_path": r"J:\003_transcode_to_vfx\projects\Others\burn_in_presets",
-    "burn_in_mac_path": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/burn_in_presets",
-    "lut_path_win": r'C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\LUTS_FOR_PROXY',
-    "lut_path_mac": r'/Library/Application Support/Blackmagic Design/DaVinci Resolve/LUT/LUTS_FOR_PROXY/',
-    "timeline_preset_path_win": r"J:\003_transcode_to_vfx\projects\Others\timeline_presets",
-    "timeline_preset_path_mac": r"/Volumes/share2/003_transcode_to_vfx/projects/Others/timeline_presets/",
-    "all_extensions": (".mxf", ".braw", ".arri", ".mov", ".r3d", ".mp4", ".dng", ".jpg", ".cine"),
-    "standart_extensions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
-    "excepted_extensions": ('.mov', '.mp4', '.jpg')
-}
+BURN_IN_PRESET = {"win32": GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["burn_in_win_path"], 
+                    "darwin": GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["burn_in_mac_path"]}[sys.platform]
+LUT_PATH = {"win32": GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["lut_path_win"], 
+                    "darwin": GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["lut_path_mac"]}[sys.platform]
+TIMELINE_PRESET = {"win32": GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["timeline_preset_path_win"], 
+                    "darwin": GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["timeline_preset_path_mac"]}[sys.platform]
+ALL_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["all_extentions"]
+STANDART_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["standart_extentions"]
+EXCEPTED_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["proxy_render"]["excepted_extentions"]
 
 class RenderPipline:
     """
@@ -153,7 +151,7 @@ class RenderPipline:
         for clip in items_list:
             name = clip.GetName().lower()
             if clip.GetClipProperty("Type") == "Video" or "." in name:
-                if self.add_all_extensions or not name.endswith(SETTINGS["excepted_extensions"]):
+                if self.add_all_extensions or not name.endswith(EXCEPTED_EXTENTIONS):
                     if self.set_fps and float(clip.GetClipProperty("FPS")) != float(self.project_fps):
                         self.set_project_fps(clip)
                     source_items.append(clip)
@@ -166,7 +164,7 @@ class RenderPipline:
         Ищет .mov, .mp4, .jpg клипы в current_source_folder и перемещает их в
         source_folder/Excepted clips/{current_source_folder}.
         """
-        valid_extensions = SETTINGS["excepted_extensions"]
+        valid_extensions = EXCEPTED_EXTENTIONS
         root_folder = self.media_pool.GetRootFolder()
 
         # Находим папку source_root_folder
@@ -330,7 +328,7 @@ class RenderPipline:
         иначе вручную обрабатываем mov/mp4/jpg, а в основной поток идёт только source_items.
         """
         if self.add_all_extensions:
-            extensions = SETTINGS["all_extensions"]
+            extensions = ALL_EXTENTIONS
             return extensions, source_items
         else:
             filtred_clips = self.get_filtered_clips(current_source_folder)
@@ -339,11 +337,11 @@ class RenderPipline:
                 return None, None
             
             if filtred_clips:
-                filtred_sorted_resolutions = self.get_resolutions_dict(filtred_clips, extensions=SETTINGS["excepted_extensions"])
+                filtred_sorted_resolutions = self.get_resolutions_dict(filtred_clips, extensions=EXCEPTED_EXTENTIONS)
                 self.get_timelines(filtred_sorted_resolutions)
                 self.media_pool.SetCurrentFolder(current_source_folder)
 
-            extensions = SETTINGS["standart_extensions"]
+            extensions = STANDART_EXTENTIONS
             return extensions, source_items
         
     def set_sound_folder(self, current_folder_list, current_folder)-> None:
@@ -739,9 +737,9 @@ class ResolveGUI(QWidget):
         self.subfolders_list = CheckableComboBox()
         self.subfolders_list.setFixedWidth(180)
 
-        self.lut_base_path = SETTINGS["lut_path_win"] if sys.platform == "win32" else SETTINGS["lut_path_mac"]
-        self.timeline_preset_path = SETTINGS["timeline_preset_path_win"] if sys.platform == "win32" else SETTINGS["timeline_preset_path_mac"]
-        self.burn_in_base_path = SETTINGS["burn_in_win_path"] if sys.platform == "win32" else SETTINGS["burn_in_mac_path"]
+        self.lut_base_path = LUT_PATH
+        self.timeline_preset_path = TIMELINE_PRESET
+        self.burn_in_base_path = BURN_IN_PRESET
 
         self.resolve = self.is_connect_resolve()
 
