@@ -54,12 +54,7 @@ STRUCTURE_001_FOLDER = {
     "05_restore": {}
 }
 
-STRUCTURE_003_TRANSCODE_PROJECTS = {
-    "Autoconform": {},
-    "Check_versions": {},
-    "Reports": {},
-    "tmp": {},
-}
+STRUCTURE_003_TRANSCODE_PROJECTS = {}
 
 STRUCTURE_004_MASTERS = {
     "01_tmp": {},
