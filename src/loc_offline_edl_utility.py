@@ -118,6 +118,7 @@ class LogicProcessor:
             if no_markers:
                 self.signals.warning_signal.emit(f"Маркеры не были созданы.")
                 return False 
+            
             logger.info("Маркеры успешно установлены.")
             return True
         except Exception as e:
@@ -151,6 +152,8 @@ class LogicProcessor:
                         output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
                         o.write(output_string + "\n")
                         ob.write(output_string + "\n")
+
+            logger.info(f"Сформированы TXT файлы: \n{path}\n{backup_path}")
             logger.info("Локаторы успешно созданы.")
             return True
         
@@ -207,7 +210,7 @@ class LogicProcessor:
                     o.write(f"{index_str}\n{timecode_str}\n{name_str}\n\n")
                     ob.write(f"{index_str}\n{timecode_str}\n{name_str}\n\n")
 
-            logger.info(f"SRT файл успешно создан: {result_path}")
+            logger.info(f"Сформированы SRT файлы: \n{result_path}\n{backup_path}")
             return True
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания SRT файла {e}")
@@ -252,7 +255,7 @@ class LogicProcessor:
                         o.write(f"* FROM CLIP NAME: {shot_name}\n")
                         ob.write(f"* FROM CLIP NAME: {shot_name}\n")
 
-            logger.info(f"EDL файл из SRT успешно создан: {result_path}")
+            logger.info(f"Сформированы EDL файлы: \n{result_path}\n{backup_path}")
             return True
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания EDL файлов из SRT {e}")
@@ -314,7 +317,7 @@ class LogicProcessor:
                                 self.create_output_edl(shot, o, marker_name)
                                 self.create_output_edl(shot, ob, marker_name)
 
-                logger.info("EDL файл успешно создан.")
+                logger.info(f"Сформированы файлы: \n{self.output_path}\n{backup_path}")
                 self.kill_tmp_edl(tmp_edl)
                 return True
             else:
@@ -412,6 +415,8 @@ class LogicProcessor:
                     if re.search(self.config["patterns"]["compare_versions_shot_no_versions_mask"], shot.edl_shot_name):
                         self.create_output_edl(shot, o)
                         self.create_output_edl(shot, ob)
+
+            logger.info(f"Сформированы EDL файлы: \n{output_path}\n{backup_path}")
             logger.info("EDL файл успешно создан.")
             return True
 
