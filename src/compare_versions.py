@@ -1,7 +1,6 @@
 import sys
 from collections import Counter
-import DaVinciResolveScript 
-from datetime import date
+from datetime import date, datetime as dt
 from pprint import pformat
 import os
 import openpyxl
@@ -9,8 +8,6 @@ import re
 import bisect
 import csv
 from pathlib import Path
-from itertools import count
-from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QLabel, QLineEdit, QPushButton, QRadioButton, 
                              QVBoxLayout, QHBoxLayout, QGroupBox, QTextEdit, QComboBox, 
                              QWidget, QMessageBox, QSizePolicy, QButtonGroup)
@@ -38,6 +35,24 @@ class VersionComparer:
         self.user_config = user_config
         self.signals = signals
         self.gui = gui
+
+    def get_output_path(self, project: str, ext: str, report_name: str) -> str:
+        """
+        Получение пути к отчету проверки.
+        """
+        date = dt.now().strftime("%Y%m%d")
+
+        output_path = (
+            Path(
+                {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"],
+                "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+            )
+            / project
+            / GLOBAL_CONFIG["output_folders"]["compare_versions"] / date
+            / f"{report_name}_{date}.{ext}"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        return output_path
 
     def get_timeline_items(self, start_track: int, end_track: int, timeline: ResolveObjects) -> list:
         """
@@ -248,7 +263,7 @@ class VersionComparer:
         Экспорт результатов проверки.
         """   
         try:
-            output_path = os.path.join(self.output_path, f'result_{date.today()}.txt')
+            output_path = self.get_output_path(self.project, "txt", f"{self.project}_compare_report")
             with open(output_path, 'a', encoding='utf-8') as o:
                 o.write(self.resolve_reel + " РИЛ" + "\n")      
                 for key, value in self.result_list.items():
