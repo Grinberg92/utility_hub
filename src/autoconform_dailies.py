@@ -36,7 +36,9 @@ ROOT_PROJECTS = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"],
                         "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
 SHOTS_PATH = {"win32": GLOBAL_CONFIG["scripts_settings"]["autoconform"]["shots_path_win"], 
                         "darwin": GLOBAL_CONFIG["scripts_settings"]["autoconform"]["shots_path_mac"]}[sys.platform]
-OUTPUT_FOLDER = GLOBAL_CONFIG["output_folders"]["autoconform"]
+AUTOCONFORM_OUTPUT = GLOBAL_CONFIG["output_folders"]["autoconform"]
+
+SEQCHECKER_OUTPUT = GLOBAL_CONFIG["output_folders"]["sequence_checker"]
 
 class OTIOCreator:
     """
@@ -1138,12 +1140,9 @@ class EXRCheckerMixin:
         date_folder = dt.now().strftime("%Y%m%d")
 
         output_path = (
-            Path(
-                {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"],
-                "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
-            )
+            Path(ROOT_PROJECTS)
             / self.project_menu.currentText().strip()
-            / GLOBAL_CONFIG["output_folders"]["sequence_checker"] / date_folder
+            / SEQCHECKER_OUTPUT / date_folder
             / f"sequence_check_report_{timestamp_file}.txt"
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1621,7 +1620,7 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         return project_list
 
     def select_edl(self):
-        init_dir = Path(ROOT_PROJECTS) / self.project_menu.currentText() / str(OUTPUT_FOLDER)
+        init_dir = Path(ROOT_PROJECTS) / self.project_menu.currentText() / str(AUTOCONFORM_OUTPUT)
         init_dir.mkdir(parents=True, exist_ok=True)
         path, _ = QFileDialog.getOpenFileName(self, 
                                               "Choose EDL file", 
@@ -1640,7 +1639,7 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
 
     def save_otio(self):
 
-        init_dir = Path(ROOT_PROJECTS) / self.project_menu.currentText() / str(OUTPUT_FOLDER)
+        init_dir = Path(ROOT_PROJECTS) / self.project_menu.currentText() / str(AUTOCONFORM_OUTPUT)
         init_dir.mkdir(parents=True, exist_ok=True)
         path, _ = QFileDialog.getSaveFileName(self, 
                                               "Save OTIO file", 
