@@ -2,6 +2,7 @@ import openpyxl
 from timecode import Timecode as tc
 import sys
 import os
+from itertools import count
 from PyQt5.QtWidgets import (
     QApplication, QWidget,  QPushButton, QVBoxLayout,
     QFileDialog, QLineEdit, QMessageBox, QFormLayout
@@ -10,13 +11,15 @@ from PyQt5.QtCore import Qt
 from dvr_tools.css_style import apply_style
 
 class LocatorCreator:
-    def __init__(self, excel_path, output_path, shift_timecode, sheet_name, shot_column, timecode_column, start_row):
+    def __init__(self, excel_path, output_path, shift_timecode, sheet_name, shot_column, src_start_tc, rec_start_tc, duration, start_row):
         self.excel_path = excel_path
         self.output_path = output_path
         self.shift_timecode = shift_timecode
         self.sheet_name = sheet_name
         self.shot_column = shot_column
-        self.timecode_column = timecode_column
+        self.src_start_tc = src_start_tc
+        self.rec_start_tc = rec_start_tc
+        self.duration = duration
         self.start_row = start_row
 
     def change_timecode(self, excel_timecode):
@@ -26,14 +29,21 @@ class LocatorCreator:
         timecode = tc(24, excel_timecode).frames
         return tc(24, frames=timecode + self.shift_timecode)
     
-    def run(self):
+    def timecode_to_frame(self, fps: int, timecode: str) -> int:
         """
-        Получение данных о столбцах с таймкодами и шотами и дальнейшая конвертация в локаторы для Avid.
+        Переводит таймкоды в значения фреймов.
         """
-        workbook = openpyxl.load_workbook(self.excel_path)
-        sheet = workbook[self.sheet_name]
+        return tc(fps, timecode).frames
 
-        raw_data = zip(sheet[self.timecode_column][self.start_row - 1:], 
+    def frame_to_timecode(self, fps: int, frames: int) -> str:
+        """
+        Переводит фреймы в значения таймкодов.
+        """
+        return str(tc(fps, frames=frames))
+    
+    def create_loc(self, sheet):
+
+        raw_data = zip(sheet[self.rec_start_tc][self.start_row - 1:], 
                     sheet[self.shot_column][self.start_row -1:])
         
         # Фильтр на пустые строки
@@ -49,11 +59,61 @@ class LocatorCreator:
                 output_string = f'PGM	{str(timecode)}	V3	yellow	{shot_name}'
                 output.write(output_string + "\n")
 
+        
+    def create_output_edl(self, shot: dict, output) -> None:
+        """
+        Метод формирует аутпут файл в формате, пригодном для отображения оффлайн клипов в Resolve и AVID.
+
+        :param output: Файловый объект.
+        """
+        str1 = (f"{shot['id']:05} {shot['shot_name']} "
+                f"{'V'} {'C'} "
+                f"{shot['src_in']} {shot['src_out']} "
+                f"{shot['rec_in']} {shot['rec_out']}")
+        str2 = f"\n* FROM CLIP NAME: {shot['shot_name']}\n"
+        output.write(str1)
+        output.write(str2)
+
+    def create_edl(self, sheet):
+
+        raw_data = zip(count(1), sheet[self.src_start_tc][self.start_row - 1:], sheet[self.rec_start_tc][self.start_row - 1:], 
+                       sheet[self.duration][self.start_row - 1:], sheet[self.shot_column][self.start_row -1:])
+        
+        shot_data = [(id, src_tc, rec_tc, dur, shot) for id, src_tc, rec_tc, dur, shot in raw_data if src_tc.value and rec_tc.value and dur.value and shot.value]
+
+        tmp = {}
+        output_path = r"J:\003_transcode_to_vfx\projects\edl.edl"
+        with open(output_path, "a", encoding='utf8') as output:
+            for data in shot_data:
+                id, src_in, rec_in, duration, shot_name = data
+                src_out = self.frame_to_timecode(24, self.timecode_to_frame(24, src_in.value) + duration.value + 2) 
+                rec_out = self.frame_to_timecode(24, self.timecode_to_frame(24, rec_in.value) + duration.value + 2)
+
+                tmp["src_in"] = src_in.value
+                tmp["src_out"] = src_out
+                tmp["rec_in"] = rec_in.value
+                tmp["rec_out"] = rec_out
+                tmp["id"] = id
+                tmp["shot_name"] = shot_name.value
+
+                self.create_output_edl(tmp, output)
+    
+    def run(self):
+        """
+        Получение данных о столбцах с таймкодами и шотами и дальнейшая конвертация в локаторы для Avid.
+        """
+        workbook = openpyxl.load_workbook(self.excel_path)
+        sheet = workbook[self.sheet_name]
+
+        self.create_loc(sheet)
+
+        self.create_edl(sheet)
+
 class LocatorGUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Locators from EXCEL")
-        self.setFixedSize(500, 280)
+        self.resize(500, 280)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
         # UI elements
@@ -61,9 +121,11 @@ class LocatorGUI(QWidget):
         self.output_input = QLineEdit()
         self.shift_input = QLineEdit("15")
 
-        self.sheet_name_input = QLineEdit("")
-        self.shot_column_input = QLineEdit("")
-        self.timecode_column_input = QLineEdit("")
+        self.sheet_name_col = QLineEdit("")
+        self.shot_column_col = QLineEdit("")
+        self.src_start_tc_col = QLineEdit("")
+        self.rec_start_tc_col = QLineEdit("")
+        self.duration_col = QLineEdit("")
         self.start_row_input = QLineEdit("1")
 
         # Кнопки
@@ -84,8 +146,8 @@ class LocatorGUI(QWidget):
         # Ширина для всех полей
         for line_edit in [
             self.excel_input, self.output_input, self.shift_input,
-            self.sheet_name_input, self.shot_column_input,
-            self.timecode_column_input, self.start_row_input
+            self.sheet_name_col, self.shot_column_col,
+            self.src_start_tc_col, self.rec_start_tc_col, self.duration_col, self.start_row_input
         ]:
             line_edit.setFixedWidth(250)
 
@@ -93,9 +155,11 @@ class LocatorGUI(QWidget):
         form_layout.addRow("Excel file:", self._with_button(self.excel_input, self.browse_excel_btn))
         form_layout.addRow("Output path:", self._with_button(self.output_input, self.browse_output_btn))
         form_layout.addRow("Shift timecode:", self.shift_input)
-        form_layout.addRow("Sheet name:", self.sheet_name_input)
-        form_layout.addRow("Shot column:", self.shot_column_input)
-        form_layout.addRow("Timecode column:", self.timecode_column_input)
+        form_layout.addRow("Sheet name:", self.sheet_name_col)
+        form_layout.addRow("Shot col:", self.shot_column_col)
+        form_layout.addRow("Source start timecode col:", self.src_start_tc_col)
+        form_layout.addRow("Record start timecode col:", self.rec_start_tc_col)
+        form_layout.addRow("Duration col:", self.duration_col)
         form_layout.addRow("Start row:", self.start_row_input)
 
         layout.addLayout(form_layout)
@@ -135,9 +199,11 @@ class LocatorGUI(QWidget):
     def run_logic(self):
         excel_path = self.excel_input.text().strip()
         output_path = self.output_input.text().strip()
-        sheet_name = self.sheet_name_input.text().strip()
-        shot_column = self.shot_column_input.text().strip().upper()
-        timecode_column = self.timecode_column_input.text().strip().upper()
+        sheet_name = self.sheet_name_col.text().strip()
+        shot_column = self.shot_column_col.text().strip().upper()
+        src_start_tc = self.src_start_tc_col.text().strip().upper()
+        rec_start_tc = self.rec_start_tc_col.text().strip().upper()
+        duration = self.duration_col.text().strip().upper()
 
         try:
             start_row = int(self.start_row_input.text().strip())
@@ -160,7 +226,7 @@ class LocatorGUI(QWidget):
             return
 
         try:
-            logic = LocatorCreator(excel_path, output_path, shift, sheet_name, shot_column, timecode_column, start_row)
+            logic = LocatorCreator(excel_path, output_path, shift, sheet_name, shot_column, src_start_tc, rec_start_tc, duration, start_row)
             
             logic.run()
             QMessageBox.information(self, "Success", "Locators created successfully.")
