@@ -66,8 +66,10 @@ class EditDatabase:
         if project not in self.data:
             self.data[project] = {}
 
-    def add_shot(self, project: str, shot_name: str, edit_name: str, shot_id: str, track_type: str, transition: str, 
-                 src_in: str, src_out: str, src_out_full: str, rec_in: str, rec_out: str, src_name: str, update_status) -> None:
+    def add_shot(self, project: str, shot_name: str, edit_name: str, shot_id: str,
+                track_type: str, transition: str, 
+                src_in: str, src_out: str, src_out_full: str, rec_in: str, 
+                rec_out: str, src_name: str, update_status) -> None:
         """
         Добавляет новый монтаж шота.
         Проверяет существует ли проект или нет.
@@ -237,19 +239,20 @@ class ShotRestorer(QObject):
         self.target_edit = target_edit_path
         self.logic = logic
 
-    def timecode_to_frame(self, fps, timecode: str) -> int:
+    def timecode_to_frame(self, fps: int, timecode: str) -> int:
         """
         Переводит таймкоды в значения фреймов.
         """
         return tc(fps, timecode).frames
 
-    def frame_to_timecode(self, fps, frames: int) -> str:
+    def frame_to_timecode(self, fps: int, frames: int) -> str:
         """
         Переводит фреймы в значения таймкодов.
         """
         return str(tc(fps, frames=frames))
 
-    def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out) -> bool:
+    def overlap_range(self, fps: int, base_src_in: str, base_src_out: str, targ_src_in: str,
+                       targ_src_out: str) -> bool:
         """
         Возвращает True, если два диапазона таймкодов пересекаются хотя бы в одном кадре.
         """
@@ -351,7 +354,8 @@ class EDLInit(QObject):
     finished = pyqtSignal(str) 
     error = pyqtSignal(str) 
 
-    def __init__(self, fps: int, edl_path: str, project: str, update_status: bool, settings_config: dict):
+    def __init__(self, fps: int, edl_path: str, project: str, update_status: bool,
+                  settings_config: dict):
         super().__init__()
         self.fps = fps
         self.edl_path = edl_path
@@ -422,13 +426,13 @@ class EDLComparator(QObject):
         self.base_logic = base_logic
         self.target_logic = target_logic
 
-    def timecode_to_frame(self, fps, timecode: str) -> int:
+    def timecode_to_frame(self, fps: int, timecode: str) -> int:
         """
         Переводит таймкоды в значения фреймов.
         """
         return tc(fps, timecode).frames
 
-    def frame_to_timecode(self, fps, frames: int) -> str:
+    def frame_to_timecode(self, fps: int, frames: int) -> str:
         """
         Переводит фреймы в значения таймкодов.
         """
@@ -441,7 +445,8 @@ class EDLComparator(QObject):
         url = Path(file_path).resolve().as_uri()
         self.progress.emit(f'Посмотреть отчет: <a href="{url}">{url}</a></span>')
 
-    def overlap_range(self, fps, base_src_in, base_src_out, targ_src_in, targ_src_out, shot_name, target_shot_data) -> bool:
+    def overlap_range(self, fps: int, base_src_in: str, base_src_out: str, targ_src_in: str, 
+                      targ_src_out: str, shot_name: str, target_shot_data: str) -> bool:
         """
         Сравнивает диапазоны таймкодов.
         Возвращает bool есть ли пересечение.
@@ -559,9 +564,11 @@ class EDLComparator(QObject):
         except Exception as e:
             raise 
         
-    def create_output_edl(self, shot: EDLParser, output) -> None:
+    def create_output_edl(self, shot: dict, output) -> None:
         """
         Метод формирует аутпут файл в формате, пригодном для отображения оффлайн клипов в Resolve и AVID.
+
+        :param output: Файловый объект.
         """
         str1 = (f"{shot['id']} {shot['shot_name']} "
                 f"{shot['track_type']} {shot['transition']} "
@@ -690,7 +697,7 @@ class PhaseChecker(QObject):
                         f"{src_in} {src_out} "
                         f"{rec_in} {rec_out}\n")
 
-    def get_rec_out(self, src_in, src_out, rec_in) -> str:
+    def get_rec_out(self, src_in: str, src_out: str, rec_in: str) -> str:
         """
         Метод вычилсяет rec_out таймкод.
         """
@@ -698,7 +705,7 @@ class PhaseChecker(QObject):
         rec_out = self.frame_to_timecode(self.timecode_to_frame(rec_in) + src_duration)
         return rec_out
 
-    def get_max_range(self, filtred_data) -> list:
+    def get_max_range(self, filtred_data: dict) -> list:
         """
         Метод ищет самый ранний таймкод source_in и самый поздный таймкод source_out, 
         высчитывает rec_in и rec_out и устанавливает полученные значения в донора.
@@ -741,7 +748,7 @@ class PhaseChecker(QObject):
 
         return result
 
-    def compare(self, base_data, trg_data_list) -> None:
+    def compare(self, base_data: dict, trg_data: dict) -> None:
         """
         Метод сравнивает сорс диапазон шота в базовом монтаже с диапазонами
         из выбранных для сравнения(trg_data_list) монтажей этого шота.
@@ -752,7 +759,7 @@ class PhaseChecker(QObject):
         shot_name = base_data["shot_name"]
 
         warnings = []
-        for trg_data in trg_data_list:
+        for trg_data in trg_data:
             trg_src_in = self.timecode_to_frame(trg_data["src_in"])
             trg_src_out = self.timecode_to_frame(trg_data["src_out_full"])
 
@@ -785,9 +792,9 @@ class PhaseChecker(QObject):
 
             self.filtred_data = {}
             for base_shot_name, base_shot_data in base_edit.items():
-                for trg_shot_name, trg_shot_data_list in target_edits.items():
+                for trg_shot_name, trg_shot_data in target_edits.items():
                     if base_shot_name == trg_shot_name:
-                        self.compare(base_shot_data, trg_shot_data_list)
+                        self.compare(base_shot_data, trg_shot_data)
                             
             if self.filtred_data:
                 adjusted_ranges = self.get_max_range(self.filtred_data)
