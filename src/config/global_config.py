@@ -43,7 +43,8 @@ GLOBAL_CONFIG = {
         "edl_processor": "edl_processor",
         "autoconform": "autoconform",
         "compare_versions": "compare_versions",
-        "ocf_color_and_fps": "resolutions_table" 
+        "ocf_color_and_fps": "resolutions_table",
+        "edl_filter": "edl_filter"  
     },
 
     "scripts_settings":{
