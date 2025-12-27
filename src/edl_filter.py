@@ -8,13 +8,27 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
-from common_tools.edl_parsers import detect_edl_parser
+from common_tools.edl_parsers import detect_edl_parser, EDLParser
 
 logger = get_logger(__file__)
 
-def filter_edl(self, edl_path: str, input_shots: list[str], fps) -> str:
+def create_output_edl(shot: EDLParser, output) -> None:
     """
-    Пересобирает шоты в EDL при нахождении их в списке input_ids
+    Метод формирует аутпут файл в формате, пригодном для отображения оффлайн клипов в Resolve и AVID.
+
+    :param output: Файловый объект.
+    """
+    str1 = (f"{shot.edl_record_id} {shot.edl_shot_name} "
+            f"{shot.edl_track_type} {shot.edl_transition} "
+            f"{shot.edl_source_in} {shot.edl_source_out} "
+            f"{shot.edl_record_in} {shot.edl_record_out}")
+    str2 = f'\n* FROM CLIP NAME: {shot.edl_shot_name}\n'
+    output.write(str1)
+    output.write(str2)
+
+def filter_edl(self, edl_path: str, input_shots: list[str], fps: int) -> str:
+    """
+    Пересобирает шоты в EDL при нахождении их в списке input_shots.
     """
     logger.info("Start process")
     edl_parser = detect_edl_parser(fps, edl_path=edl_path)
@@ -30,10 +44,13 @@ def filter_edl(self, edl_path: str, input_shots: list[str], fps) -> str:
     logger.info(f"Output: {output_path}")
 
     # Поиск шота из EDL в списке input_shots
+    with open(output_path, "w", encoding="utf-8") as _:
+        pass
+
     for shot_data in edl_shot_data:
         with open(output_path, "a", encoding="utf-8") as f:
             if shot_data.edl_shot_name in input_shots_data: 
-                f.write(f"{shot_data.edl_record_id}  {shot_data.edl_shot_name}   V     C        {shot_data.edl_source_in} {shot_data.edl_source_out} {shot_data.edl_record_in} {shot_data.edl_record_out}\n")    
+                create_output_edl(shot_data, f)
     
     # Поиск шотов отсутствующих в EDL
     not_found_shots = []
@@ -95,19 +112,19 @@ class EDLFilterApp(QMainWindow):
 
     def run_filter(self):
         if not self.edl_path:
-            QMessageBox.warning(self, "Warning", "Сначала выберите файл EDL")
-            logger.warning("Сначала выберите файл EDL")
+            QMessageBox.warning(self, "Warning", "Не выбран EDL файл")
+            logger.warning("Не выбран EDL файл")
             return
         
         else:
             if not os.path.exists(self.edl_path):
                 QMessageBox.warning(self, "Warning", "Указан несуществующий путь к EDL файлу")
-                logger.warning("Сначала выберите файл EDL")
+                logger.warning("Указан несуществующий путь к EDL файлу")
                 return
         
         if not self.ids_edit.toPlainText().strip():
-            QMessageBox.warning(self, "Warning", "Добавьте input shots")
-            logger.warning("Добавьте input shots")
+            QMessageBox.warning(self, "Warning", "Добавьте шоты в input shot names")
+            logger.warning("Добавьте шоты в input shot names")
             return
 
         ids_raw = self.ids_edit.toPlainText().strip()
