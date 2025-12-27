@@ -346,7 +346,7 @@ class ShotRestorer(QObject):
             if processed_shots_tmp:                  
                 self.show_duplicates(processed_shots_tmp)
 
-            logger.info(f"Сформированы файлы: \n{output_path}\n{backup_path}")
+            logger.info(f"Сформированы файлы: \n{output_path}\n{backup_path}\n{loc_path}\n{loc_backup_path}")
             self.finished.emit(f"Обработка завершена!")
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
