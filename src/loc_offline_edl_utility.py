@@ -7,7 +7,7 @@ import sys
 import os
 from pathlib import Path
 from PyQt5 import QtWidgets, QtCore
-from datetime import datetime as dt
+from datetime import datetime as dt, date as d
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QRadioButton,
     QLineEdit, QComboBox, QGroupBox, QCheckBox, QPushButton, QSizePolicy, QApplication, QFileDialog, QFrame)
@@ -132,10 +132,10 @@ class LogicProcessor:
             if not markers_list:
                 return
             
-            path = Path(self.locator_output_path) / f"{self.timeline.GetName()}.txt"
-            backup_path = get_output_path(self.project_name, "txt", f"{self.timeline.GetName()}_AVID_LOC")
+            path = Path(self.locator_output_path) / f"{self.timeline.GetName()}_AVID_LOC_{d.today()}.txt"
+            backup_path = get_output_path(self.project_name, "txt", f"{self.timeline.GetName()}_AVID_LOC_{d.today()}")
 
-            with open(path, "a", encoding='utf8') as o, open(backup_path, "a", encoding='utf8') as ob:
+            with open(path, "w", encoding='utf8') as o, open(backup_path, "w", encoding='utf8') as ob:
 
                 for name, timecode in markers_list:
                     if self.shot_filter:
@@ -197,7 +197,8 @@ class LogicProcessor:
             result_path = Path(str(edl_path).replace(".edl", "_converted.srt"))
             backup_path = get_output_path(self.project_name, "edl", os.path.basename(edl_path).replace(".edl", f"_converted"))
             items_data = self.get_edl_data()
-            with open(result_path, "a" ,encoding="utf-8") as o, open(backup_path, "a" ,encoding="utf-8") as ob:
+
+            with open(result_path, "w" ,encoding="utf-8") as o, open(backup_path, "w" ,encoding="utf-8") as ob:
                 for index, data in enumerate(items_data, start=1):
                     name, start_tc, end_tc = data
                     index_str = index
@@ -232,6 +233,9 @@ class LogicProcessor:
             result_path = Path(str(srt_path).replace(".srt", "_converted.edl"))
             backup_path = get_output_path(self.project_name, "srt", os.path.basename(srt_path).replace(".srt", f"_converted"))
 
+            with open(result_path, 'w', encoding='utf-8') as o, open(backup_path, 'w', encoding='utf-8') as ob:
+                pass
+
             with open(srt_path, 'r', encoding='utf-8') as input:
                 srt = input.read().strip().split('\n\n')
 
@@ -245,6 +249,7 @@ class LogicProcessor:
                     src_in = "00:00:00:00"
                     src_out = self.frame_to_timecode(self.timecode_to_frame(src_in) + rec_duration)
                     shot_name = shot_name.strip("<b>").strip("</b>")
+
                     with open(result_path, 'a', encoding='utf-8') as o, open(backup_path, 'a', encoding='utf-8') as ob:
                         # Жестко придерживаться табуляции, что бы корректно принимал AVID
                         o.write(f"000{number}  {shot_name} V     C        {src_in} {src_out} {record_in} {record_out}\n")
@@ -407,7 +412,7 @@ class LogicProcessor:
             backup_path = get_output_path(self.project_name, "edl", os.path.basename(edl_path).replace(".edl", f"_converted_to_v23"))
             parser = detect_edl_parser(fps=self.fps, edl_path=edl_path)
 
-            with open(output_path, 'a', encoding="utf-8") as o, open(backup_path, 'a', encoding="utf-8") as ob:
+            with open(output_path, 'w', encoding="utf-8") as o, open(backup_path, 'w', encoding="utf-8") as ob:
                 for shot in parser:
                     if re.search(self.config["patterns"]["compare_versions_shot_no_versions_mask"], shot.edl_shot_name):
                         self.create_output_edl(shot, o)
