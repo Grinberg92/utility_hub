@@ -263,7 +263,7 @@ class ShotRestorer(QObject):
 
         return base_in <= targ_out and targ_in <= base_out
     
-    def create_and_export_avid_loc(self, shot_info: tuple) -> None:
+    def create_and_export_avid_loc(self, shot_info: tuple, output_path: Path, backup_output_path: Path) -> None:
         '''
         Создание и экспорт локатора AVID в аутпут файл.
         '''
@@ -271,10 +271,8 @@ class ShotRestorer(QObject):
             shot_data, shot_name = shot_info
             rec_in = self.timecode_to_frame(self.fps, shot_data.edl_record_in)
             rec_out = self.timecode_to_frame(self.fps, shot_data.edl_record_out)
-            path = Path(str(self.target_edit).replace(".edl", f"_AVID_LOC_{d.today()}.txt"))
-            backup_path = get_output_path(self.project, "txt", os.path.basename(self.target_edit).replace(".edl", f"_AVID_LOC"))
             
-            with open(path, "a", encoding='utf8') as o, open(backup_path, "a", encoding='utf8') as ob:
+            with open(output_path, "a", encoding='utf8') as o, open(backup_output_path, "a", encoding='utf8') as ob:
                 timecode = int((rec_in + (rec_in + (rec_out - rec_in))) / 2)
                 # Используется спец табуляция для корректного импорта в AVID
                 output_string = f'PGM	{self.frame_to_timecode(self.fps, timecode)}	V3	yellow	{shot_name}\n'
@@ -313,6 +311,12 @@ class ShotRestorer(QObject):
             
             output_path = Path(str(self.target_edit).replace(".edl", f"_restored_rasshot_{d.today()}.edl"))
             backup_path = get_output_path(self.project, "edl", os.path.basename(self.target_edit).replace(".edl", f"_restored_rasshot"))
+
+            loc_path = Path(str(self.target_edit).replace(".edl", f"_AVID_LOC_{d.today()}.txt"))
+            loc_backup_path = get_output_path(self.project, "txt", os.path.basename(self.target_edit).replace(".edl", f"_AVID_LOC"))
+            
+            with open(loc_path, "w", encoding='utf8') as _, open(loc_backup_path, "w", encoding='utf8') as _:
+                pass
             
             with open(output_path, "w", encoding="utf-8") as o, open(backup_path, "w", encoding="utf-8") as ob:
                 processed_shots_tmp = {}
@@ -324,7 +328,7 @@ class ShotRestorer(QObject):
                             base_shot_data["src_in"], base_shot_data["src_out_full"],
                             target_edit_data.edl_source_in, target_edit_data.edl_source_out_src
                         ):  
-                            self.create_and_export_avid_loc((target_edit_data, base_shot_data["shot_name"]))
+                            self.create_and_export_avid_loc((target_edit_data, base_shot_data["shot_name"]), loc_path, loc_backup_path)
 
                             str1 = (f"{target_edit_data.edl_record_id} {base_shot_data['shot_name']} "
                                     f"{target_edit_data.edl_track_type} {target_edit_data.edl_transition} "
@@ -583,8 +587,10 @@ class EDLComparator(QObject):
         Сортирует аутпут в зависимости от категории изменений.
         """
         for status, data in reedit_data.items():
+            output_path = get_output_path(self.project, 'edl', status , subfolder='reedit_edl')
+            with open(output_path, 'w', encoding="utf-8") as o:
+                pass
             for shot_data in data:
-                output_path = get_output_path(self.project, 'edl', status , subfolder='reedit_edl')
                 with open(output_path, 'a', encoding="utf-8") as o:
                     self.create_output_edl(shot_data, o)
 
