@@ -1,14 +1,9 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
 import os
 import numpy as np
 import OpenImageIO as oiio
-from concurrent.futures import ProcessPoolExecutor
-from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
 import argparse
-import subprocess
 import sys
-
 
 # --- Функция чтения EXR-файлов ---
 def read_exr(file_path):
@@ -71,7 +66,7 @@ def scan_folders(root_folder, output_path, extention):
         file_pairs = [(os.path.join(folder, exr_files[i]),
                         os.path.join(folder, exr_files[i + 1])) for i in range(len(exr_files) - 1)]
 
-        with ProcessPoolExecutor() as executor:
+        with ThreadPoolExecutor() as executor:
             results = executor.map(process_frame_pair, file_pairs)
 
         for result in results:
