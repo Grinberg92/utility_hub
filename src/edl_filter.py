@@ -1,16 +1,38 @@
+from pathlib import Path
 import sys
 import os
+from datetime import datetime as dt
 from collections import Counter
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QTextEdit, QPushButton, QFileDialog, QMessageBox
+    QLabel, QLineEdit, QTextEdit, QPushButton, QFileDialog, QMessageBox, QComboBox
 )
 from PyQt5.QtCore import Qt
+from config.global_config import GLOBAL_CONFIG
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from common_tools.edl_parsers import detect_edl_parser, EDLParser
 
 logger = get_logger(__file__)
+
+def get_output_path(project: str, ext: str, report_name: str) -> str:
+    """
+    Получение пути к бекапу отчета проверки секвенций.
+    """
+    date = dt.now().strftime("%Y%m%d")
+
+    output_path = (
+        Path(
+            {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"],
+            "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform]
+        )
+        / project
+        / GLOBAL_CONFIG["output_folders"]["edl_filter"] / date
+        / f"{report_name}_{date}.{ext}"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    return output_path
+
 
 def create_output_edl(shot: EDLParser, output) -> None:
     """
@@ -26,7 +48,7 @@ def create_output_edl(shot: EDLParser, output) -> None:
     output.write(str1)
     output.write(str2)
 
-def filter_edl(self, edl_path: str, input_shots: list[str], fps: int) -> str:
+def filter_edl(self, edl_path: str, input_shots: list[str], fps: int, project: str) -> str:
     """
     Пересобирает шоты в EDL при нахождении их в списке input_shots.
     """
@@ -40,18 +62,23 @@ def filter_edl(self, edl_path: str, input_shots: list[str], fps: int) -> str:
     input_shots_data = Counter(input_shots) # Словарь имен шотов из инпута
 
     base, ext = os.path.splitext(self.edl_path)
-    output_path = base + "_filtered" + ext
-    logger.info(f"Output: {output_path}")
+    output_path = base + f"_filtered_{dt.today()}" + ext
+
+    file_name, _ = os.path.splitext(os.path.basename(output_path))
+    backup_path = get_output_path(project, "edl", f"{file_name}")
 
     # Поиск шота из EDL в списке input_shots
-    with open(output_path, "w", encoding="utf-8") as _:
+    with open(output_path, "w", encoding="utf-8") as o, open(backup_path, "w", encoding="utf-8") as ob:
         pass
 
     for shot_data in edl_shot_data:
-        with open(output_path, "a", encoding="utf-8") as f:
+        with open(output_path, "a", encoding="utf-8") as o, open(backup_path, "a", encoding="utf-8") as ob:
             if shot_data.edl_shot_name in input_shots_data: 
-                create_output_edl(shot_data, f)
-    
+                create_output_edl(shot_data, o)
+                create_output_edl(shot_data, ob)
+
+    logger.info(f"Сохранены EDL файлы: \n{output_path}\n{backup_path}")
+
     # Поиск шотов отсутствующих в EDL
     not_found_shots = []
     for input_shot in input_shots_data:
@@ -70,10 +97,24 @@ class EDLFilterApp(QMainWindow):
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         self.resize(600, 200)
 
-        self.fps = 24
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+        
+        # Project
+        self.fps_lbl = QLabel("FPS:")
+        self.fps = QLineEdit("24")
+        self.fps.setMaximumWidth(40)
+        project_layout = QHBoxLayout()
+        self.project_menu = QComboBox()
+        self.project_menu.setMinimumWidth(290)
+        self.project_menu.addItems(self.get_project())
+        project_layout.addStretch()
+        project_layout.addWidget(self.fps_lbl)
+        project_layout.addWidget(self.fps)
+        project_layout.addWidget(self.project_menu)
+        project_layout.addStretch()
+        layout.addLayout(project_layout)
 
         # Choose EDL
         file_layout = QHBoxLayout()
@@ -105,12 +146,32 @@ class EDLFilterApp(QMainWindow):
         self.edl_path = ""
 
     def choose_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Choose EDL", "", "EDL Files (*.edl *.txt)")
+        path, _ = QFileDialog.getOpenFileName(self, "Choose EDL", "", "EDL Files (*.edl)")
         if path:
             self.file_edit.setText(path)
             self.edl_path = path
 
+    def get_project(self):
+                """
+                Метод получает список проектов из корневого каталога.
+                """
+                project_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
+                    "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform] 
+                if os.path.exists(project_path):
+                    projects_list = sorted([i for i in os.listdir(Path(project_path)) if os.path.isdir(Path(project_path) / i)])
+                    projects_list.insert(0, "Select Project")
+                    return projects_list
+                else:
+                    self.on_error_signal("Путь к папке проекта не обнаружен")
+                    return
+
     def run_filter(self):
+
+        if self.project_menu.currentText() == "Select Project":
+            QMessageBox.warning(self, "Warning", "Выберите проект")
+            logger.warning("Выберите проект")
+            return            
+
         if not self.edl_path:
             QMessageBox.warning(self, "Warning", "Не выбран EDL файл")
             logger.warning("Не выбран EDL файл")
@@ -129,7 +190,7 @@ class EDLFilterApp(QMainWindow):
 
         ids_raw = self.ids_edit.toPlainText().strip()
         input_ids = ids_raw.replace(",", " ").split()
-        result = filter_edl(self, self.edl_path, input_ids, self.fps)
+        result = filter_edl(self, self.edl_path, input_ids, int(self.fps.text()), self.project_menu.currentText())
         if result:
             QMessageBox.information(self, "Success", f"Файл успешно создан")
             logger.info(f"Файл успешно создан")
