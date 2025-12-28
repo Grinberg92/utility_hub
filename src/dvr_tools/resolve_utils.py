@@ -56,6 +56,7 @@ def get_resolve_shot_list(start_track: int, end_track: int, extension: str, patt
     Возвращает список имён клипов с верхнего трека в указанном диапазоне.
     Если несколько клипов стоят в стеке, берётся тот, что выше по номеру трека.
     """
+    print("here")
     try:
         resolve = dvr.scriptapp("Resolve")
         project = resolve.GetProjectManager().GetCurrentProject()
@@ -69,15 +70,17 @@ def get_resolve_shot_list(start_track: int, end_track: int, extension: str, patt
         regex = re.compile(pattern)
 
         top_items = {}
+        end_track = timeline.GetTrackCount('video') 
         # идём сверху вниз, чтобы нижние не перезаписывали верхние
-        for track_index in range(end_track, start_track - 1, -1):
+        for track_index in range(end_track, 0, -1):
             clips = timeline.GetItemListInTrack('video', track_index)
 
             for clip in clips:
-                start, end = clip.GetStart(), clip.GetStart() + clip.GetDuration()
+                if re.search(pattern, clip.GetName()):
+                    start, end = clip.GetStart(), clip.GetStart() + clip.GetDuration()
 
-                if not any(s <= start < e or start <= s < end for s, e in top_items.keys()):
-                    top_items[(start, end)] = clip
+                    if not any(s <= start < e or start <= s < end for s, e in top_items.keys()):
+                        top_items[(start, end)] = clip
 
         # Фильтрация по расширению и паттерну
         filtered = [
@@ -85,7 +88,7 @@ def get_resolve_shot_list(start_track: int, end_track: int, extension: str, patt
             for clip in top_items.values()
             if clip.GetName().lower().endswith(f".{extension.lower()}") and regex.search(clip.GetName())
         ]
-
+    
         return Counter(filtered)
 
     except Exception as e:
