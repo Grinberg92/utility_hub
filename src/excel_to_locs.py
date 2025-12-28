@@ -42,7 +42,9 @@ class LocatorCreator:
         return str(tc(fps, frames=frames))
     
     def create_loc(self, sheet):
-
+        """
+        Парсинг данных из EDL для формирования маркеров.
+        """
         raw_data = zip(sheet[self.rec_start_tc][self.start_row - 1:], 
                     sheet[self.shot_column][self.start_row -1:])
         
@@ -58,7 +60,6 @@ class LocatorCreator:
                 # Используется спец табуляция для корректного импорта в AVID
                 output_string = f'PGM	{str(timecode)}	V3	yellow	{shot_name}'
                 output.write(output_string + "\n")
-
         
     def create_output_edl(self, shot: dict, output) -> None:
         """
@@ -75,7 +76,9 @@ class LocatorCreator:
         output.write(str2)
 
     def create_edl(self, sheet):
-
+        """
+        Парсинг данных из EDL для формирования оффлайн клипов.
+        """
         raw_data = zip(count(1), sheet[self.src_start_tc][self.start_row - 1:], sheet[self.rec_start_tc][self.start_row - 1:], 
                        sheet[self.duration][self.start_row - 1:], sheet[self.shot_column][self.start_row -1:])
         
@@ -83,11 +86,15 @@ class LocatorCreator:
 
         tmp = {}
         output_path = r"J:\003_transcode_to_vfx\projects\edl.edl"
+
+        with open(output_path, "w", encoding="utf-8") as _:
+            pass
+
         with open(output_path, "a", encoding='utf8') as output:
             for data in shot_data:
                 id, src_in, rec_in, duration, shot_name = data
-                src_out = self.frame_to_timecode(24, self.timecode_to_frame(24, src_in.value) + duration.value + 2) 
-                rec_out = self.frame_to_timecode(24, self.timecode_to_frame(24, rec_in.value) + duration.value + 2)
+                src_out = tc(24, src_in.value) + tc(24, frames=duration.value)
+                rec_out = tc(24, rec_in.value) + tc(24, frames=duration.value)
 
                 tmp["src_in"] = src_in.value
                 tmp["src_out"] = src_out
@@ -206,8 +213,8 @@ class LocatorGUI(QWidget):
         duration = self.duration_col.text().strip().upper()
 
         try:
-            start_row = int(self.start_row_input.text().strip())
             shift = int(self.shift_input.text())
+            start_row = int(self.start_row_input.text().strip())
 
         except ValueError:
             QMessageBox.critical(self, "Error", "Shift timecode and Start row must be integers.")
