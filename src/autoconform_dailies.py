@@ -1654,14 +1654,15 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         """
         self.validator = ConfigValidator(self)
         self.user_config = self.validator.collect_config()
-
+        shot_pattern = self.config["patterns"]["compare_versions_shot_versions_mask"]
         self.warning_signal.emit(f"\nМонтаж: {Path(os.path.basename(self.edl_input.text())).stem}\n")
 
         if self.no_dublicates.isChecked():
             self.resolve_shots_list = get_resolve_shot_list(
                 int(self.user_config["track_in"]),
                 int(self.user_config["track_out"]),
-                self.user_config["extension"]
+                self.user_config["extension"],
+                pattern=shot_pattern
             )
         else:
             self.resolve_shots_list = None
