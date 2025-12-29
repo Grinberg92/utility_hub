@@ -122,7 +122,7 @@ class LogicProcessor:
             self.signals.error_signal.emit(f"Ошибка создания маркеров: {e}")
             return False
 
-    def export_locators_to_avid(self) -> bool:
+    def convert_markers_to_locs(self) -> bool:
         '''
         Формирование строк и экспорт локаторов для AVID в .txt.
         Поддерживает опциональную фильтрацию по паттерну имени шота при конвертации в локаторы.
@@ -155,7 +155,7 @@ class LogicProcessor:
                         ob.write(output_string + "\n")
 
             if not match_flag:
-                self.signals.warning_signal.emit(f"Нет маркеров по фильтру имени.")
+                self.signals.warning_signal.emit(f"Нет маркеров по фильтру имени шота.")
                 return
 
             logger.info(f"Сформированы TXT файлы: \n{path}\n{backup_path}")
@@ -477,7 +477,7 @@ class LogicProcessor:
                 return False
 
         if self.export_loc_cb:
-            export_loc_var = self.export_locators_to_avid()
+            export_loc_var = self.convert_markers_to_locs()
             if not export_loc_var:
                 return False
             
