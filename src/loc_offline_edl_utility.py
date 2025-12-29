@@ -130,9 +130,11 @@ class LogicProcessor:
         try:
             markers_list = self.get_markers()
             if not markers_list:
+                self.signals.warning_signal.emit(f"На таймлайне нет маркеров.")
                 return
             
-            path = Path(self.locator_output_path) / f"{self.timeline.GetName()}_AVID_LOC_{d.today()}.txt"
+            match_flag = True
+            path = Path(self.output_path) / f"{self.timeline.GetName()}_AVID_LOC_{d.today()}.txt"
             backup_path = get_output_path(self.project_name, "txt", f"{self.timeline.GetName()}_AVID_LOC_{d.today()}")
 
             with open(path, "w", encoding='utf8') as o, open(backup_path, "w", encoding='utf8') as ob:
@@ -144,11 +146,17 @@ class LogicProcessor:
                             output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
                             o.write(output_string + "\n")
                             ob.write(output_string + "\n")
+                        else:
+                            match_flag = False
                     else:
                         # Используется спец табуляция для корректного импорта в AVID
                         output_string = f'PGM	{str(timecode)}	V3	yellow	{name}'
                         o.write(output_string + "\n")
                         ob.write(output_string + "\n")
+
+            if not match_flag:
+                self.signals.warning_signal.emit(f"Нет маркеров по фильтру имени.")
+                return
 
             logger.info(f"Сформированы TXT файлы: \n{path}\n{backup_path}")
             logger.info("Локаторы успешно созданы.")
@@ -432,7 +440,6 @@ class LogicProcessor:
         self.process_edl_logic = self.user_config["process_edl"]
         self.output_path = self.user_config["output_path"]
         self.edl_path = self.user_config["edl_path"]
-        self.locator_output_path = self.user_config["locator_output_path"]
         self.export_loc_cb = self.user_config["export_loc"]
         self.fps = int(self.user_config["fps"])
         self.track_number = int(self.user_config["track_number"])
@@ -531,11 +538,10 @@ class ConfigValidator:
         return {
         "edl_path": self.gui.input_entry.text(),
         "output_path": self.gui.output_entry.text(),
-        "export_loc": self.gui.export_loc_checkbox.isChecked(),
+        "export_loc": self.gui.convert_marker.isChecked(),
         "set_markers": self.gui.set_markers_checkbox.isChecked(),
         "process_edl": (self.gui.offline_clips_checkbox.isChecked()),
         "fps": self.gui.fps_entry.text(),
-        "locator_output_path": self.gui.save_locators_path_entry.text(),
         "locator_from": self.gui.locator_from_combo.currentText(),
         "track_number": self.gui.track_entry.text().strip(),
         "offline_checkbox": self.gui.offline_clips_checkbox.isChecked(),
@@ -550,6 +556,7 @@ class ConfigValidator:
         "postfix_name": ("_", "")[self.gui.postfix.text() == ""] + self.gui.postfix.text(),
         "set_track_id": self.gui.set_track_id.isChecked(),
         "convert_edl": self.gui.convert_edl.isChecked(),
+        "convert_marker": self.gui.convert_marker.isChecked(),
         "project": self.gui.project_menu.currentText() != "Select Project"
         }
     
@@ -562,7 +569,6 @@ class ConfigValidator:
         process_edl = user_config["process_edl"]
         edl_path = user_config["edl_path"]
         output_path = user_config["output_path"]
-        locator_output_path = user_config["locator_output_path"]
         export_loc_cb = user_config["export_loc"]
         fps = user_config["fps"]
         track_number = user_config["track_number"]
@@ -576,6 +582,7 @@ class ConfigValidator:
         convert_edl = user_config["convert_edl"]
         project = user_config["project"]
         shot_filter = user_config["shot_filter"]
+        convert_marker = user_config["convert_marker"]
 
         if not any([name_from_track, name_from_markers, offline_edl_cb, 
                     create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt, convert_edl]):
@@ -602,9 +609,6 @@ class ConfigValidator:
 
         if edl_from_srt and not os.path.exists(edl_path):
             self.errors.append("Указан несуществующий путь к EDL!")
-        
-        if not locator_output_path and export_loc_cb:
-            self.errors.append("Введите путь для сохранения локаторов!")
 
         if convert_edl and not edl_path:
             self.errors.append("Укажите входной путь для EDL!")
@@ -612,7 +616,7 @@ class ConfigValidator:
         if convert_edl and not os.path.exists(edl_path):
             self.errors.append("Указан несуществующий путь к EDL!")
 
-        if not project and (process_edl or create_srt_cb or edl_from_srt or convert_edl or export_loc_cb or shot_filter):
+        if not project and (convert_marker or process_edl or create_srt_cb or edl_from_srt or convert_edl or shot_filter):
             self.errors.append("Выберите проект!")
 
         try:
@@ -726,33 +730,6 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         set_marker_layout.addStretch()
         block1_group_layout.addLayout(set_marker_layout)
 
-        # Locator & Shot filter
-        options_layout = QHBoxLayout()
-        options_layout.setAlignment(Qt.AlignLeft)
-
-        self.export_loc_checkbox = QCheckBox("Export locators to Avid")
-        self.export_loc_checkbox.stateChanged.connect(self.update_fields_state)
-        options_layout.addWidget(self.export_loc_checkbox)
-        options_layout.addSpacing(290)
-
-        self.filter_shot = QCheckBox("Shot filter")
-        options_layout.addWidget(self.filter_shot)
-        options_layout.addStretch()
-        block1_group_layout.addLayout(options_layout)
-
-        # Save locators path
-        save_path_label = QLabel("Save locators:")
-        save_path_layout = QHBoxLayout()
-        self.save_locators_path_entry = QLineEdit()
-        self.save_path_btn = QPushButton("Choose")
-        self.save_path_btn.clicked.connect(self.select_save_markers_file)
-        save_path_layout.addWidget(self.save_locators_path_entry)
-        save_path_layout.addWidget(self.save_path_btn)
-        self.save_locators_path_entry.setEnabled(False)
-        self.save_path_btn.setEnabled(False)
-
-        block1_group_layout.addWidget(save_path_label)
-        block1_group_layout.addLayout(save_path_layout)
         block1_group.setLayout(block1_group_layout)
         main_layout.addWidget(block1_group)
 
@@ -762,24 +739,35 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         block2_group_layout.addSpacing(20)
 
         # Checkboxes
-        checks_layout = QHBoxLayout()
-        checks_layout.setAlignment(Qt.AlignLeft)
+        convert_layout = QHBoxLayout()
+        convert_layout2 = QHBoxLayout()
+        convert_layout.setAlignment(Qt.AlignLeft)
         self.offline_clips_checkbox = QCheckBox("Resolve markers to EDL_v23")
         self.create_srt_cb = QCheckBox("EDL to SRT")
         self.srt_to_edl_cb = QCheckBox("SRT to EDL")
         self.convert_edl = QCheckBox("EDL_v3 to EDL_v23")
+        self.convert_marker = QCheckBox("Resolve markers to Avid locators")
+        self.filter_shot = QCheckBox("Shot filter")
         self.offline_clips_checkbox.stateChanged.connect(self.update_fields_state)
         self.create_srt_cb.stateChanged.connect(self.update_fields_state)
         self.srt_to_edl_cb.stateChanged.connect(self.update_fields_state)
         self.convert_edl.stateChanged.connect(self.update_fields_state)
-        checks_layout.addWidget(self.offline_clips_checkbox)
-        checks_layout.addSpacing(30)
-        checks_layout.addWidget(self.create_srt_cb)
-        checks_layout.addSpacing(30)
-        checks_layout.addWidget(self.srt_to_edl_cb)
-        checks_layout.addSpacing(30)
-        checks_layout.addWidget(self.convert_edl)
-        block2_group_layout.addLayout(checks_layout)
+        self.convert_marker.stateChanged.connect(self.update_fields_state)
+        convert_layout.addWidget(self.offline_clips_checkbox)
+        convert_layout.addSpacing(30)
+        convert_layout.addWidget(self.create_srt_cb)
+        convert_layout.addSpacing(30)
+        convert_layout.addWidget(self.srt_to_edl_cb)
+        convert_layout.addSpacing(30)
+        convert_layout.addWidget(self.convert_edl)
+        convert_layout.addSpacing(30)
+        convert_layout2.addWidget(self.convert_marker)
+        convert_layout2.addSpacing(243)        
+        convert_layout2.addWidget(self.filter_shot)
+        convert_layout2.addStretch()
+        block2_group_layout.addLayout(convert_layout)
+        block2_group_layout.addSpacing(10)
+        block2_group_layout.addLayout(convert_layout2)
 
         # Input path
         input_label = QLabel("Choose input file:")
@@ -801,7 +789,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.output_entry.setEnabled(False)
         self.output_btn = QPushButton("Choose")
         self.output_btn.setEnabled(False)
-        self.output_btn.clicked.connect(self.select_output_file)
+        self.output_btn.clicked.connect(self.path_type)
         output_layout.addWidget(self.output_entry)
         output_layout.addWidget(self.output_btn)
         block2_group_layout.addWidget(output_label)
@@ -866,6 +854,15 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.run_button.clicked.connect(self.run_script)
         main_layout.addWidget(self.run_button)
 
+    def path_type(self):
+        """
+        Определяем либо полный путь к файлу либо директорию.
+        """
+        if self.convert_marker.isChecked():
+            self.select_output_file(noname=True)
+        else:
+            self.select_output_file()
+
     def get_project(self):
             """
             Метод получает список проектов из корневого каталога.
@@ -894,17 +891,15 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         if file_path:
             self.input_entry.setText(file_path)
 
-    def select_save_markers_file(self):
-        file_path = QFileDialog.getExistingDirectory(self, 
-                                                "Choose Shots Folder",
-                                                )
-        if file_path:
-            self.save_locators_path_entry.setText(file_path)
-
-    def select_output_file(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save As", "", "EDL files (*.edl);; SRT files (*.srt);;All Files (*)")
-        if file_path:
-            self.output_entry.setText(file_path)
+    def select_output_file(self, noname: bool = False):
+        if noname:
+            file_path = QFileDialog.getExistingDirectory(self, "Choose Shots Folder",)
+            if file_path:
+                self.output_entry.setText(file_path)
+        else:
+            file_path, _ = QFileDialog.getSaveFileName(self, "Save As", "", "EDL files (*.edl);; SRT files (*.srt);;All Files (*)")
+            if file_path:
+                self.output_entry.setText(file_path)
 
     def update_fields_state(self):
         """
@@ -913,9 +908,6 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.track_entry.setEnabled(self.set_markers_checkbox.isChecked())
         self.to_start_rb.setEnabled(self.set_markers_checkbox.isChecked())
         self.to_center_rb.setEnabled(self.set_markers_checkbox.isChecked())
-
-        self.save_locators_path_entry.setEnabled(self.export_loc_checkbox.isChecked())
-        self.save_path_btn.setEnabled(self.export_loc_checkbox.isChecked())
 
         self.input_entry.setEnabled(self.create_srt_cb.isChecked())
         self.input_btn.setEnabled(self.create_srt_cb.isChecked())
@@ -929,8 +921,8 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), 
                                             self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
 
-        self.output_entry.setEnabled(self.offline_clips_checkbox.isChecked())
-        self.output_btn.setEnabled(self.offline_clips_checkbox.isChecked())
+        self.output_entry.setEnabled(any((self.offline_clips_checkbox.isChecked(), self.convert_marker.isChecked())))
+        self.output_btn.setEnabled(any((self.offline_clips_checkbox.isChecked(),  self.convert_marker.isChecked())))
 
     def run_script(self):
         self.validator = ConfigValidator(self)
