@@ -1181,8 +1181,6 @@ class ConfigValidator:
             "edl_path": self.gui.edl_input.text().strip(),
             "shots_folder": self.gui.shots_input.text().strip(),
             "otio_path": self.gui.otio_input.text().strip(),
-            "track_in": self.gui.track_in_input.text().strip(),
-            "track_out": self.gui.track_out_input.text().strip(),
             "extension": self.gui.format_menu.currentText().lower(),
             "project": self.gui.project_menu.currentText(),
             "ignore_dublicates": self.gui.no_dublicates.isChecked(),
@@ -1210,8 +1208,6 @@ class ConfigValidator:
             self.errors.append("Укажите путь к папке для сохранения OTIO")
 
         try:
-            int(user_config["track_in"])
-            int(user_config["track_out"])
             int(user_config["start_frame_ui"])
         except ValueError:
             self.errors.append("Значения должны быть целыми числами")
@@ -1242,8 +1238,6 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         self.frame_rate = QLineEdit("24")
         self.frame_rate.setMaximumWidth(30)
 
-        self.selected_track_in = "8"
-        self.selected_track_out = "8"
         self.selected_format = "EXR"
         self.select_frame = "3"
 
@@ -1367,19 +1361,6 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         tracks_hbox = QHBoxLayout()
         self.no_dublicates = QCheckBox("Ignore dubl")
         tracks_hbox.addWidget(self.no_dublicates)
-
-        tracks_hbox.addSpacing(5)
-        tracks_hbox.addWidget(QLabel("from tracks:"))
-
-        self.track_in_input = QLineEdit(self.selected_track_in)
-        self.track_in_input.setFixedWidth(30)
-        tracks_hbox.addWidget(self.track_in_input)
-
-        tracks_hbox.addWidget(QLabel("-"))
-
-        self.track_out_input = QLineEdit(self.selected_track_out)
-        self.track_out_input.setFixedWidth(30)
-        tracks_hbox.addWidget(self.track_out_input)
         tracks_hbox.addStretch()
         right_vbox.addLayout(tracks_hbox)
 
@@ -1577,10 +1558,6 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         """
         Блокировка и активация полей ui.
         """
-        track_inputs_enabled = self.no_dublicates.isChecked()
-        self.track_in_input.setEnabled(track_inputs_enabled)
-        self.track_out_input.setEnabled(track_inputs_enabled)
-
         selected_button = self.logic_mode_group.checkedButton()
         selected_mode = selected_button.property("mode") if selected_button else None
 
@@ -1657,15 +1634,15 @@ class Autoconform(QWidget, ConformCheckerMixin, EXRCheckerMixin):
         shot_pattern = self.config["patterns"]["compare_versions_shot_versions_mask"]
         self.warning_signal.emit(f"\nМонтаж: {Path(os.path.basename(self.edl_input.text())).stem}\n")
 
-        if self.no_dublicates.isChecked():
-            self.resolve_shots_list = get_resolve_shot_list(
-                int(self.user_config["track_in"]),
-                int(self.user_config["track_out"]),
-                self.user_config["extension"],
-                pattern=shot_pattern
-            )
-        else:
-            self.resolve_shots_list = None
+        self.resolve_shots_list = None
+        try:
+            if self.no_dublicates.isChecked():
+                self.resolve_shots_list = get_resolve_shot_list(
+                    self.user_config["extension"],
+                    pattern=shot_pattern)
+                
+        except Exception as e:
+            self.on_error_signal(f"{e}\nДубликаты отфильтрованы не будут, но сборка OTIO продолжится")
 
         if not self.validator.validate(self.user_config):
             self.on_error_signal("\n".join(self.validator.get_errors()))
