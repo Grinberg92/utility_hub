@@ -2,6 +2,9 @@ import DaVinciResolveScript as dvr
 import re
 from collections import Counter
 
+class GetTimelineObjectsError(Exception):
+    pass
+
 class ResolveObjects:
     """
     Класс получает основные объекты резолв.
@@ -51,26 +54,28 @@ import re
 from collections import Counter
 import DaVinciResolveScript as dvr
 
-def get_resolve_shot_list(start_track: int, end_track: int, extension: str, pattern: str = None) -> Counter:
+def get_resolve_shot_list(extension: str, pattern: str = None, timeline: ResolveObjects = None) -> Counter:
     """
     Возвращает список имён клипов с верхнего трека в указанном диапазоне.
     Если несколько клипов стоят в стеке, берётся тот, что выше по номеру трека.
     """
-    print("here")
-    try:
-        resolve = dvr.scriptapp("Resolve")
-        project = resolve.GetProjectManager().GetCurrentProject()
-        timeline = project.GetCurrentTimeline()
+    if timeline is None:
+        try:
+            resolve = ResolveObjects()
+            timeline = resolve.timeline
+        except Exception as e:
+            raise
 
+    try:
         if not timeline:
             return Counter()
 
         if pattern is None:
             pattern = r'(.+_)?\d{1,4}[a-zA-Z]?_\d{1,4}_.+'
-        regex = re.compile(pattern)
 
         top_items = {}
         end_track = timeline.GetTrackCount('video') 
+
         # идём сверху вниз, чтобы нижние не перезаписывали верхние
         for track_index in range(end_track, 0, -1):
             clips = timeline.GetItemListInTrack('video', track_index)
@@ -86,14 +91,12 @@ def get_resolve_shot_list(start_track: int, end_track: int, extension: str, patt
         filtered = [
             clip.GetName()
             for clip in top_items.values()
-            if clip.GetName().lower().endswith(f".{extension.lower()}") and regex.search(clip.GetName())
+            if clip.GetName().lower().endswith(f".{extension.lower()}")
         ]
     
-        return Counter(filtered)
-
+        return Counter(filtered)    
     except Exception as e:
-        print(f"Ошибка подключения к API Resolve: {e}")
-        return Counter()
+        raise GetTimelineObjectsError("Ошибка получения данных с таймлайна Resolve")
 
 class ResolveTimelineItemExtractor():
 
