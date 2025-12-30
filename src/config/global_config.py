@@ -44,7 +44,8 @@ GLOBAL_CONFIG = {
         "autoconform": "autoconform",
         "compare_versions": "compare_versions",
         "ocf_color_and_fps": "resolutions_table",
-        "edl_filter": "edl_filter"  
+        "edl_filter": "edl_filter",
+        "excel_to_locs": "excel_to_locs"  
     },
 
     "scripts_settings":{
