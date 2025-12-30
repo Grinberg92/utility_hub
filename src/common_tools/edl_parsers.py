@@ -142,7 +142,9 @@ class EDLParser:
         self.convert_src_out = convert_src_out
 
     def is_retime(self, data: list) -> bool:
-        """Определение ретайма по разнице длительностей"""
+        """
+        Определение ретайма по разнице длительностей
+        """
         edl_source_in = tc(self.fps, data[4]).frames
         edl_source_out = tc(self.fps, data[5]).frames
         edl_record_in = tc(self.fps, data[6]).frames
@@ -156,7 +158,9 @@ class EDLParser:
         return str(tc(self.fps, frames=end_source_tc_frames))
 
     def _match_shot_name(self, line: str) -> str | None:
-        """Пробуем вытащить имя шота по всем известным вариантам"""
+        """
+        Пробуем вытащить имя шота по всем известным вариантам
+        """
         line = line.strip()
 
         # *LOC или *LOC: → берём последнее слово
