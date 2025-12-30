@@ -1051,23 +1051,27 @@ class ConformCheckerMixin:
         check_flag = False
         triger_flag = False
 
-        parser = detect_edl_parser(fps, lines=united_edls)
-        for shot_name in shots_list:
-            
-            for edl_line in parser:
-                if edl_line.edl_shot_name.lower() in shot_name.lower():
-                    triger_flag = True
-            
-            if not triger_flag:
-                self.warning_signal.emit(f"🔴  Шот {shot_name} отсутствует в монтаже")
-                self.otio_counter += 1
-                check_flag = True
-            triger_flag = False
+        try:
+            parser = detect_edl_parser(fps, lines=united_edls)
+            for shot_name in shots_list:
+                
+                for edl_line in parser:
+                    if edl_line.edl_shot_name.lower() in shot_name.lower():
+                        triger_flag = True
+                
+                if not triger_flag:
+                    self.warning_signal.emit(f"🔴  Шот {shot_name} отсутствует в монтаже")
+                    self.otio_counter += 1
+                    check_flag = True
+                triger_flag = False
 
-        if not check_flag:
-            self.warning_signal.emit("🟢  Проверка пройдена успешно!")
+            if not check_flag:
+                self.warning_signal.emit("🟢  Проверка пройдена успешно!")
 
-        self.update_result_label()
+            self.update_result_label()
+        except Exception as e:
+            self.error_signal.emit(f"{e}")
+            return
 
 class EXRCheckerMixin:
     """
