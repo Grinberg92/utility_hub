@@ -8,7 +8,7 @@ class EDLParserError(Exception):
 
 class EDLParser_v23:
     """
-    Класс-итератор. Итерируется по EDL файлу, обрабатывая строки с ретаймом (M2).
+    Класс-итератор. Итерируется по EDL файлу формата без *loc, *from clip name, * from clip name.
     """
     @dataclass
     class EDLEntry:
@@ -118,10 +118,8 @@ class EDLParser_v23:
         
 class EDLParser:
     """
-    Универсальный EDL-парсер.
-    Итерирует EDL, возвращая записи с учётом разных форматов (*LOC, *FROM CLIP NAME: и т.д.)
+    Класс-итератор. Итерируется по EDL файлу формата *loc, *from clip name, * from clip name.
     """
-
     @dataclass
     class EDLEntry:
         edl_record_id: str
