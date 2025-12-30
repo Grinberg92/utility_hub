@@ -13,6 +13,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from config.global_config import GLOBAL_CONFIG
 from dvr_tools.css_style import apply_style
+from dvr_tools.logger_config import get_logger
+
+logger = get_logger(__file__)
 
 class ExcelDataerror(Exception):
     pass
@@ -108,6 +111,8 @@ class LocatorCreator:
         except Exception as e:
             raise ExcelDataerror("Некорректные данные в Excel файле.\n" \
             "Проверьте, не попадает ли шапка таблицы в сборку данных.")
+        
+        logger.info(f"Сохранены TXT файлы: \n{output_path}\n{backup_output_path}")
 
         return True
 
@@ -145,6 +150,8 @@ class LocatorCreator:
         except Exception as e:
             raise ExcelDataerror("Некорректные данные в Excel файле.\n" \
             "Проверьте, не попадает ли шапка таблицы в сборку данных.")
+        
+        logger.info(f"Сохранены EDL файлы: \n{output_path}\n{backup_output_path}")
         
         return True
     
@@ -348,6 +355,7 @@ class LocatorGUI(QWidget):
 
         if project == "Select Project":
             QMessageBox.warning(self, "Warning", "Выберите проект.")
+            logger.warning("Выберите проект.")
             return
 
         try:
@@ -355,36 +363,44 @@ class LocatorGUI(QWidget):
             start_row = int(self.start_row_input.text().strip())
 
         except ValueError:
-            QMessageBox.critical(self, "Error", "Значения должны быть положительными числами.")
+            QMessageBox.warning(self, "Error", "Значения должны быть положительными числами.")
+            logger.warning("Значения должны быть положительными числами.")
             return
 
         if not excel_path:
             QMessageBox.warning(self, "Warning", "Укажите Excel файл для чтения.")
+            logger.warning("Укажите Excel файл для чтения.")
             return
 
         if not os.path.exists(excel_path):
             QMessageBox.warning(self, "Warning", "Некорректный путь к Excel файлу.")
+            logger.warning("Некорректный путь к Excel файлу.")
             return
 
         if not sheet_name:
             QMessageBox.warning(self, "Warning", "Не указан лист Excel файла.")
+            logger.warning("Не указан лист Excel файла.")
             return                
 
         if not shot_column:
             QMessageBox.warning(self, "Warning", "Не указана колонка с именами шотов.")
+            logger.warning("Не указана колонка с именами шотов.")
             return                
 
         if not rec_start_tc:
             QMessageBox.warning(self, "Warning", "Не указан рекорд таймкод.")
+            logger.warning("Не указан рекорд таймкод.")
             return                
         
         if not base_mode:
 
             if not src_start_tc:
                 QMessageBox.warning(self, "Warning", "Не указан стартовый таймкод исходника.")
+                logger.warning("Не указан стартовый таймкод исходника.")
                 return                
             if not duration:
                 QMessageBox.warning(self, "Warning", "Не указан дюрейшн исходника.")
+                logger.warning("Не указан дюрейшн исходника.")
                 return
 
         try:
@@ -395,13 +411,15 @@ class LocatorGUI(QWidget):
             success = logic.run()
             if success:
                 QMessageBox.information(self, "Success", "Процесс успешно завершен.")  
+                logger.info("Процесс успешно завершен.")
 
         except ExcelDataerror as e:
             QMessageBox.critical(self, "Error", f"{e}")
-
+            logger.error(f"{e}")
         
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка:\n{e}")
+            logger.error(f"Ошибка:\n{e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
