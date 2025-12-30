@@ -52,41 +52,43 @@ def filter_edl(self, edl_path: str, input_shots: list[str], fps: int, project: s
     """
     Пересобирает шоты в EDL при нахождении их в списке input_shots.
     """
-    logger.info("Start process")
-    edl_parser = detect_edl_parser(fps, edl_path=edl_path)
+    try:
+        edl_parser = detect_edl_parser(fps, edl_path=edl_path)
 
-    edl_shot_names = Counter([i.edl_shot_name for i in edl_parser]) # Словарь имен шотов из EDL
+        edl_shot_names = Counter([i.edl_shot_name for i in edl_parser]) # Словарь имен шотов из EDL
 
-    edl_shot_data = [i for i in edl_parser] # Объекты EDL парсера в списке
+        edl_shot_data = [i for i in edl_parser] # Объекты EDL парсера в списке
 
-    input_shots_data = Counter(input_shots) # Словарь имен шотов из инпута
+        input_shots_data = Counter(input_shots) # Словарь имен шотов из инпута
 
-    base, ext = os.path.splitext(self.edl_path)
-    output_path = base + f"_filtered_{dt.today()}" + ext
+        base, ext = os.path.splitext(self.edl_path)
+        output_path = base + f"_filtered_{dt.today()}" + ext
 
-    file_name, _ = os.path.splitext(os.path.basename(output_path))
-    backup_path = get_output_path(project, "edl", f"{file_name}")
+        file_name, _ = os.path.splitext(os.path.basename(output_path))
+        backup_path = get_output_path(project, "edl", f"{file_name}")
 
-    # Поиск шота из EDL в списке input_shots
-    with open(output_path, "w", encoding="utf-8") as o, open(backup_path, "w", encoding="utf-8") as ob:
-        pass
+        # Поиск шота из EDL в списке input_shots
+        with open(output_path, "w", encoding="utf-8") as o, open(backup_path, "w", encoding="utf-8") as ob:
+            pass
 
-    for shot_data in edl_shot_data:
-        with open(output_path, "a", encoding="utf-8") as o, open(backup_path, "a", encoding="utf-8") as ob:
-            if shot_data.edl_shot_name in input_shots_data: 
-                create_output_edl(shot_data, o)
-                create_output_edl(shot_data, ob)
+        for shot_data in edl_shot_data:
+            with open(output_path, "a", encoding="utf-8") as o, open(backup_path, "a", encoding="utf-8") as ob:
+                if shot_data.edl_shot_name in input_shots_data: 
+                    create_output_edl(shot_data, o)
+                    create_output_edl(shot_data, ob)
 
-    logger.info(f"Сохранены EDL файлы: \n{output_path}\n{backup_path}")
+        logger.info(f"Сохранены EDL файлы: \n{output_path}\n{backup_path}")
 
-    # Поиск шотов отсутствующих в EDL
-    not_found_shots = []
-    for input_shot in input_shots_data:
-        if input_shot not in edl_shot_names:
-            not_found_shots.append(f"В EDL отсутствует шот {input_shot}")
-    if not_found_shots:
-        self.log.append("\n".join(not_found_shots))
-        return True
+        # Поиск шотов отсутствующих в EDL
+        not_found_shots = []
+        for input_shot in input_shots_data:
+            if input_shot not in edl_shot_names:
+                not_found_shots.append(f"В EDL отсутствует шот {input_shot}")
+        if not_found_shots:
+            self.log.append("\n".join(not_found_shots))
+            return True
+    except Exception as e:
+        raise
 
     return True
 
@@ -152,18 +154,19 @@ class EDLFilterApp(QMainWindow):
             self.edl_path = path
 
     def get_project(self):
-                """
-                Метод получает список проектов из корневого каталога.
-                """
-                project_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
-                    "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform] 
-                if os.path.exists(project_path):
-                    projects_list = sorted([i for i in os.listdir(Path(project_path)) if os.path.isdir(Path(project_path) / i)])
-                    projects_list.insert(0, "Select Project")
-                    return projects_list
-                else:
-                    self.on_error_signal("Путь к папке проекта не обнаружен")
-                    return
+        """
+        Метод получает список проектов из корневого каталога.
+        """
+        project_path = {"win32": GLOBAL_CONFIG["paths"]["root_projects_win"], 
+            "darwin": GLOBAL_CONFIG["paths"]["root_projects_mac"]}[sys.platform] 
+        if os.path.exists(project_path):
+            projects_list = sorted([i for i in os.listdir(Path(project_path)) if os.path.isdir(Path(project_path) / i)])
+            projects_list.insert(0, "Select Project")
+            return projects_list
+        else:
+            QMessageBox.critical(self, "Error", "Путь к папке проекта не обнаружен")
+            logger.error("Путь к папке проекта не обнаружен")
+            return
 
     def run_filter(self):
 
@@ -190,13 +193,15 @@ class EDLFilterApp(QMainWindow):
 
         ids_raw = self.ids_edit.toPlainText().strip()
         input_ids = ids_raw.replace(",", " ").split()
-        result = filter_edl(self, self.edl_path, input_ids, int(self.fps.text()), self.project_menu.currentText())
-        if result:
-            QMessageBox.information(self, "Success", f"Файл успешно создан")
-            logger.info(f"Файл успешно создан")
-        else:
-            QMessageBox.critical(self, "Error", f"Ошибка создания файла")
-            logger.error(f"Ошибка создания файла")
+
+        try:
+            result = filter_edl(self, self.edl_path, input_ids, int(self.fps.text()), self.project_menu.currentText())
+            if result:
+                QMessageBox.information(self, "Success", f"Файл успешно создан")
+                logger.info(f"Файл успешно создан")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f'{e}')
+            logger.error(f'{e}')
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
