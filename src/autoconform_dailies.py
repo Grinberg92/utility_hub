@@ -44,12 +44,13 @@ class OTIOCreator:
     """
     Класс создания OTIO таймлайна.
     """
-    def __init__(self, user_config, resolve_shot_list, gui):
+    def __init__(self, user_config, resolve_shot_list, gui, signals):
         self.user_config = user_config
         self.resolve_shot_list = resolve_shot_list
         self.send_warning = lambda msg: None
         self.frame_mask = get_config()["patterns"]["frame_number"]
         self.gui = gui
+        self.signals = signals
 
     def get_shots_paths(self, path):
         """
@@ -640,9 +641,8 @@ class OTIOCreator:
         self.shots_paths = self.get_shots_paths(self.user_config["shots_folder"])
         self.include_slate = self.user_config["include_slate"]
 
-        edl_data = detect_edl_parser(self.frame_rate, self.edl_path)
-
         try:
+            edl_data = detect_edl_parser(self.frame_rate, self.edl_path)
             self.otio_timeline = otio.schema.Timeline(name="Timeline") 
             self.create_video_tracks()
             # edl_start_timecodes: - Список промежуточных значений edl_record_out для вычисления GAP на каждом треке
@@ -703,7 +703,8 @@ class OTIOCreator:
             return self.otio_timeline, timeline_objects
 
         except Exception as e:
-            logger.exception(f"Сбой в работе программы. Не удалось сформировать OTIO файл: {e}") 
+            self.signals.error_signal.emit(f"{e}")
+            return None, None
 
 class MovieObject:
     
@@ -902,9 +903,13 @@ class OTIOWorker(QThread):
 
     def run(self):
         try:
-            logic = OTIOCreator(self.user_config, self.resolve_shot_list, self.parent)
+            logic = OTIOCreator(self.user_config, self.resolve_shot_list, self.parent, self)
             logic.send_warning = lambda msg: self.warnings.emit(msg)
             otio_timeline, timeline_objects = logic.run() #timeline_objects: Количество объектов на OTIO таймлайне
+
+            if all(map(lambda x: x is None, [otio_timeline, timeline_objects])):
+                return
+
             if not timeline_objects:
                 self.warning_signal.emit('Отсутствуют шоты для данной таймлинии')
                 return
