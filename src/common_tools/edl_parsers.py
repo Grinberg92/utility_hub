@@ -3,6 +3,9 @@ from pathlib import Path
 from dataclasses import dataclass
 from timecode import Timecode as tc
 
+class EDLParserError(Exception):
+    pass
+
 class EDLParser_v23:
     """
     Класс-итератор. Итерируется по EDL файлу, обрабатывая строки с ретаймом (M2).
@@ -54,61 +57,65 @@ class EDLParser_v23:
             return True
 
     def __iter__(self):
-        if self._lines is not None:
-            lines = self._lines
-        else:    
-            with open(self.edl_path, 'r') as edl_file:
-                lines = edl_file.readlines()
-        if self.edl_path:
-            edit_name = str(Path(self.edl_path).stem)
-        if lines and "TITLE" in lines[0]:
-            edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
+        try:
+                
+            if self._lines is not None:
+                lines = self._lines
+            else:    
+                with open(self.edl_path, 'r') as edl_file:
+                    lines = edl_file.readlines()
+            if self.edl_path:
+                edit_name = str(Path(self.edl_path).stem)
+            if lines and "TITLE" in lines[0]:
+                edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
 
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
 
-            if re.match(r'^\d+\s', line):
-                parts = line.split()
-                if len(parts) < 8:
-                    i += 1
-                    continue
+                if re.match(r'^\d+\s', line):
+                    parts = line.split()
+                    if len(parts) < 8:
+                        i += 1
+                        continue
 
-                retime_val = False
-                j = i + 1
+                    retime_val = False
+                    j = i + 1
 
-                while j < len(lines):
-                    next_line = lines[j].strip()
-                    if re.match(r'^\d+\s', next_line): 
-                        break
-                    if next_line.startswith("M2"):
+                    while j < len(lines):
+                        next_line = lines[j].strip()
+                        if re.match(r'^\d+\s', next_line): 
+                            break
+                        if next_line.startswith("M2"):
+                            retime_val = True
+                        j += 1
+
+                    source_out_full = parts[5]
+
+                    if retime_val or self.is_retime(parts):
+                        parts[5] = self.convert(parts[4], parts[6], parts[7])
                         retime_val = True
-                    j += 1
 
-                source_out_full = parts[5]
-
-                if retime_val or self.is_retime(parts):
-                    parts[5] = self.convert(parts[4], parts[6], parts[7])
-                    retime_val = True
-
-                yield self.EDLEntry(
-                    edl_record_id=parts[0],
-                    edl_shot_name=parts[1],
-                    edl_source_name = parts[1],
-                    edl_track_type=parts[2],
-                    edl_transition=parts[3],
-                    edl_source_in=parts[4],
-                    edl_source_out=parts[5], # Изменена для ретаймов из AVID
-                    edl_source_out_src = source_out_full, # Исходная, не измененная строка
-                    edl_record_in=parts[6],
-                    edl_record_out=parts[7],
-                    retime=retime_val,
-                    edl_edit_name=edit_name,
-                )
-                i = j
-            else:
-                i += 1
-
+                    yield self.EDLEntry(
+                        edl_record_id=parts[0],
+                        edl_shot_name=parts[1],
+                        edl_source_name = parts[1],
+                        edl_track_type=parts[2],
+                        edl_transition=parts[3],
+                        edl_source_in=parts[4],
+                        edl_source_out=parts[5], # Изменена для ретаймов из AVID
+                        edl_source_out_src = source_out_full, # Исходная, не измененная строка
+                        edl_record_in=parts[6],
+                        edl_record_out=parts[7],
+                        retime=retime_val,
+                        edl_edit_name=edit_name,
+                    )
+                    i = j
+                else:
+                    i += 1
+        except Exception as e:
+            raise EDLParserError(f"Ошибка парсера EDL: {e}")
+        
 class EDLParser:
     """
     Универсальный EDL-парсер.
@@ -167,78 +174,83 @@ class EDLParser:
         return None
 
     def __iter__(self):
-        if self._lines is not None:
-            lines = self._lines
-        else:
-            with open(self.edl_path, 'r', encoding="utf-8") as edl_file:
-                lines = edl_file.readlines()
-        if self.edl_path:
-            edit_name = str(Path((self.edl_path)).stem)
-        if lines and "TITLE" in lines[0]:
-            edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
+        try:
 
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-
-            if re.match(r'^\d+\s', line):  # основная строка
-                parts = line.split()
-                if len(parts) < 8:
-                    i += 1
-                    continue
-
-                shot_name = None
-                retime_val = False
-                j = i + 1
-
-                # проход по блоку
-                while j < len(lines):
-                    next_line = lines[j].strip()
-                    if re.match(r'^\d+\s', next_line):
-                        break
-
-                    if next_line.startswith("M2"):
-                        retime_val = True
-
-                    name = self._match_shot_name(next_line)
-                    if name:
-                        shot_name = name
-
-                    j += 1
-
-                # если ретайм → всегда пересчитываем source_out
-
-                source_out_full = parts[5]
-                if retime_val or self.is_retime(parts):
-                    if self.convert_src_out:
-                        parts[5] = self.convert(parts[4], parts[6], parts[7])
-                        retime_val = True
-                    else:
-                        retime_val = True
-
-                if not shot_name:
-                    i = j
-                    continue
-
-                yield self.EDLEntry(
-                    edl_record_id=parts[0],
-                    edl_source_name=parts[1] if len(parts) > 1 else None,
-                    edl_shot_name=shot_name,
-                    edl_track_type=parts[2],
-                    edl_transition=parts[3],
-                    edl_source_in=parts[4],
-                    edl_source_out=parts[5],
-                    edl_source_out_src = source_out_full, # Исходная, не измененная строка
-                    edl_record_in=parts[6],
-                    edl_record_out=parts[7],
-                    retime=retime_val,
-                    edl_edit_name=edit_name,
-                )
-
-                i = j
+            if self._lines is not None:
+                lines = self._lines
             else:
-                i += 1
-        
+                with open(self.edl_path, 'r', encoding="utf-8") as edl_file:
+                    lines = edl_file.readlines()
+            if self.edl_path:
+                edit_name = str(Path((self.edl_path)).stem)
+            if lines and "TITLE" in lines[0]:
+                edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
+
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
+
+                if re.match(r'^\d+\s', line):  # основная строка
+                    parts = line.split()
+                    if len(parts) < 8:
+                        i += 1
+                        continue
+
+                    shot_name = None
+                    retime_val = False
+                    j = i + 1
+
+                    # проход по блоку
+                    while j < len(lines):
+                        next_line = lines[j].strip()
+                        if re.match(r'^\d+\s', next_line):
+                            break
+
+                        if next_line.startswith("M2"):
+                            retime_val = True
+
+                        name = self._match_shot_name(next_line)
+                        if name:
+                            shot_name = name
+
+                        j += 1
+
+                    source_out_full = parts[5]
+
+                    # если ретайм → всегда пересчитываем source_out
+                    if retime_val or self.is_retime(parts):
+                        if self.convert_src_out:
+                            parts[5] = self.convert(parts[4], parts[6], parts[7])
+                            retime_val = True
+                        else:
+                            retime_val = True
+
+                    if not shot_name:
+                        i = j
+                        continue
+
+                    yield self.EDLEntry(
+                        edl_record_id=parts[0],
+                        edl_source_name=parts[1] if len(parts) > 1 else None,
+                        edl_shot_name=shot_name,
+                        edl_track_type=parts[2],
+                        edl_transition=parts[3],
+                        edl_source_in=parts[4],
+                        edl_source_out=parts[5],
+                        edl_source_out_src = source_out_full, # Исходная, не измененная строка
+                        edl_record_in=parts[6],
+                        edl_record_out=parts[7],
+                        retime=retime_val,
+                        edl_edit_name=edit_name,
+                    )
+
+                    i = j
+                else:
+                    i += 1
+
+        except Exception as e:
+            raise EDLParserError(f"Ошибка парсера EDL: {e}")
+
 def detect_edl_parser(fps: int, edl_path:str=None, lines:list[str]=None):
     """
     Определяем тип EDL файла по содержимому файла.
