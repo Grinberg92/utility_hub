@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QRad
 from dvr_tools.css_style import apply_style
 from dvr_tools.logger_config import get_logger
 from dvr_tools.resolve_utils import ResolveObjects
-from common_tools.edl_parsers import detect_edl_parser, EDLParser
+from common_tools.edl_parsers import detect_edl_parser, EDLParser, EDLParserError
 from config.config_loader import load_config
 from config.config import get_config
 from config.global_config import GLOBAL_CONFIG
@@ -218,9 +218,14 @@ class LogicProcessor:
 
             logger.info(f"Сформированы SRT файлы: \n{result_path}\n{backup_path}")
             return True
+        
+        except EDLParserError as e:
+            self.signals.error_signal.emit(f"{e}")
+            return False
+        
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка создания SRT файла {e}")
-            return False
+            return False     
         
     def convert_timecode_srt(self, timecode: str) -> str:
         """
@@ -429,6 +434,10 @@ class LogicProcessor:
             logger.info(f"Сформированы EDL файлы: \n{output_path}\n{backup_path}")
             logger.info("EDL файл успешно создан.")
             return True
+        
+        except EDLParserError as e:
+            self.signals.error_signal.emit(f"{e}")
+            return False        
 
         except Exception as e:
             self.signals.error_signal.emit(f"Ошибка конвертации EDL: {e}")
@@ -874,7 +883,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
                 projects_list.insert(0, "Select Project")
                 return projects_list
             else:
-                self.on_error_signal("Путь к папке проекта не обнаружен")
+                self.on_warning_signal("Путь к папке проекта не обнаружен")
                 return
 
     def get_shot_name(self):
@@ -929,7 +938,7 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.user_config = self.validator.collect_config()
 
         if not self.validator.validate(self.user_config):
-            self.on_error_signal("\n".join(self.validator.get_errors()))
+            self.on_warning_signal("\n".join(self.validator.get_errors()))
             return
 
         logger.info(f"\n\nSetUp:\n{pformat(self.user_config)}\n") 
