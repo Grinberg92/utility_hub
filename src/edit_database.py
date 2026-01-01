@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel,
     QTabWidget, QComboBox,  QTreeView, QHeaderView, QTextBrowser)
 from timecode import Timecode as tc
 from dvr_tools.css_style import apply_style
-from common_tools.edl_parsers import detect_edl_parser, EDLParser
+from common_tools.edl_parsers import detect_edl_parser, EDLParserError, EDLParser
 from dvr_tools.logger_config import get_logger
 from config.config_loader import load_config
 from config.config import get_config
@@ -166,7 +166,11 @@ class EditDatabase:
         Возвращает шоты со статусом монтажа "is_actual": True.
         """
         result_data = {}
-        project_data = self.data.get(project, {})
+    
+        if self.data[project] == {}:
+            raise KeyError("В указанном проекте нет монтажей")
+
+        project_data = self.data[project]
         for shot, edit in project_data.items():
             for _, edit_data in edit.items():
                 if edit_data.get("is_actual"):
@@ -222,6 +226,67 @@ class EditDatabase:
         self.data = {}
         with open(self.data_base, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=4, ensure_ascii=False) 
+
+class EDLInit(QObject):
+    """
+    Класс служит для инициализации данных из EDL.
+    """
+    finished = pyqtSignal(str) 
+    error = pyqtSignal(str) 
+
+    def __init__(self, fps: int, edl_path: str, project: str, update_status: bool,
+                  settings_config: dict):
+        super().__init__()
+        self.fps = fps
+        self.edl_path = edl_path
+        self.project = project
+        self.update_status = update_status
+        self.settings_config = settings_config
+
+    def run(self) -> None:
+        """
+        Основная логика.
+        """
+        try:
+            db_path = DATA_PATH
+
+        except Exception as e:
+            self.error.emit(f"Ошибка получения пути к базе данных: {e}")
+        
+        try:
+            db = EditDatabase(db_path, self.project)
+        except Exception as e:
+            self.error.emit(f"Ошибка получения объекта базы данных: {e}")
+
+        try:
+            parser_data = detect_edl_parser(self.fps, edl_path=self.edl_path)
+        except Exception as e:
+            self.error.emit(f"Ошибка парсинга EDL: {e}")
+
+        try:
+            for data in parser_data:
+                match =  re.match(self.settings_config["patterns"]["compare_versions_shot_no_versions_mask"], data.edl_shot_name)
+                if match:
+                    db.add_shot(project=self.project,
+                                shot_name=data.edl_shot_name,
+                                edit_name=data.edl_edit_name,
+                                shot_id=data.edl_record_id,
+                                track_type=data.edl_track_type,
+                                transition=data.edl_transition,
+                                src_in=data.edl_source_in,
+                                src_out=data.edl_source_out,
+                                src_out_full=data.edl_source_out_src,
+                                rec_in=data.edl_record_in,
+                                rec_out=data.edl_record_out,
+                                src_name=data.edl_source_name,
+                                update_status=self.update_status
+                                )
+
+            db.save()
+            db.backup()
+            self.finished.emit("Данные успешно добавлены!")
+        except Exception as e:
+            self.error.emit(f"Ошибка добавления данных в базу: {e}")
 
 class ShotRestorer(QObject):
     """
@@ -349,69 +414,15 @@ class ShotRestorer(QObject):
 
             logger.info(f"Сформированы файлы: \n{output_path}\n{backup_path}\n{loc_path}\n{loc_backup_path}")
             self.finished.emit(f"Обработка завершена!")
+
+        except KeyError as ke:
+            self.error.emit(f"{ke}")
+
+        except EDLParserError as epe:
+            self.error.emit(f"{epe}")
+
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
-
-class EDLInit(QObject):
-    """
-    Класс служит для инициализации данных из EDL.
-    """
-    finished = pyqtSignal(str) 
-    error = pyqtSignal(str) 
-
-    def __init__(self, fps: int, edl_path: str, project: str, update_status: bool,
-                  settings_config: dict):
-        super().__init__()
-        self.fps = fps
-        self.edl_path = edl_path
-        self.project = project
-        self.update_status = update_status
-        self.settings_config = settings_config
-
-    def run(self) -> None:
-        """
-        Основная логика.
-        """
-        try:
-            db_path = DATA_PATH
-
-        except Exception as e:
-            self.error.emit(f"Ошибка получения пути к базе данных: {e}")
-        
-        try:
-            db = EditDatabase(db_path, self.project)
-        except Exception as e:
-            self.error.emit(f"Ошибка получения объекта базы данных: {e}")
-
-        try:
-            parser_data = detect_edl_parser(self.fps, edl_path=self.edl_path)
-        except Exception as e:
-            self.error.emit(f"Ошибка парсинга EDL: {e}")
-
-        try:
-            for data in parser_data:
-                match =  re.match(self.settings_config["patterns"]["compare_versions_shot_no_versions_mask"], data.edl_shot_name)
-                if match:
-                    db.add_shot(project=self.project,
-                                shot_name=data.edl_shot_name,
-                                edit_name=data.edl_edit_name,
-                                shot_id=data.edl_record_id,
-                                track_type=data.edl_track_type,
-                                transition=data.edl_transition,
-                                src_in=data.edl_source_in,
-                                src_out=data.edl_source_out,
-                                src_out_full=data.edl_source_out_src,
-                                rec_in=data.edl_record_in,
-                                rec_out=data.edl_record_out,
-                                src_name=data.edl_source_name,
-                                update_status=self.update_status
-                                )
-
-            db.save()
-            db.backup()
-            self.finished.emit("Данные успешно добавлены!")
-        except Exception as e:
-            self.error.emit(f"Ошибка добавления данных в базу: {e}")
 
 class EDLComparator(QObject):
     """
@@ -653,6 +664,13 @@ class EDLComparator(QObject):
 
             logger.info(f"Сформирован отчет: {result_path}")
             self.finished.emit(f"Обработка успешно завершена!")
+
+        except KeyError as ke:
+            self.error.emit(f"{ke}")
+
+        except EDLParserError as epe:
+            self.error.emit(f"Ошибка: {epe}")
+
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
 
@@ -808,6 +826,9 @@ class PhaseChecker(QObject):
             
             #self.create_edl(adjusted_ranges)
             self.finished.emit(f"Обработка успешно завершена!")
+
+        except KeyError as ke:
+            self.error.emit(f"{ke}")
 
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
