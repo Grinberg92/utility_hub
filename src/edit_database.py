@@ -833,6 +833,99 @@ class PhaseChecker(QObject):
         except Exception as e:
             self.error.emit(f"Ошибка: {e}")
 
+class LocsAndOffline(QObject):
+
+    finished = pyqtSignal(str) 
+    progress = pyqtSignal(str)
+    error = pyqtSignal(str) 
+
+    def __init__(self, fps, project, target_edit_name, target_logic):
+        super().__init__()
+        self.fps = fps
+        self.project = project
+        self.target_edit_name = target_edit_name
+        self.target_logic = target_logic
+
+    def timecode_to_frame(self, fps: int, timecode: str) -> int:
+        """
+        Переводит таймкоды в значения фреймов.
+        """
+        return tc(fps, timecode).frames
+
+    def frame_to_timecode(self, fps: int, frames: int) -> str:
+        """
+        Переводит фреймы в значения таймкодов.
+        """
+        return str(tc(fps, frames=frames))
+
+    def create_output_edl(self, shot: dict, output) -> None:
+        """
+        Метод формирует аутпут файл в формате, пригодном для отображения оффлайн клипов в Resolve и AVID.
+
+        :param output: Файловый объект.
+        """
+        str1 = (f"{shot['id']} {shot['shot_name']} "
+                f"{shot['track_type']} {shot['transition']} "
+                f"{shot['src_in']} {shot['src_out']} "
+                f"{shot['rec_in']} {shot['rec_out']}")
+        str2 = f"\n* FROM CLIP NAME: {shot['shot_name']}\n"
+        output.write(str1)
+        output.write(str2)
+
+    def create_locs(self, shot_data: list[dict], loc_output):
+        '''
+        Создание и экспорт локатора AVID в аутпут файл.
+
+        :param loc_output: Файловый объект.
+        '''
+        try:
+            rec_in = shot_data["rec_in"]
+            rec_out = shot_data["rec_out"]
+            shot_name = shot_data["shot_name"]
+            rec_in = self.timecode_to_frame(self.fps, rec_in)
+            rec_out = self.timecode_to_frame(self.fps, rec_out)
+
+            center_timecode = int((rec_in + (rec_in + (rec_out - rec_in))) / 2)
+            # Используется спец табуляция для корректного импорта в AVID
+            output_string = f'PGM	{self.frame_to_timecode(self.fps, center_timecode)}	V3	yellow	{shot_name}\n'
+            loc_output.write(output_string)
+
+        except:
+            message = f"Не удалось создать маркер для шота {shot_name}"
+            logger.debug(message)
+            self.progress.emit(message)
+
+    def run(self):
+
+        try:
+            db = EditDatabase(DATA_PATH, self.project)
+
+            if self.target_logic == "Edit":
+                self.target_edit = db.get_shots_by_edit(self.project, self.target_edit_name)
+            if self.target_logic == "Actual":
+                self.target_edit = db.get_shots_by_actual(self.project)
+
+            edl_output_path = get_output_path(self.project, 'edl', f'{self.target_edit_name}_offline_EDL')
+
+            locs_output_path = get_output_path(self.project, 'txt', f"{self.target_edit_name}_AVID_LOCS")
+
+            with open(edl_output_path, 'w', encoding="utf-8") as o, open(locs_output_path, 'w', encoding="utf-8") as lo:
+                pass
+
+            for _, shot_data in self.target_edit.items():
+                with open(edl_output_path, 'a', encoding="utf-8") as o, open(locs_output_path, 'a', encoding="utf-8") as lo:
+                    self.create_output_edl(shot_data, o)
+                    self.create_locs(shot_data, lo)
+
+            logger.info(f"Сформированы документы: \n{edl_output_path}\n{locs_output_path}")
+            self.finished.emit(f"Обработка успешно завершена!")
+
+        except KeyError as ke:
+            self.error.emit(f"{ke}")
+
+        except Exception as e:
+            self.error.emit(f"Ошибка: {e}")
+
 class EDLGui(QWidget):
 
     def __init__(self):
@@ -848,6 +941,7 @@ class EDLGui(QWidget):
         tabs.addTab(self.init_tab(), "Init Edit")
         tabs.addTab(self.restore_tab(), "Restore shots")
         tabs.addTab(self.compare_tab(), "Compare Edits")
+        tabs.addTab(self.locoffline_tab(), "Locs&OfflineEDL")
         tabs.addTab(self.check_phase_tab(), "Max Range")
         tabs.addTab(self.view_database(), "View Database")
 
@@ -1006,14 +1100,14 @@ class EDLGui(QWidget):
         layout.addLayout(fps_layout)
 
         # Project
-        compare_project_layout = QHBoxLayout()
-        compare_project_layout.addStretch()
+        locs_project_layout = QHBoxLayout()
+        locs_project_layout.addStretch()
         self.compare_project_cb = QComboBox()
         self.compare_project_cb.setFixedWidth(300)
         self.compare_project_cb.addItems(self.get_project())
-        compare_project_layout.addWidget(self.compare_project_cb)
-        compare_project_layout.addStretch()
-        layout.addLayout(compare_project_layout)
+        locs_project_layout.addWidget(self.compare_project_cb)
+        locs_project_layout.addStretch()
+        layout.addLayout(locs_project_layout)
 
         # Base Edit
         base_edit_layout = QHBoxLayout()
@@ -1073,7 +1167,69 @@ class EDLGui(QWidget):
 
         tab.setLayout(layout)
         return tab
-    
+
+    def locoffline_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+
+        # FPS
+        fps_layout = QHBoxLayout()
+        fps_layout.addStretch()
+        fps_layout.addWidget(QLabel("FPS:"))
+        self.locs_fps_input = QLineEdit("24")
+        self.locs_fps_input.setMaximumWidth(40)
+        fps_layout.addWidget(self.locs_fps_input)
+        fps_layout.addStretch()
+        layout.addLayout(fps_layout)
+
+        # Project
+        locs_project_layout = QHBoxLayout()
+        locs_project_layout.addStretch()
+        self.locs_project_cb = QComboBox()
+        self.locs_project_cb.setFixedWidth(300)
+        self.locs_project_cb.addItems(self.get_project())
+        locs_project_layout.addWidget(self.locs_project_cb)
+        locs_project_layout.addStretch()
+        layout.addLayout(locs_project_layout)
+
+        # Base Edit
+        target_edit_layout = QHBoxLayout()
+        target_edit_layout.addWidget(QLabel("Target Edit:"))
+
+        target_edit_layout.addSpacing(10)
+        self.locs_trg_logic_cb = QComboBox()
+        self.locs_trg_logic_cb.addItems(["Based on", "Actual", "Edit"])
+        target_edit_layout.addWidget(self.locs_trg_logic_cb, 1)
+
+        self.locs_trg_edit_cb = QComboBox()
+        self.locs_trg_edit_cb.setMinimumWidth(250)
+        target_edit_layout.addWidget(self.locs_trg_edit_cb, 1)
+
+        self.locs_project_cb.currentTextChanged.connect(
+            lambda _: self.get_edit(self.locs_project_cb, self.locs_trg_edit_cb, self.locs_trg_logic_cb)
+        )
+        self.locs_trg_logic_cb.currentTextChanged.connect(
+            lambda _: self.get_edit(self.locs_project_cb, self.locs_trg_edit_cb, self.locs_trg_logic_cb)
+        )
+
+        layout.addLayout(target_edit_layout)
+
+        # Run button
+        self.locs_start_btn = QPushButton("Start")
+        self.locs_start_btn.clicked.connect(self.start_locs)
+        layout.addWidget(self.locs_start_btn)
+
+        # Log
+        self.locs_log = QTextBrowser()
+        self.locs_log.setPlaceholderText("Warnings")
+        self.locs_log.setReadOnly(True)
+        self.locs_log.setOpenLinks(False)
+        self.locs_log.anchorClicked.connect(self.open_in_file_manager)
+        layout.addWidget(self.locs_log)
+
+        tab.setLayout(layout)
+        return tab    
+
     def check_phase_tab(self):
         tab = QWidget()
         layout = QVBoxLayout()
@@ -1700,6 +1856,66 @@ class EDLGui(QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.finished.connect(lambda: self.compare_start_btn.setEnabled(True))
         self.worker.error.connect(lambda: self.compare_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda: self.thread.quit())
+
+        self.thread.start()
+
+    def locs_validate_inputs(self):
+        """
+        Валидация пользовательских данных из таба Locs&OfflineEDL.
+        """
+        project = self.locs_project_cb.currentText().strip()
+        target_edit = self.locs_trg_edit_cb.currentText().strip()
+        target_logic = self.locs_trg_logic_cb.currentText().strip()
+
+        try:
+            fps = int(self.locs_fps_input.text())
+            if fps <= 0:
+                raise ValueError("FPS должно быть больше 0")
+        except ValueError:
+            self.on_error("FPS должно быть целым числом больше 0")
+            return None
+
+        if project == "Select Project":
+            self.on_error("Укажите проект для базового монтажа")
+            return None
+           
+        if target_logic == "Based on":
+            self.on_error("Выберете корректное значение логики")
+            return None
+        
+        if target_logic == "Edit":
+            if target_edit == "Select Edit":
+                self.on_error("Укажите целевой монтаж")
+                return None
+    
+        return fps, project, target_edit, target_logic
+
+    def start_locs(self):
+        """
+        Запуск создания локаторов и оффлайн EDL.
+        """
+        inputs = self.locs_validate_inputs()
+        if not inputs:
+            return
+
+        fps, project, target_edit, target_logic = inputs
+        self.thread = QThread()
+        self.worker = LocsAndOffline(fps, project, 
+                                    target_edit, target_logic)
+        self.worker.moveToThread(self.thread)
+
+        self.thread.started.connect(self.worker.run)
+        self.locs_start_btn.setEnabled(False)
+        self.worker.finished.connect(self.on_finished)
+        self.worker.error.connect(self.on_error)
+        self.worker.progress.connect(self.log.append)
+
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.finished.connect(lambda: self.locs_start_btn.setEnabled(True))
+        self.worker.error.connect(lambda: self.locs_start_btn.setEnabled(True))
         self.worker.error.connect(lambda: self.thread.quit())
 
         self.thread.start()
