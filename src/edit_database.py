@@ -857,6 +857,13 @@ class LocsAndOffline(QObject):
         Переводит фреймы в значения таймкодов.
         """
         return str(tc(fps, frames=frames))
+    
+    def out_hyper(self, file_path: str) -> None:
+        """
+        Выводит в GUI ссылку на фолдер с документами.
+        """
+        url = Path(file_path).parent.as_uri()
+        self.progress.emit(f'Путь к документам: <a href="{url}">{url}</a></span>')
 
     def create_output_edl(self, shot: dict, output) -> None:
         """
@@ -918,6 +925,7 @@ class LocsAndOffline(QObject):
                     self.create_locs(shot_data, lo)
 
             logger.info(f"Сформированы документы: \n{edl_output_path}\n{locs_output_path}")
+            self.out_hyper(edl_output_path)
             self.finished.emit(f"Обработка успешно завершена!")
 
         except KeyError as ke:
@@ -1909,7 +1917,7 @@ class EDLGui(QWidget):
         self.locs_start_btn.setEnabled(False)
         self.worker.finished.connect(self.on_finished)
         self.worker.error.connect(self.on_error)
-        self.worker.progress.connect(self.log.append)
+        self.worker.progress.connect(self.locs_log.append)
 
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
