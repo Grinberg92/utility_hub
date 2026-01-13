@@ -177,16 +177,15 @@ class EDLParser:
 
     def __iter__(self):
         try:
-
+            
             if self._lines is not None:
                 lines = self._lines
+                if lines and "TITLE" in lines[0]:
+                    edit_name = lines[0].strip().split(":", 1)[1].strip()
             else:
                 with open(self.edl_path, 'r', encoding="utf-8") as edl_file:
                     lines = edl_file.readlines()
-            if self.edl_path:
-                edit_name = str(Path((self.edl_path)).stem)
-            if lines and "TITLE" in lines[0]:
-                edit_name = lines[0].strip().split(":", 1)[1].strip() # Отрезаем слово 'TITLE'
+                edit_name = Path(self.edl_path).stem
 
             i = 0
             while i < len(lines):
