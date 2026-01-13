@@ -988,6 +988,7 @@ class EDLGui(QWidget):
         self.project_combo.addItems(self.get_project())
         self.project_combo.currentTextChanged.connect(self.get_project_settings)
         self.project_combo.setFixedWidth(300)
+        self.project_combo.currentTextChanged.connect(self.init_ui_state)
         project_layout.addWidget(self.project_combo)
         project_layout.addStretch()
         layout.addLayout(project_layout)
@@ -1672,11 +1673,22 @@ class EDLGui(QWidget):
         else:
             self.on_error("Путь к папке с проекта не обнаружен")
             return
+        
+    def init_ui_state(self):
+        """
+        Локировка полей UI.
+        """
+        self.project_edit_name.setEnabled(self.project_combo.currentText() == 'Select Project')
 
     def init_validate_inputs(self):
         """
         Валидация пользовательских данных из таба Init Edit.
         """
+
+        if self.project_combo.currentText() == 'Select Project' and self.project_edit_name.text() == "":
+            self.on_error("Выберите проект из списка")
+            return None
+
         try:
             fps = int(self.init_fps_input.text())
             if fps <= 0:
