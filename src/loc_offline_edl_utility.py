@@ -308,6 +308,19 @@ class LogicProcessor:
         output.write(str1)
         output.write(str2)
 
+    def create_noretime_output(self, shot: EDLParser, output, marker_name:list=None) -> None:
+        """
+        Аутпут для метода no_retime_v23.
+        """
+        shot_name = marker_name if marker_name is not None else shot.edl_shot_name
+
+        str1 = (f"{shot.edl_record_id} {shot_name} "
+                f"{shot.edl_track_type} {shot.edl_transition} "
+                f"{shot.edl_source_in} {shot.edl_source_out} "
+                f"{shot.edl_record_in} {shot.edl_record_out}"
+                f"\n")
+        output.write(str1)
+
     def process_edl(self) -> bool:
         """
         Выводит EDL c оффлайн клипами.
@@ -443,6 +456,32 @@ class LogicProcessor:
             self.signals.error_signal.emit(f"Ошибка конвертации EDL: {e}")
             return False
             
+    def no_retime_v23(self, edl_path: str) -> None:
+        """
+        Пересбор EDL с удалением ретаймов в сорс тамкодах (для AVID).
+        """
+        try:
+            output_path = Path(str(edl_path).replace(".edl", "_no_retime.edl"))
+            backup_path = get_output_path(self.project_name, "edl", os.path.basename(edl_path).replace(".edl", f"_no_retime"))
+            parser = detect_edl_parser(fps=self.fps, edl_path=edl_path)
+
+            with open(output_path, 'w', encoding="utf-8") as o, open(backup_path, 'w', encoding="utf-8") as ob:
+                for shot in parser:
+                    self.create_noretime_output(shot, o)
+                    self.create_noretime_output(shot, ob)
+
+            logger.info(f"Сформированы EDL файлы: \n{output_path}\n{backup_path}")
+            logger.info("EDL файл успешно создан.")
+            return True
+        
+        except EDLParserError as e:
+            self.signals.error_signal.emit(f"{e}")
+            return False        
+
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка удаления ретайма в EDL: {e}")
+            return False
+
     def run(self) -> bool:
         self.timeline = ResolveObjects().timeline
         self.resolve = ResolveObjects().resolve
@@ -467,6 +506,7 @@ class LogicProcessor:
         self.postfix = self.user_config["postfix_name"]
         self.set_track_id = self.user_config["set_track_id"]
         self.convert_edl = self.user_config["convert_edl"]
+        self.no_retime = self.user_config["no_retime"]
 
         load_config(self.project_name)
         self.config = get_config()
@@ -503,6 +543,11 @@ class LogicProcessor:
         if self.convert_edl:
             convert_edl_var = self.convert_v3_to_v23(self.edl_path)
             if not convert_edl_var:
+                return False
+
+        if self.no_retime:
+            no_retime_var = self.no_retime_v23(self.edl_path)
+            if not no_retime_var:
                 return False
             
         if self.name_from_markers or self.name_from_track:
@@ -566,7 +611,8 @@ class ConfigValidator:
         "set_track_id": self.gui.set_track_id.isChecked(),
         "convert_edl": self.gui.convert_edl.isChecked(),
         "convert_marker": self.gui.convert_marker.isChecked(),
-        "project": self.gui.project_menu.currentText() != "Select Project"
+        "project": self.gui.project_menu.currentText() != "Select Project",
+        "no_retime": self.gui.no_retime.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -592,9 +638,10 @@ class ConfigValidator:
         project = user_config["project"]
         shot_filter = user_config["shot_filter"]
         convert_marker = user_config["convert_marker"]
+        no_retime = user_config["no_retime"]
 
         if not any([name_from_track, name_from_markers, offline_edl_cb, 
-                    create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt, convert_edl]):
+                    create_srt_cb, export_loc_cb, set_markers_cb, edl_from_srt, convert_edl, no_retime]):
             self.errors.append("Не выбрана ни одна опция!")
             return
 
@@ -751,17 +798,19 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         convert_layout = QHBoxLayout()
         convert_layout2 = QHBoxLayout()
         convert_layout.setAlignment(Qt.AlignLeft)
-        self.offline_clips_checkbox = QCheckBox("Resolve markers to EDL_v23")
+        self.offline_clips_checkbox = QCheckBox("Resolve markers to EDLv23")
         self.create_srt_cb = QCheckBox("EDL to SRT")
         self.srt_to_edl_cb = QCheckBox("SRT to EDL")
-        self.convert_edl = QCheckBox("EDL_v3 to EDL_v23")
-        self.convert_marker = QCheckBox("Resolve markers to Avid locators")
+        self.convert_edl = QCheckBox("EDL_v3 to EDLv23")
+        self.convert_marker = QCheckBox("Resolve markers to Avid locs")
+        self.no_retime = QCheckBox("EDL no retime")
         self.filter_shot = QCheckBox("Shot filter")
         self.offline_clips_checkbox.stateChanged.connect(self.update_fields_state)
         self.create_srt_cb.stateChanged.connect(self.update_fields_state)
         self.srt_to_edl_cb.stateChanged.connect(self.update_fields_state)
         self.convert_edl.stateChanged.connect(self.update_fields_state)
         self.convert_marker.stateChanged.connect(self.update_fields_state)
+        self.no_retime.stateChanged.connect(self.update_fields_state)
         convert_layout.addWidget(self.offline_clips_checkbox)
         convert_layout.addSpacing(30)
         convert_layout.addWidget(self.create_srt_cb)
@@ -771,7 +820,9 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         convert_layout.addWidget(self.convert_edl)
         convert_layout.addSpacing(30)
         convert_layout2.addWidget(self.convert_marker)
-        convert_layout2.addSpacing(243)        
+        convert_layout2.addSpacing(20)
+        convert_layout2.addWidget(self.no_retime)
+        convert_layout2.addSpacing(132)        
         convert_layout2.addWidget(self.filter_shot)
         convert_layout2.addStretch()
         block2_group_layout.addLayout(convert_layout)
@@ -921,14 +972,14 @@ class EDLProcessorGUI(QtWidgets.QWidget):
         self.input_entry.setEnabled(self.create_srt_cb.isChecked())
         self.input_btn.setEnabled(self.create_srt_cb.isChecked())
 
-        input_enabled = self.create_srt_cb.isChecked() or self.srt_to_edl_cb.isChecked() or self.convert_edl.isChecked()
+        input_enabled = self.create_srt_cb.isChecked() or self.srt_to_edl_cb.isChecked() or self.convert_edl.isChecked() or self.no_retime.isChecked()
         self.input_entry.setEnabled(input_enabled)
         self.input_btn.setEnabled(input_enabled)
 
         self.output_entry.setEnabled(not any((self.srt_to_edl_cb.isChecked(), 
-                                              self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
+                                              self.create_srt_cb.isChecked(), self.convert_edl.isChecked(), self.no_retime.isChecked())))
         self.output_btn.setEnabled(not any((self.srt_to_edl_cb.isChecked(), 
-                                            self.create_srt_cb.isChecked(), self.convert_edl.isChecked())))
+                                            self.create_srt_cb.isChecked(), self.convert_edl.isChecked(), self.no_retime.isChecked())))
 
         self.output_entry.setEnabled(any((self.offline_clips_checkbox.isChecked(), self.convert_marker.isChecked())))
         self.output_btn.setEnabled(any((self.offline_clips_checkbox.isChecked(),  self.convert_marker.isChecked())))
