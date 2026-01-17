@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QSize, QUrl
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import (QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QPushButton,  QApplication, QFileDialog, QWidget, QTextEdit, 
-    QTabWidget, QComboBox,  QTreeView, QHeaderView, QTextBrowser)
+    QTabWidget, QComboBox,  QTreeView, QHeaderView, QTextBrowser, QCheckBox)
 from timecode import Timecode as tc
 from dvr_tools.css_style import apply_style
 from common_tools.edl_parsers import detect_edl_parser, EDLParserError, EDLParser
@@ -433,14 +433,16 @@ class EDLComparator(QObject):
     error = pyqtSignal(str) 
 
     def __init__(self, fps: int, project: str, base_edit: str, 
-                target_edit: str, base_logic: str, target_logic: str):
+                target_edit: str, base_logic: str, target_logic: str, tmp_target_edit: str, is_tmp_edit: bool):
         super().__init__()
         self.fps = fps
         self.project = project
         self.base_edit_name = base_edit
         self.target_edit_name = target_edit
+        self.tmp_target_edit = tmp_target_edit
         self.base_logic = base_logic
         self.target_logic = target_logic
+        self.is_tmp_edit = is_tmp_edit
 
     def timecode_to_frame(self, fps: int, timecode: str) -> int:
         """
@@ -460,6 +462,28 @@ class EDLComparator(QObject):
         """
         url = Path(file_path).resolve().as_uri()
         self.progress.emit(f'Посмотреть отчет: <a href="{url}">{url}</a></span>')
+
+    def convert_parser_to_dict(self) -> dict:
+        """
+        Конвертирует данные EDL парсера в dict для temp монтажей.
+        """
+        target_edit = {}
+        tmp_shots_data = detect_edl_parser(self.fps, edl_path=self.tmp_target_edit)
+        for shot in tmp_shots_data:
+            target_edit[shot.edl_shot_name] = {}
+            target_edit[shot.edl_shot_name].update({"id": shot.edl_record_id})
+            target_edit[shot.edl_shot_name].update({"track_type": shot.edl_track_type})
+            target_edit[shot.edl_shot_name].update({"transition": shot.edl_transition})
+            target_edit[shot.edl_shot_name].update({"shot_name": shot.edl_shot_name})
+            target_edit[shot.edl_shot_name].update({"src_name": shot.edl_source_name})
+            target_edit[shot.edl_shot_name].update({"src_in": shot.edl_source_in})
+            target_edit[shot.edl_shot_name].update({"src_out": shot.edl_source_out})
+            target_edit[shot.edl_shot_name].update({"src_out_full": shot.edl_source_out_src})
+            target_edit[shot.edl_shot_name].update({"rec_in": shot.edl_record_in})
+            target_edit[shot.edl_shot_name].update({"rec_out": shot.edl_record_out})
+            target_edit[shot.edl_shot_name].update({"edit_version": shot.edl_edit_name})
+
+        return target_edit
 
     def overlap_range(self, fps: int, base_src_in: str, base_src_out: str, targ_src_in: str, 
                       targ_src_out: str, shot_name: str, target_shot_data: str) -> bool:
@@ -573,8 +597,6 @@ class EDLComparator(QObject):
 
             wb.save(filepath)
 
-            logger.info(f"Сохранен Excel файл: {filepath}")
-
             return filepath
         
         except Exception as e:
@@ -599,7 +621,7 @@ class EDLComparator(QObject):
         Сортирует аутпут в зависимости от категории изменений.
         """
         for status, data in reedit_data.items():
-            output_path = get_output_path(self.project, 'edl', status , subfolder='reedit_edl')
+            output_path = get_output_path(self.project, 'edl', status , subfolder=f'reedit_edl_{dt.now().strftime("%Y%m%d%H%M")}')
             with open(output_path, 'w', encoding="utf-8") as o:
                 pass
             for shot_data in data:
@@ -642,13 +664,16 @@ class EDLComparator(QObject):
 
             if self.base_logic == "Edit":
                 self.base_edit = db.get_shots_by_edit(self.project, self.base_edit_name)
-            if self.base_logic == "Actual":
+            elif self.base_logic == "Actual":
                 self.base_edit = db.get_shots_by_actual(self.project)
-            
-            if self.target_logic == "Edit":
-                self.target_edit = db.get_shots_by_edit(self.project, self.target_edit_name)
-            if self.target_logic == "Actual":
-                self.target_edit = db.get_shots_by_actual(self.project)
+
+            if not self.is_tmp_edit:
+                if self.target_logic == "Edit":
+                    self.target_edit = db.get_shots_by_edit(self.project, self.target_edit_name)
+                if self.target_logic == "Actual":
+                    self.target_edit = db.get_shots_by_actual(self.project)
+            else:
+                self.target_edit = self.convert_parser_to_dict()
 
             self.find_cross()
 
@@ -1075,7 +1100,7 @@ class EDLGui(QWidget):
         base_layout.addSpacing(4)
         self.restore_new_input = QLineEdit()
         browse_button = QPushButton("Choose")
-        browse_button.clicked.connect(self.browse_restore_new)
+        browse_button.clicked.connect(self.browse_restore)
         target_layout.addWidget(self.restore_new_input)
         target_layout.addWidget(browse_button)
         layout.addLayout(target_layout)
@@ -1161,6 +1186,26 @@ class EDLGui(QWidget):
 
         layout.addLayout(target_edit_layout)
 
+        choose_tmp_layout = QHBoxLayout()
+        choose_tmp_layout.addWidget(QLabel("Use temporary edit"))
+        choose_tmp_layout.addSpacing(10)
+        self.choose_tmp_cb = QCheckBox("")
+        self.choose_tmp_cb.stateChanged.connect(self.compare_ui_state)
+        choose_tmp_layout.addWidget(self.choose_tmp_cb)
+        choose_tmp_layout.addStretch()
+        layout.addLayout(choose_tmp_layout)
+
+        # Target Edit tmp
+        tmp_target_edit_layout = QHBoxLayout()
+        tmp_target_edit_layout.addWidget(QLabel("Temp Edit:"))
+        tmp_target_edit_layout.addSpacing(5)
+        self.compare_tmp_input = QLineEdit()
+        self.compare_tmp_btn = QPushButton("Choose")
+        self.compare_tmp_btn.clicked.connect(self.browse_compare)
+        tmp_target_edit_layout.addWidget(self.compare_tmp_input)
+        tmp_target_edit_layout.addWidget(self.compare_tmp_btn)
+        layout.addLayout(tmp_target_edit_layout)
+
         # Run button
         self.compare_start_btn = QPushButton("Start")
         self.compare_start_btn.clicked.connect(self.start_comparison)
@@ -1174,6 +1219,7 @@ class EDLGui(QWidget):
         self.log.anchorClicked.connect(self.open_in_file_manager)
         layout.addWidget(self.log)
 
+        self.compare_ui_state()
         tab.setLayout(layout)
         return tab
 
@@ -1605,10 +1651,15 @@ class EDLGui(QWidget):
 
         self.select_found_item(self.current_found)
 
-    def browse_restore_new(self):
+    def browse_restore(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select New Edit", "", "EDL files (*.edl)")
         if path:
             self.restore_new_input.setText(path)
+
+    def browse_compare(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Select New Edit", "", "EDL files (*.edl)")
+        if path:
+            self.compare_tmp_input.setText(path)
     
     def browse_init_edl(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select EDL", "", "EDL files (*.edl)")
@@ -1809,7 +1860,17 @@ class EDLGui(QWidget):
 
         self.thread.start()
 
-    def analyze_validate_inputs(self):
+    def compare_ui_state(self):
+        """
+        Локирование полей интерфейса в табе Compare Edit.
+        """
+        self.compare_tmp_input.setEnabled(self.choose_tmp_cb.isChecked())
+        self.compare_tmp_btn.setEnabled(self.choose_tmp_cb.isChecked())
+        
+        self.target_logic_combo.setEnabled(not self.choose_tmp_cb.isChecked())
+        self.compare_target_edit_cb.setEnabled(not self.choose_tmp_cb.isChecked())
+
+    def compare_validate_inputs(self):
         """
         Валидация пользовательских данных из таба Compare Edits.
         """
@@ -1818,7 +1879,8 @@ class EDLGui(QWidget):
         target_edit = self.compare_target_edit_cb.currentText().strip()
         base_logic = self.base_logic_combo.currentText().strip()
         target_logic = self.target_logic_combo.currentText().strip()
-
+        tmp_target_edit = self.compare_tmp_input.text()
+        is_tmp_edit = self.choose_tmp_cb.isChecked()
         try:
             fps = int(self.fps_input.text())
             if fps <= 0:
@@ -1840,29 +1902,36 @@ class EDLGui(QWidget):
                 self.on_error("Укажите базовый монтаж")
                 return None
             
-        if target_logic == "Based on":
-            self.on_error("Выберете корректное значение логики")
-            return None
+
+        if not is_tmp_edit:
+            if target_logic == "Based on":
+                self.on_error("Выберете корректное значение логики")
+                return None
+            
+            if target_logic == "Edit":
+                if target_edit == "Select Edit":
+                    self.on_error("Укажите целевой монтаж")
+                    return None
         
-        if target_logic == "Edit":
-            if target_edit == "Select Edit":
-                self.on_error("Укажите целевой монтаж")
+        if is_tmp_edit:
+            if not os.path.isfile(tmp_target_edit):
+                self.on_error("Укажите корректный путь к Temp Edit")
                 return None
     
-        return fps, project, base_edit, target_edit, base_logic, target_logic
+        return fps, project, base_edit, target_edit, base_logic, target_logic, tmp_target_edit
 
     def start_comparison(self):
         """
         Запуск сравнения монтажей.
         """
-        inputs = self.analyze_validate_inputs()
+        inputs = self.compare_validate_inputs()
         if not inputs:
             return
 
-        fps, project, base_edit, target_edit, base_logic, target_logic = inputs
+        fps, project, base_edit, target_edit, base_logic, target_logic, tmp_tagret_edit = inputs
         self.thread = QThread()
         self.worker = EDLComparator(fps, project, base_edit, 
-                                    target_edit, base_logic, target_logic)
+                                    target_edit, base_logic, target_logic, tmp_tagret_edit, self.choose_tmp_cb.isChecked())
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.run)
