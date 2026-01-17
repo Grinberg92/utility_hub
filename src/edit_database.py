@@ -1900,8 +1900,7 @@ class EDLGui(QWidget):
         if base_logic == "Edit":
             if base_edit == "Select Edit":
                 self.on_error("Укажите базовый монтаж")
-                return None
-            
+                return None   
 
         if not is_tmp_edit:
             if target_logic == "Based on":
