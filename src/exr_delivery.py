@@ -26,6 +26,7 @@ EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["extentions"]
 FALSE_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["false_extentions"]
 RESOLVE_PROJECT_PRESETS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["project_presets"]
 COPTER_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["copter_extentions"]
+LUT_PATH = GLOBAL_CONFIG["scripts_settings"]["exr_delivery"]["LUT_win"]
 
 class DvrTimelineObject():
     """
@@ -263,6 +264,13 @@ class DeliveryPipline:
 
         return no_empty_tracks
     
+    def set_LUT(self, item) -> None:
+        """
+        Установка LUT на клип.
+        """
+        item.timeline_item.SetLUT(1, LUT_PATH)
+        logger.info(f"Применен LUT: {os.path.basename(LUT_PATH)}")
+    
     def set_project_preset(self, item) -> bool:
         """
         Установка пресета проекта.
@@ -271,8 +279,9 @@ class DeliveryPipline:
         # и автоматическое перелючение пресета на YRGB RCM при рендере .dng, .mov, .mp4, .jpg .
         if self.project_preset == RESOLVE_PROJECT_PRESETS[0]:
             if item.mp_item.GetName().lower().endswith(COPTER_EXTENTIONS) or item.mp_item.GetName().lower().endswith(FALSE_EXTENTIONS):
-                preset = RESOLVE_PROJECT_PRESETS[1]
+                preset = RESOLVE_PROJECT_PRESETS[2]
                 set_preset_var = self.project.SetPreset(preset)
+                self.set_LUT(item)
                 if set_preset_var is not None:
                     logger.info(f"Применен пресет проекта: {preset}")
                     return True
@@ -715,11 +724,7 @@ class DeliveryPipline:
 
                     # Проверка на раасширения (".mov", ".mp4", ".jpg")
                     if clip.GetName().lower().endswith(FALSE_EXTENTIONS) and not item.clip_color == COLORS[4]:
-                        warnings_question.append((clip.GetName(), track_num))   
-
-                    # Проверка на коптерное расширение .dng
-                    if clip.GetName().lower().endswith(COPTER_EXTENTIONS) and not item.clip_color == COLORS[4]:
-                        warnings_question.append((clip.GetName(), track_num))   
+                        warnings_question.append((clip.GetName(), track_num))    
 
                     # Сбор статусов для проверки хотя бы одного ввыделенного клипа на таймлайне
                     if not item.clip_color == COLORS[4]:
