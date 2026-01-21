@@ -1,6 +1,6 @@
 import sys
 from collections import Counter
-from datetime import datetime as dt
+from datetime import date, datetime as dt
 from pprint import pformat
 import os
 import openpyxl
@@ -9,10 +9,10 @@ import bisect
 import csv
 from pathlib import Path
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QLabel, QLineEdit, QPushButton, QRadioButton, 
-                             QVBoxLayout, QHBoxLayout, QGroupBox, QTextEdit, QComboBox, 
-                             QWidget, QMessageBox, QSizePolicy, QButtonGroup)
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+                             QVBoxLayout, QHBoxLayout, QGroupBox, QTextBrowser, QComboBox, QCheckBox,
+                             QWidget, QMessageBox, QSizePolicy, QButtonGroup, QListView)
+from PyQt5.QtGui import QFont, QStandardItemModel, QStandardItem
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QUrl
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from config.config_loader import load_config
@@ -125,7 +125,7 @@ class VersionComparer:
                 if shot.value is not None and shot.value != '' and re.search(self.pattern_shot_number, shot.value):
                     self.gui.global_counter += 1
 
-    def check_reel_excel(self, sheet) -> None:
+    def check_reel_excel(self, sheet, reel_num) -> None:
         """
         Метод проверяет незаполненные поля рил в контрольной таблице.
         """  
@@ -134,7 +134,7 @@ class VersionComparer:
 
         reel_shot = list(zip(reels_column, shots_column))
 
-        if int(self.resolve_reel) != 0:
+        if int(reel_num) != 0:
             for reel, shot in reel_shot:
                 if shot.value is not None and shot.value != '' and reel.value is None:
                     self.signals.warnings.emit(f"🔴  Не указан рил в шоте {shot.value}")        
@@ -152,7 +152,7 @@ class VersionComparer:
                 for string in file:
                     self.gui.global_counter += 1
 
-    def read_column_from_excel(self)-> list: 
+    def read_column_from_excel(self, reel_num: str)-> list: 
         '''
         Получаем данные из .xlsx файла.
         '''
@@ -161,12 +161,11 @@ class VersionComparer:
             workbook = openpyxl.load_workbook(self.control_table_path) 
             sheet = workbook[self.sheet_name]
             self.count_global_excel(sheet)
-
-            if self.gui.current_counter == 0 and int(self.resolve_reel) != 0:
-                self.check_reel_excel(sheet)
+            if self.gui.current_counter == 0 and int(reel_num) != 0:
+                self.check_reel_excel(sheet, reel_num)
             
             # Проверка, указан ли номер рила или рил = 0
-            is_reel = int(self.resolve_reel) != 0
+            is_reel = int(reel_num) != 0
 
             shots_column = sheet[self.column_shots]
 
@@ -181,7 +180,7 @@ class VersionComparer:
             # Считываем данные из списка кортежей (рил, шот)
             for reel, shot in reel_shot:
                 if (not is_reel) or (reel.value is not None and reel.value != ''):  # Проверяем что ячейка рила не пустая, если он не равен 0
-                    if (not is_reel) or re.search(self.resolve_reel, str(reel.value)):  # Проверяем соответствие рила если он не равен 0
+                    if (not is_reel) or re.search(reel_num, str(reel.value)):  # Проверяем соответствие рила если он не равен 0
                         if shot.value is not None and shot.value != '':  # Проверяем что ячейка шота не пустая
                             match_shot = re.search(self.pattern_long, shot.value)  # Проаеряем что шот соответствует паттерну имени шота
                             if match_shot:
@@ -199,7 +198,7 @@ class VersionComparer:
             self.signals.error_signal.emit(f"Не удалось получить данные из Excel документа: {e}")
             return []
 
-    def read_column_from_csv(self)-> list:
+    def read_column_from_csv(self, reel_num: str)-> list:
         '''
         Получаем данные из .csv файла.
         '''
@@ -216,19 +215,19 @@ class VersionComparer:
                 for shot in file:
                     
                     # Если не указан рил, выбран 0 рил и current_counter пуст
-                    if int(self.resolve_reel) != 0 and self.gui.current_counter == 0 and (shot["Reel"] == "" or not shot["Reel"]):
+                    if int(reel_num) != 0 and self.gui.current_counter == 0 and (shot["Reel"] == "" or not shot["Reel"]):
                         self.signals.warnings.emit(f"🔴  Не указан номер рила в шоте {shot['Entity']}")
                         self.failed_names.add(shot['Entity'])
                         self.gui.current_counter += 1
 
-                    if not shot['Path to EXR'] and not shot['Path to Frames'] and (re.search(self.resolve_reel, shot['Reel']), True)[int(self.resolve_reel) == 0]: # Если нет адресов
+                    if not shot['Path to EXR'] and not shot['Path to Frames'] and (re.search(reel_num, shot['Reel']), True)[int(reel_num) == 0]: # Если нет адресов
                         self.signals.warnings.emit(f"🔴  Отсутствуют данные о шоте {shot['Entity']}")
                         self.failed_names.add(shot['Entity'])
                         self.gui.current_counter += 1
                         continue
 
                     # Если есть путь к exr и рил в контрольном списке соответствует рилу резолв в гуи
-                    if shot['Path to EXR'] and (re.search(self.resolve_reel, shot['Reel']), True)[int(self.resolve_reel) == 0]: 
+                    if shot['Path to EXR'] and (re.search(reel_num, shot['Reel']), True)[int(reel_num) == 0]: 
                         try:
                             shot['Path to EXR']
                             try:
@@ -243,7 +242,7 @@ class VersionComparer:
                             pass # Ничего не делать. Переходим к проверке Path to Frames
                     
                     # Если нет пути к exr и рил в контрольном списке соответствует рилу резолв в гуи
-                    if not shot['Path to EXR'] and (re.search(self.resolve_reel, shot['Reel']), True)[int(self.resolve_reel) == 0]:
+                    if not shot['Path to EXR'] and (re.search(reel_num, shot['Reel']), True)[int(reel_num) == 0]:
                         try:
                             control_table[re.search(self.pattern_short, shot['Path to Frames']).group(0)] = re.search(self.pattern_long, shot['Path to Frames']).group(0).lower()
                             dublicate_shot.append(re.search(self.pattern_short, shot['Path to Frames']).group(0))
@@ -258,20 +257,27 @@ class VersionComparer:
             self.signals.error_signal.emit(f"Не удалось получить данные из CSV документа: {e}")
             return []
         
-    def export_result(self)-> bool:
+    def out_hyper(self, file_path: str) -> None:
+        """
+        Выводит в GUI ссылку на аутпут документ.
+        """
+        url = Path(file_path).resolve().as_uri()
+        self.signals.warnings.emit(f'Посмотреть отчет: <a href="{url}">{url}</a></span>')
+        
+    def export_result(self, reel_num) -> bool:
         """
         Экспорт результатов проверки.
         """   
         try:
             output_path = self.get_output_path(self.project, "txt", f"{self.project}_compare_report")
             with open(output_path, 'a', encoding='utf-8') as o:
-                o.write(self.resolve_reel + " РИЛ" + "\n")      
+                o.write(reel_num + "REEL" + "\n")      
                 for key, value in self.result_list.items():
                     o.write("\n" + key + "\n\n") 
                     for item in value:
                         o.write(item + "\n")
                 o.write("_"* 80 + '\n\n')
-            return True
+            return output_path
         except:
             return False
         
@@ -364,24 +370,22 @@ class VersionComparer:
         #self.total_miss(timeline_items, control_table) 
         return True
     
-    def is_valid_track(self, timeline:ResolveObjects) -> bool:
-        '''
-        Валидация и проверка существования трека.
-        '''
-        if timeline.GetTrackCount("video") < self.out_track or self.in_track == 0:
-            self.signals.warning_signal.emit(f"Указан несущствующий трек")
-            return False
-        return True
-    
+    def get_reel_num(self, project) -> int:
+        """
+        Возвращает номер рила полученный из имени проекта.
+        """
+
+        match = re.search(r"reel_?(\d{1,2})", project, re.IGNORECASE)
+        if match:
+            return str(int(match.group(1))) # Уберем ведущий 0
+        else:
+            return "0"
+
     def run(self) -> bool:
         '''
         Основная бизнес-логика.
         '''
         self.control_table_path = self.user_config["control_table_path"]
-        self.output_path = self.user_config["output_path"]
-        self.in_track = int(self.user_config["in_track"])
-        self.out_track = int(self.user_config["out_track"])
-        self.resolve_reel = self.user_config["resolve_reel"]
         self.sheet_name = self.user_config["sheet_name"]
         self.column_reel = self.user_config["column_reel"]
         self.column_shots = self.user_config["column_shots"]
@@ -390,6 +394,7 @@ class VersionComparer:
         self.xlsx_source = self.user_config["xlsx_source"]
         self.csv_source = self.user_config["csv_source"]
         self.project = self.user_config["project"]
+        self.resolve_projects = self.user_config["resolve_projects"]
         self.failed_names = set()
         self.result_list = {}
 
@@ -400,41 +405,130 @@ class VersionComparer:
         self.pattern_shot_number = self.config['patterns']["compare_versions_shot_soft_mask"]
         self.pattern_real_shot = self.config['patterns']["compare_versions_shot_no_prefix_mask"]
 
-        try:
+        resolve = ResolveObjects()
+        self.project_manager = resolve.project_manager
+
+        for project in self.resolve_projects:
+            
+            logger.info(f"Начало работы с проектом {project}")
+            is_connect_project = self.project_manager.LoadProject(project)
+
+            if is_connect_project is None:
+                return False
+            
+            self.reel_num = self.get_reel_num(project)
 
             resolve = ResolveObjects()
+            project_obj = self.project_manager.GetCurrentProject()
             timeline = resolve.timeline
+            max_track = timeline.GetTrackCount("video")
+
             if timeline is None:
                 self.signals.error_signal.emit(f"Не найдена таймлиния")
                 return False
-            valid = self.is_valid_track(timeline)
-            if not valid:
-                return False 
-            
-        except Exception as e:
-            self.signals.error_signal.emit(f"{e}")
-            return False     
-            
-        all_timeline_items = self.get_timeline_items(self.in_track, self.out_track, timeline)
+                
+            all_timeline_items = self.get_timeline_items(1, max_track, timeline)
+            timeline_items = self.get_target_tmln_items(all_timeline_items)
 
-        timeline_items = self.get_target_tmln_items(all_timeline_items)
+            control_table = self.read_column_from_excel(self.reel_num) if self.xlsx_source else self.read_column_from_csv(self.reel_num)
+            logger.debug(f"Данные плейлиста полученные из контрольного документа:\n{control_table}")
+            if not control_table:
+                self.project_manager.CloseProject(project_obj)
+                self.signals.warnings.emit(f"В контрольном документе отсутствуют данные для сверки с проектом {project}")
+                continue
 
-        control_table = self.read_column_from_excel() if self.xlsx_source else self.read_column_from_csv()
-        logger.debug(f"Данные плейлиста полученные из контрольного документа:\n{control_table}")
-        if not control_table:
-            self.signals.warning_signal.emit(f"В контрольном документе отсутствуют данные")
-            return False
-
-        compare_logic = self.is_compare(timeline_items, control_table)
-        if not compare_logic:
-            return
-        else:
-            export_result_var = self.export_result()
-            if export_result_var is None:
-                self.signals.error_signal.emit("Ошибка создания документа с результатами проверки")
+            compare_logic = self.is_compare(timeline_items, control_table)
+            if not compare_logic:
                 return False
+            else:
+                result_path = self.export_result(self.reel_num)
+                if result_path is None:
+                    self.signals.error_signal.emit("Ошибка создания документа с результатами проверки")
+                    return False
             
+            self.out_hyper(result_path)
+            self.result_list.clear()
+            logger.info(f"Сформирован отчет: {result_path}")
+            logger.info(f"Проверка проекта {project} закончена")
+            self.project_manager.CloseProject(project_obj)
+        
         return True
+
+class CheckableComboBox(QComboBox):
+    """
+    Выпадающий список с чекбоксами.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setModel(QStandardItemModel(self))
+        self.setView(QListView())
+
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.lineEdit().setPlaceholderText("Select items")
+
+        self.model().dataChanged.connect(self._update_display_text)
+        self.lineEdit().installEventFilter(self)
+
+    def eventFilter(self, source, event):
+        if source == self.lineEdit() and event.type() == event.MouseButtonPress:
+            self.showPopup()
+            return True
+        return super().eventFilter(source, event)
+
+    def clear_items(self):
+        self.model().clear()
+        self._update_display_text()
+
+    def add_checkable_item(self, text: str, checked: bool = False):
+        """
+        Добавляет пункт с чекбоксом.
+        """
+        item = QStandardItem(text)
+        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+        item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+        self.model().appendRow(item)
+
+        self.sort_items()
+
+    def sort_items(self):
+        """
+        Сортировка в виджете GUI.
+        """
+        items = []
+        for i in range(self.model().rowCount()):
+            items.append(self.model().takeRow(0)[0])
+
+        items.sort(key=lambda item: self.sort_key(item.text()))
+
+        for item in items:
+            self.model().appendRow(item)
+
+    def sort_key(self, text: str):
+        """
+        Сортирока списка возвращаемого в checked_items.
+        """
+        match = re.search(r"reel_?(\d{1,2})", text, re.IGNORECASE)
+        if match:
+            return (0, int(match.group(1)), text)
+        else:
+            return (1, text)
+
+    def checked_items(self) -> list[str]:
+        """
+        Возвращает список выбранных текстовых значений.
+        """
+        result = []
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            if item.checkState() == Qt.Checked:
+                result.append(item.text())
+        return sorted(result, key=self.sort_key)
+
+    def _update_display_text(self):
+        selected = self.checked_items()
+        self.lineEdit().setText(", ".join(selected) if selected else "Select items")
 
 class CheckerWorker(QThread):
     """
@@ -477,10 +571,6 @@ class ConfigValidator:
         """
         return {
             "control_table_path": self.gui.control_table_path.text().strip(),
-            "output_path": self.gui.result_path.text().strip(),
-            "in_track": self.gui.in_resolve_track.text().strip(),
-            "out_track": self.gui.out_resolve_track.text().strip(),
-            "resolve_reel": self.gui.resolve_reel.text().strip(),
             "project": self.gui.project_cb.currentText(),
             "sheet_name": self.gui.sheet_name.text().strip(),
             "column_reel": self.gui.column_reel.text().strip().upper(),
@@ -488,7 +578,9 @@ class ConfigValidator:
             "local_mode": self.gui.local_mode.isChecked(),
             "global_mode": self.gui.global_mode.isChecked(),
             "xlsx_source": self.gui.xlsx_source.isChecked(),
-            "csv_source": self.gui.csv_source.isChecked()
+            "csv_source": self.gui.csv_source.isChecked(),
+            "resolve_projects": self.gui.resolve_projects.checked_items(),
+            "is_reel": self.gui.is_reel_cb.isChecked()
         }
     
     def validate(self, user_config: dict) -> bool:
@@ -502,23 +594,11 @@ class ConfigValidator:
         else:
             if not os.path.exists(user_config["control_table_path"]):
                 self.errors.append("Указан несуществующий путь к контрольной таблице")
-        if not user_config["output_path"]:
-            self.errors.append("Укажите путь для документа с результатом проверки")
-        else:
-            if not os.path.exists(user_config["output_path"]):
-                self.errors.append("Указан несуществующий путь к документу с результатом сверки")
 
-        try:
-            int(user_config["in_track"])
-            int(user_config["out_track"])
-            int(user_config["resolve_reel"])
-        except ValueError:
-            self.errors.append("Значения должны быть целыми числами")
-
-        if user_config["resolve_reel"] != "0" and any(list(map(lambda x: x == '', (user_config["sheet_name"], user_config["column_reel"], user_config["column_shots"])))) and user_config['xlsx_source']:
+        if  user_config["is_reel"] and any(list(map(lambda x: x == '', (user_config["sheet_name"], user_config["column_reel"], user_config["column_shots"])))) and user_config['xlsx_source']:
             self.errors.append("Указаны не все значения для блока Excel Data")
 
-        if user_config["resolve_reel"] == "0" and any(list(map(lambda x: x == '', (user_config["sheet_name"], user_config["column_shots"])))) and user_config['xlsx_source']:
+        if not user_config["is_reel"] and any(list(map(lambda x: x == '', (user_config["sheet_name"], user_config["column_shots"])))) and user_config['xlsx_source']:
             self.errors.append("Указаны не все значения для блока Excel Data")
 
         return not self.errors
@@ -531,7 +611,7 @@ class VersionCheckerGUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Check Shot Version")
-        self.resize(550, 500)
+        self.resize(600, 600)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
         self.current_counter = 0
@@ -539,11 +619,7 @@ class VersionCheckerGUI(QWidget):
 
         self.control_table_path = QLineEdit()
         self.result_path = QLineEdit()
-        self.in_resolve_track = QLineEdit("2")
-        self.out_resolve_track = QLineEdit("10")
         self.sheet_name = QLineEdit("Sheet1")
-        self.resolve_reel = QLineEdit("0")
-        self.resolve_reel.textChanged.connect(lambda: self.update_fields_state())
         self.column_reel = QLineEdit()
         self.column_shots = QLineEdit()
 
@@ -565,11 +641,22 @@ class VersionCheckerGUI(QWidget):
         self.mode_group_rb.addButton(self.csv_source)
         self.local_mode.setChecked(True)
 
-        self.warning_field = QTextEdit()
+        self.resolve_projects = CheckableComboBox()
+        self.resolve_projects.setMinimumWidth(200)
+        self.refresh_projects = QPushButton("Refresh")
+        self.refresh_projects.setMaximumWidth(70)
+        self.refresh_projects.clicked.connect(self.load_resolve_projects)
+        self.is_reel_cb = QCheckBox("Use Reel")
+        self.is_reel_cb.setChecked(True)
+        self.is_reel_cb.stateChanged.connect(self.update_fields_state)
+
+        self.warning_field = QTextBrowser()
         self.warning_field_ph_text = "Здесь будут показаны имена шотов, которые не удалось определить."
         self.warning_field.setPlaceholderText(self.warning_field_ph_text)
         self.warning_field.setReadOnly(True)
         self.warning_field.setMinimumHeight(200)
+        self.warning_field.setOpenLinks(False)
+        self.warning_field.anchorClicked.connect(self.open_in_file_manager)
 
         self.result_label = QLabel("Processed 0 from 0 shots")
         bold_font = QFont()
@@ -587,22 +674,12 @@ class VersionCheckerGUI(QWidget):
         # Input file
         file_layout = QHBoxLayout()
         file_layout.addWidget(QLabel("Choose input file:"))
-        file_layout.addSpacing(27)
+        file_layout.addSpacing(5)
         file_layout.addWidget(self.control_table_path)
         choose_file_btn = QPushButton("Choose")
         choose_file_btn.clicked.connect(self.select_file)
         file_layout.addWidget(choose_file_btn)
         layout.addLayout(file_layout)
-
-        # Output path
-        output_layout = QHBoxLayout()
-        output_layout.addWidget(QLabel("Choose output path:"))
-        output_layout.addSpacing(10)
-        output_layout.addWidget(self.result_path)
-        choose_output_btn = QPushButton("Choose")
-        choose_output_btn.clicked.connect(self.select_result_path)
-        output_layout.addWidget(choose_output_btn)
-        layout.addLayout(output_layout)
 
         layout.addSpacing(7)
 
@@ -638,37 +715,37 @@ class VersionCheckerGUI(QWidget):
         mode_group.setLayout(mode_layout)
         layout.addWidget(mode_group, alignment=Qt.AlignCenter)
 
-        # GroupBox Section
+        # Resolve group
+        resolve_group = QGroupBox("Resolve Projects")
+        resolve_group.setMinimumHeight(70)
+        resolve_project_choose_layout = QHBoxLayout()
+        resolve_project_choose_layout.addWidget(self.resolve_projects)
+        resolve_project_choose_layout.addWidget(self.refresh_projects)
+        resolve_project_choose_layout.addSpacing(70)
+        resolve_project_choose_layout.addWidget(self.is_reel_cb)
+        resolve_group.setLayout(resolve_project_choose_layout)
+        layout.addWidget(resolve_group)
+
+        # Excel group
         groupbox_layout = QHBoxLayout()  
-        resolve_group = QGroupBox("Resolve Data")
-        resolve_layout = QHBoxLayout()
-        resolve_group.setFixedHeight(70)
-        resolve_layout.addWidget(QLabel("Reel:"))
-        resolve_layout.addWidget(self.resolve_reel)
-        resolve_layout.addSpacing(10)
-        resolve_layout.addWidget(QLabel("Track In:"))
-        resolve_layout.addWidget(self.in_resolve_track)
-        resolve_layout.addSpacing(10)
-        resolve_layout.addWidget(QLabel("Out:"))
-        resolve_layout.addWidget(self.out_resolve_track)
-        resolve_group.setLayout(resolve_layout)
 
         excel_group = QGroupBox("Excel Data")
+        excel_group.setMinimumHeight(70)
         excel_layout = QHBoxLayout()
         self.sheet_name.setFixedWidth(80)
         self.column_reel.setFixedWidth(40)
         self.column_shots.setFixedWidth(40)
         excel_layout.addWidget(QLabel("Sheet:"))
         excel_layout.addWidget(self.sheet_name)
-        excel_layout.addSpacing(10)
+        excel_layout.addSpacing(85)
         excel_layout.addWidget(QLabel("Reel:"))
         excel_layout.addWidget(self.column_reel)
-        excel_layout.addSpacing(10)
+        excel_layout.addSpacing(80)
         excel_layout.addWidget(QLabel("Shots:"))
         excel_layout.addWidget(self.column_shots)
+        excel_layout.addStretch()
         excel_group.setLayout(excel_layout)
 
-        groupbox_layout.addWidget(resolve_group)
         groupbox_layout.addWidget(excel_group)
         layout.addLayout(groupbox_layout)
 
@@ -686,6 +763,51 @@ class VersionCheckerGUI(QWidget):
         self.start_button.setFixedHeight(30)
         self.start_button.clicked.connect(self.start)
         layout.addWidget(self.start_button)
+
+        self.load_resolve_projects()
+
+    def open_in_file_manager(self, url:QUrl):
+        """
+        Метод открывает файл в файловом менеджере.
+        """
+        try:
+            path = Path(url.toLocalFile())
+
+            if sys.platform == 'win32': 
+                os.startfile(path)
+            else: 
+                subprocess.Popen(['open', path])
+        except Exception as e:
+            self.on_error(self, "Error", f"Ошибка при открытии файла: {e}")
+
+    def load_resolve_projects(self):
+        """
+        Метод загружает сабфолдеры из папки 'source_root_folder' в CheckableComboBox.
+        """
+        self.is_connect_resolve()
+        
+        resolve_projects = self.project_manager.GetProjectListInCurrentFolder()
+        self.resolve_projects.clear_items()
+
+        for project in resolve_projects:
+            self.resolve_projects.add_checkable_item(project)
+
+    def is_connect_resolve(self):
+        """
+        Проверка подключения к Resolve и получение базовых объектов.
+        """
+        try:
+            self.resolve = ResolveObjects()
+            self.project_manager = self.resolve.project_manager
+
+            if self.project_manager is None:
+                self.on_error(f"Не найден проект!")
+                return
+
+        except RuntimeError as re:
+            self.on_error(str(re))
+            sys.exit()
+            return
 
     def reset_counter(self):
         """
@@ -709,11 +831,6 @@ class VersionCheckerGUI(QWidget):
         if path:
             self.control_table_path.setText(path)
 
-    def select_result_path(self):
-        folder = QFileDialog.getExistingDirectory(self, "Choose Output Folder")
-        if folder:
-            self.result_path.setText(folder)
-
     def update_fields_state(self):
         """
         Локирует блок Excel при выборе режима .csv.
@@ -724,12 +841,8 @@ class VersionCheckerGUI(QWidget):
         self.column_shots.setEnabled(enable_excel)
 
         if enable_excel:
-            try:
-                reel_num = int(self.resolve_reel.text().strip())
-            except ValueError:
-                reel_num = None 
 
-            if reel_num == 0:
+            if not self.is_reel_cb.isChecked():
                 self.column_reel.setEnabled(False)
                 self.column_reel.clear()
             else:
