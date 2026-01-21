@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys
 import os
-from datetime import datetime as dt
+from datetime import datetime as dt, date as d
 from collections import Counter
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -62,7 +62,7 @@ def filter_edl(self, edl_path: str, input_shots: list[str], fps: int, project: s
         input_shots_data = Counter(input_shots) # Словарь имен шотов из инпута
 
         base, ext = os.path.splitext(self.edl_path)
-        output_path = base + f"_filtered_{dt.today()}" + ext
+        output_path = base + f"_filtered_{d.today()}" + ext
 
         file_name, _ = os.path.splitext(os.path.basename(output_path))
         backup_path = get_output_path(project, "edl", f"{file_name}")
