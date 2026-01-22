@@ -8,6 +8,7 @@ import re
 import bisect
 import csv
 import subprocess
+import random as rand
 from pathlib import Path
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QLabel, QLineEdit, QPushButton, QRadioButton, 
                              QVBoxLayout, QHBoxLayout, QGroupBox, QTextBrowser, QComboBox, QCheckBox,
@@ -24,6 +25,10 @@ from dvr_tools.resolve_utils import ResolveObjects
 logger = get_logger(__file__)
 
 EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["compare_versions"]["extentions"]
+REQUIRED_FIELDS = GLOBAL_CONFIG["scripts_settings"]["compare_versions"]["required_fields"]
+
+class NoFoundColumnError(Exception):
+    pass
 
 class VersionComparer:
 
@@ -50,7 +55,7 @@ class VersionComparer:
             )
             / project
             / GLOBAL_CONFIG["output_folders"]["compare_versions"] / date
-            / f"{report_name}_{date}.{ext}"
+            / f"{report_name}_{date}_{rand.randrange(10000, 99999)}.{ext}"
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         return output_path
@@ -199,6 +204,16 @@ class VersionComparer:
             self.signals.error_signal.emit(f"Не удалось получить данные из Excel документа: {e}")
             return []
 
+    def is_every_column(self, file):
+        """
+        Проверка на наличие всех обязательный колонок для работы.
+        Колонки 'Entity', 'Reel', 'Path to Frames', 'Path to EXR'.
+        """
+        miss_fields = set(['Entity', 'Reel', 'Path to Frames', 'Path to EXR']) - set(file.fieldnames)
+        if miss_fields:
+            self.signals.warnings.emit(f"🔴  В плейлисте отсутствуют поля: {miss_fields}")
+            raise NoFoundColumnError()
+
     def read_column_from_csv(self, reel_num: str)-> list:
         '''
         Получаем данные из .csv файла.
@@ -210,7 +225,7 @@ class VersionComparer:
         # Открываем csv с данными по плейлисту из Шотгана и получаем словарь с парами ключ: значение. Имя шота с версией и имя шота без версии. {001_0010_comp_v001 : 001_0010, ...} 
             with open(self.control_table_path, encoding='utf-8') as f:
                 file = csv.DictReader(f, delimiter=',')
-                
+                self.is_every_column(file)
                 # Проверка всего контрольного списка
                 control_table = {}
                 for shot in file:
@@ -254,6 +269,10 @@ class VersionComparer:
 
             self.is_dublicate(dublicate_shot)
             return control_table
+        
+        except NoFoundColumnError:
+            raise
+
         except Exception as e: 
             self.signals.error_signal.emit(f"Не удалось получить данные из CSV документа: {e}")
             return []
@@ -265,14 +284,13 @@ class VersionComparer:
         url = Path(file_path).resolve().as_uri()
         self.signals.warnings.emit(f'Посмотреть отчет: <a href="{url}">{url}</a></span>')
         
-    def export_result(self, reel_num) -> bool:
+    def export_result(self, reel_num, output_path) -> bool:
         """
         Экспорт результатов проверки.
         """   
         try:
-            output_path = self.get_output_path(self.project, "txt", f"{self.project}_compare_report")
             with open(output_path, 'a', encoding='utf-8') as o:
-                o.write(reel_num + "REEL" + "\n")      
+                o.write(reel_num + " REEL" + "\n")      
                 for key, value in self.result_list.items():
                     o.write("\n" + key + "\n\n") 
                     for item in value:
@@ -408,6 +426,8 @@ class VersionComparer:
 
         resolve = ResolveObjects()
         self.project_manager = resolve.project_manager
+        output_path = self.get_output_path(self.project, "txt", f"{self.project}_compare_report")
+
 
         for project in self.resolve_projects:
             
@@ -431,28 +451,31 @@ class VersionComparer:
             all_timeline_items = self.get_timeline_items(1, max_track, timeline)
             timeline_items = self.get_target_tmln_items(all_timeline_items)
 
-            control_table = self.read_column_from_excel(self.reel_num) if self.xlsx_source else self.read_column_from_csv(self.reel_num)
-            logger.debug(f"Данные плейлиста полученные из контрольного документа:\n{control_table}")
-            if not control_table:
-                self.project_manager.CloseProject(project_obj)
-                self.signals.warnings.emit(f"В контрольном документе отсутствуют данные для сверки с проектом {project}")
-                continue
+            try:
+                control_table = self.read_column_from_excel(self.reel_num) if self.xlsx_source else self.read_column_from_csv(self.reel_num)
+                logger.debug(f"Данные плейлиста полученные из контрольного документа:\n{control_table}")
+                if not control_table:
+                    self.project_manager.CloseProject(project_obj)
+                    self.signals.warnings.emit(f"В контрольном документе отсутствуют данные для сверки с проектом {project}")
+                    continue
+            except NoFoundColumnError:
+                return True
 
             compare_logic = self.is_compare(timeline_items, control_table)
             if not compare_logic:
                 return False
             else:
-                result_path = self.export_result(self.reel_num)
+                result_path = self.export_result(self.reel_num, output_path)
                 if result_path is None:
                     self.signals.error_signal.emit("Ошибка создания документа с результатами проверки")
                     return False
             
-            self.out_hyper(result_path)
             self.result_list.clear()
-            logger.info(f"Сформирован отчет: {result_path}")
             logger.info(f"Проверка проекта {project} закончена")
             self.project_manager.CloseProject(project_obj)
-        
+
+        self.out_hyper(result_path)
+        logger.info(f"Сформирован отчет: {result_path}")        
         return True
 
 class CheckableComboBox(QComboBox):
@@ -590,6 +613,9 @@ class ConfigValidator:
         """
         self.errors.clear()
 
+        if not user_config["resolve_projects"] :
+            self.errors.append("Не выбран ни один проект в Resolve")
+
         if not user_config["control_table_path"]:
             self.errors.append("Укажите путь к контрольной таблице")
         else:
@@ -652,7 +678,7 @@ class VersionCheckerGUI(QWidget):
         self.is_reel_cb.stateChanged.connect(self.update_fields_state)
 
         self.warning_field = QTextBrowser()
-        self.warning_field_ph_text = "Здесь будут показаны имена шотов, которые не удалось определить."
+        self.warning_field_ph_text = "Здесь будут показаны предупреждения и имена шотов, которые не удалось определить."
         self.warning_field.setPlaceholderText(self.warning_field_ph_text)
         self.warning_field.setReadOnly(True)
         self.warning_field.setMinimumHeight(200)
@@ -877,8 +903,6 @@ class VersionCheckerGUI(QWidget):
         """
         Добавляет уведомления и ошибки в warning_field через сигналы.
         """
-        if self.warning_field.toPlainText().strip().startswith(self.warning_field_ph_text):
-            self.warning_field.clear()
         self.warning_field.append(message)
     
     def start(self):
