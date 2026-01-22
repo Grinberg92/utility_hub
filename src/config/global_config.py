@@ -80,7 +80,8 @@ GLOBAL_CONFIG = {
                 "standart_extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
                 "excepted_extentions": ('.mov', '.mp4', '.jpg')
             },
-        "compare_versions": {"extentions": ('.exr', '.mov', '.jpg')},
+        "compare_versions": {"extentions": ('.exr', '.mov', '.jpg'),
+                             "required_fields": ['Entity', 'Reel', 'Path to Frames', 'Path to EXR']},
         "get_shot": {"extentions": (".exr", ".jpg", ".tif", ".tiff", ".png")}
     }
 }
