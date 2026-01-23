@@ -4,6 +4,7 @@ import sys
 import os
 import json
 import subprocess
+import random as rand
 from pathlib import Path
 from collections import Counter
 from openpyxl import Workbook
@@ -33,6 +34,7 @@ def get_output_path(project: str, ext: str, report_name: str, subfolder=None) ->
     Получение пути к бекапу отчета проверки секвенций.
     """
     date = dt.now().strftime("%Y%m%d")
+    rand_version = rand.randrange(10000, 99999)
 
     output_path = (
         Path(
@@ -41,7 +43,7 @@ def get_output_path(project: str, ext: str, report_name: str, subfolder=None) ->
         )
         / project
         / GLOBAL_CONFIG["output_folders"]["edit_database"] / date / (subfolder if subfolder is not None else "")
-        / f"{report_name}_{date}.{ext}"
+        / f"{report_name}_{date}_{rand_version}.{ext}"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     return output_path
@@ -375,10 +377,10 @@ class ShotRestorer(QObject):
 
             target_edit = detect_edl_parser(self.fps, edl_path=self.target_edit)
             
-            output_path = Path(str(self.target_edit).replace(".edl", f"_restored_rasshot_{d.today()}.edl"))
+            output_path = Path(str(self.target_edit).replace(".edl", f"_restored_rasshot_{d.today()}_{rand.randrange(10000, 99999)}.edl"))
             backup_path = get_output_path(self.project, "edl", os.path.basename(self.target_edit).replace(".edl", f"_restored_rasshot"))
 
-            loc_path = Path(str(self.target_edit).replace(".edl", f"_AVID_LOC_{d.today()}.txt"))
+            loc_path = Path(str(self.target_edit).replace(".edl", f"_AVID_LOC_{d.today()}_{rand.randrange(10000, 99999)}.txt"))
             loc_backup_path = get_output_path(self.project, "txt", os.path.basename(self.target_edit).replace(".edl", f"_AVID_LOC"))
             
             with open(loc_path, "w", encoding='utf8') as _, open(loc_backup_path, "w", encoding='utf8') as _:
@@ -593,7 +595,7 @@ class EDLComparator(QObject):
                 max_len = max(len(str(cell.value)) for cell in ws[letter] if cell.value)
                 ws.column_dimensions[letter].width = max_len + 2
 
-            filepath = get_output_path(self.project, "xlsx", "reedit_report")
+            filepath = get_output_path(self.project, "xlsx", f"reedit_report")
 
             wb.save(filepath)
 
@@ -620,8 +622,10 @@ class EDLComparator(QObject):
         """
         Сортирует аутпут в зависимости от категории изменений.
         """
+        folder_name = f'reedit_edl_{dt.now().strftime("%Y%m%d")}_{rand.randrange(10000, 99999)}'
         for status, data in reedit_data.items():
-            output_path = get_output_path(self.project, 'edl', status , subfolder=f'reedit_edl_{dt.now().strftime("%Y%m%d%H%M")}')
+            output_path = get_output_path(self.project, 'edl', status,
+                                          subfolder=folder_name)
             with open(output_path, 'w', encoding="utf-8") as o:
                 pass
             for shot_data in data:
