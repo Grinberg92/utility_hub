@@ -67,12 +67,18 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 2) Установка venv
 3) АКТИВАЦИЯ venv
 4) установка зависимостей
-5) Запуск симлинк скрипта
+
+__________________________________________________________
 
 АВТОЗАПУСК АВТОПУЛА ГИТА
 
+
+MAC
 ./autorefresh_win.sh >> /j/003_transcode_to_vfx/projects/log.log 2>&1 &
 
 MAC - /usr/bin/nohup ./autorefresh_mac.sh >> /Volumes/share2/003_transcode_to_vfx/projects/log.log 2>&1 &
+
+WIN
+Импортировать пресет для планировщика задач и заменить пути на актуальные в системе и исполняемом файле.
 
 
