@@ -873,13 +873,6 @@ class DeliveryPipline:
 
                 self.shots_tracks.setdefault(item.timeline_item.GetName(), []).append(track_num)
 
-                logger.debug("\n".join(("\n", f"timline duration: {item.clip_duration}",
-                             f"source duration: {item.source_end - item.source_start}",
-                             f"timline start: {item.clip_start}",
-                             f"timeline end: {item.clip_end}",
-                             f"source start: {item.source_start}",
-                             f"source end: {item.source_end}")))
-
                 handles_value = self.get_handles(item)
 
                 item_resolution = self.get_resolution_settings(item)
