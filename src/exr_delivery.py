@@ -264,24 +264,26 @@ class DeliveryPipline:
 
         return no_empty_tracks
     
-    def set_LUT(self, item) -> None:
+    def set_LUT(self, item: DvrTimelineObject) -> None:
         """
         Установка LUT на клип.
         """
         item.timeline_item.SetLUT(1, LUT_PATH)
         logger.info(f"Применен LUT: {os.path.basename(LUT_PATH)}")
     
-    def set_project_preset(self, item) -> bool:
+    def set_project_preset(self, item: DvrTimelineObject) -> bool:
         """
         Установка пресета проекта.
         """
         # Пресет ACES 1.2 RCM для динамического определения цветового пространства ACES
         # и автоматическое перелючение пресета на YRGB RCM при рендере .dng, .mov, .mp4, .jpg .
         if self.project_preset == RESOLVE_PROJECT_PRESETS[0]:
-            if item.mp_item.GetName().lower().endswith(COPTER_EXTENTIONS) or item.mp_item.GetName().lower().endswith(FALSE_EXTENTIONS):
-                preset = RESOLVE_PROJECT_PRESETS[2]
+            if (item.mp_item.GetName().lower().endswith(COPTER_EXTENTIONS) or 
+                item.mp_item.GetName().lower().endswith(FALSE_EXTENTIONS) or 
+                item.mp_item.GetClipProperty("Input Color Space") == "S-Gamut3.Cine/S-Log3"):
+                preset = RESOLVE_PROJECT_PRESETS[1]
                 set_preset_var = self.project.SetPreset(preset)
-                self.set_LUT(item)
+                #self.set_LUT(item)
                 if set_preset_var is not None:
                     logger.info(f"Применен пресет проекта: {preset}")
                     return True
@@ -723,7 +725,9 @@ class DeliveryPipline:
                     clip = item.mp_item
 
                     # Проверка на раасширения (".mov", ".mp4", ".jpg")
-                    if clip.GetName().lower().endswith(FALSE_EXTENTIONS) and not item.clip_color == COLORS[4]:
+                    if (clip.GetName().lower().endswith(FALSE_EXTENTIONS) or 
+                        clip.GetName().lower().endswith(COPTER_EXTENTIONS) or
+                        clip.GetClipProperty("Input Color Space") == "S-Gamut3.Cine/S-Log3") and not item.clip_color == COLORS[4]:
                         warnings_question.append((clip.GetName(), track_num))    
 
                     # Сбор статусов для проверки хотя бы одного ввыделенного клипа на таймлайне
