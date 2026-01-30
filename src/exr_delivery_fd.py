@@ -1,3 +1,4 @@
+from collections import Counter
 import sys
 import re
 import math
@@ -22,9 +23,9 @@ SETTINGS = {
     "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".mov", ".mp4"),
     "reference_render_preset": "reference_preset_FD",
     "effects": ('RTS+', 'Counter'),
-    "plate_prefix": 'prk_',
+    "plate_prefix": 'bim_',
     "plate_suffix": '_src_v001_VT',
-    "ref_prefix": 'prm_prk_',
+    "ref_prefix": 'prm_bim_',
     "ref_suffix": '_rec709'
 }
 
@@ -292,6 +293,28 @@ class DeliveryPipline:
         except RuntimeError as re:
             raise
 
+    def is_connect_project(self) -> bool:
+        """
+        Проверяет все ли объекты резолв получены для дальнейшей работы.
+        """
+        if self.resolve is None:
+            self.signals.error_signal.emit("Не найден Резолв")
+            return False
+        
+        if self.media_pool is None:
+            self.signals.error.emit("Не найден медиапул")
+            return False
+        
+        if self.timeline is None:
+            self.signals.error_signal.emit("Не найдена таймлиния")
+            return False
+        
+        if self.project is None:
+            self.signals.error_signal.emit("Не найден проект")
+            return False
+        
+        return True
+
     def get_mediapoolitems(self, start_track, end_track) -> list:
         """
         Получение списка с экземплярами DvrTimelineObject,
@@ -412,6 +435,46 @@ class DeliveryPipline:
             resolution = "x".join([self.width_res_glob, calculate_height])
             return resolution
         
+    def standart_resolution(self, clip) -> str:
+        """
+        Пересчет разрешения исходника под стандартное разрешение для рендера(2к).
+        Обрабатывает и сферическую и анаморфную линзу. 
+        Для вычисления выходного разрешения ширины сферической линзы используется формула: 
+        (ширина кадра текущего клипа * высота целевого разрешения) / (высота кадра такущего клипа / аспект текущего клипа).
+        Для вычисления выходного разрешения высоты анаморфной линзы используется формула: 
+        (высота кадра текущего клипа * ширина целевого разрешения) / (ширина кадра такущего клипа).
+        Если полученное значение ширины или высоты кадра получается нечетным, то идет округление вверх до ближайшего четного значения.
+        """
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+            # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) ))) / 2) * 2))
+                # Временный фикс
+                if self.boe_fix:
+                    if calculate_width == "2500":
+                        calculate_width = "2498"
+                resolution = "x".join([calculate_width, self.height_res_glob])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect)))) / 2) * 2))
+                # Временный фикс
+                if self.boe_fix:
+                    if calculate_width == "2500":
+                        calculate_width = "2498"
+                resolution = "x".join([calculate_width, self.height_res_glob])
+                return resolution
+            
+        else:
+            aspect = clip.GetClipProperty('PAR')
+            calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
+            resolution = "x".join([self.width_res_glob, calculate_height])
+            return resolution
+        
     def scale_1_5_resolution(self, clip) -> str:
         """
         Пересчет разрешения исходника под стандартное разрешение для рендера,
@@ -419,15 +482,33 @@ class DeliveryPipline:
         Вычисление аналогично standart_resolution, но при этом и ширина и высота домножаются на коэффициент 1.5.
         """
         # Находит анаморф, вычисляет ширину по аспекту
-        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-            aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            resolution = "x".join([str(int(int(calculate_height) * 1.5)), str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
-            return resolution
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+            # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (float(height) ))) / 2) * 2))
+                # Временный фикс
+                width_1_5 = str(int(math.ceil((float(calculate_width) * 1.5) / 2.0) * 2))
+                if self.boe_fix:
+                    if width_1_5 == "3750":
+                            width_1_5 = "3748"
+                resolution = "x".join([width_1_5, str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+                # Временный фикс
+                width_1_5 = str(int(math.ceil((float(calculate_width) * 1.5) / 2.0) * 2))
+                if self.boe_fix:
+                    if width_1_5 == "3750":
+                            width_1_5 = "3748"
+                resolution = "x".join([width_1_5, str(int(math.ceil(int(self.height_res_glob) * 1.5 / 2.0) * 2))])
+                return resolution
         else:
             aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
             resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 1.5) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 1.5) / 2) * 2))])
             return resolution
@@ -438,15 +519,23 @@ class DeliveryPipline:
         умноженное на 2 при зуме(скеиле) свыше 50%.
         Вычисление аналогично standart_resolution, но при этом и ширина и высота домножаются на коэффициент 2.
         """
-        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-            aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_height = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
-            resolution = "x".join([str(int(int(calculate_height) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
-            return resolution
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+            # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height))) ) / 2) * 2))
+                resolution = "x".join([str(int(int(calculate_width) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_width = str((math.ceil(((int(width) * int(self.height_res_glob) / (int(height) / float(aspect))) ) / 2) * 2))
+                resolution = "x".join([str(int(int(calculate_width) * 2)), str(int(math.ceil(int(self.height_res_glob) * 2 / 2.0) * 2))])
+                return resolution      
         else:
             aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
             calculate_height = str((math.ceil((int(height) * int(self.width_res_glob) / int(width)) / 2) * 2))
             resolution = "x".join([str(int(math.ceil((int(self.width_res_glob) * 2) / 2) * 2)), str(int(math.ceil((int(calculate_height) * 2) / 2) * 2))])
             return resolution
@@ -456,14 +545,23 @@ class DeliveryPipline:
         Полное разрешение исходника.
         Для вычисления выходного разрешения высоты анаморфной линзы используется формула: 
         (высота кадра текущего клипа / аспект текущего клипа).
-        Если полученное значение высоты кадра получается нечетным, то идет округление до ближайшего четного значения.
+        Если полученное значение высоты кадра получается нечетным, то идет округление вверх до ближайшего четного значения.
         """
-        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR'):
-            aspect = clip.GetClipProperty('PAR')
-            width, height = clip.GetClipProperty('Resolution').split('x')
-            calculate_height = str((math.ceil((int(height) / float(aspect))  / 2) * 2))
-            resolution = "x".join([width, calculate_height])
-            return resolution
+        width, height = clip.GetClipProperty('Resolution').split('x')
+        ratio = int(width) / int(height)
+
+        if clip.GetClipProperty('PAR') != 'Square' and clip.GetClipProperty('PAR') or ratio > 2.2:
+             # Отлавливаем анаморфоты которые в исходнике уже имеют десквизный вид и PAR 'Square'
+            if ratio > 2.2:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_height = str((math.ceil((int(height))  / 2) * 2))
+                resolution = "x".join([width, calculate_height])
+                return resolution
+            else:
+                aspect = clip.GetClipProperty('PAR')
+                calculate_height = str((math.ceil((int(height) / float(aspect))  / 2) * 2))
+                resolution = "x".join([width, calculate_height])
+                return resolution
         else:
             return clip.GetClipProperty('Resolution')
         
@@ -562,6 +660,7 @@ class DeliveryPipline:
         render_job = self.project.AddRenderJob()
 
         if set_render is not None and render_job is not None:
+            self.rj_to_clear.append(render_job)
             logger.info(f"Запустился рендер клипа {clip.mp_item.GetName()} с разрешением {width}x{height}")
             return True, render_job
         else:
@@ -575,6 +674,42 @@ class DeliveryPipline:
         """
         if item.clip_color == SETTINGS["colors"][3] and item.track_type_ind != 1:
             return True
+        
+    def detect_transform(self, item) -> bool:
+        """
+        Определяет есть ли трансформы и кроппинг на таймлайн итеме.
+        """
+        try:
+            return not all((float(item.timeline_item.GetProperty("Pan")) == float(0.0),
+                        float(item.timeline_item.GetProperty("Tilt")) == float(0.0),
+                        float(item.timeline_item.GetProperty("ZoomX")) == float(1.0),
+                        float(item.timeline_item.GetProperty("ZoomY")) == float(1.0),
+                        float(item.timeline_item.GetProperty("Pitch")) == float(0.0),
+                        float(item.timeline_item.GetProperty("Yaw")) == float(0.0),
+                        float(item.timeline_item.GetProperty("RotationAngle")) == float(0.0),
+                        float(item.timeline_item.GetProperty("CropLeft")) == float(0.0),
+                        float(item.timeline_item.GetProperty("CropRight")) == float(0.0),
+                        float(item.timeline_item.GetProperty("CropBottom")) == float(0.0),
+                        float(item.timeline_item.GetProperty("Opacity")) == float(100.0),
+                        float(item.timeline_item.GetProperty("CropSoftness")) == float(0.0)))
+
+        except Exception as e:
+            self.signals.warning_signal.emit(f"Ошибка получения значений трансформов: {e}")
+        
+    def is_multy_plates(self, timeline) -> dict:
+        """
+        Получаем словарь с количеством повторений шота на таймлайне.
+        """
+        extractor_obj = ResolveTimelineItemExtractor(timeline)
+        timeline_items = [i.GetName() for i in extractor_obj.get_timeline_items(start_track=2, end_track=timeline.GetTrackCount("video")) if i != "" or i is not None]
+        count_plate_tracks = Counter(timeline_items)
+        return count_plate_tracks
+
+    def burn_in_off(self) -> None:
+        """
+        Отключаем burn in.
+        """
+        self.project.LoadBurnInPreset("python_no_burn_in")
 
     def start_render(self, render_job) -> bool:
         """
@@ -588,6 +723,14 @@ class DeliveryPipline:
         
         self.is_reference = False
         return True
+    
+    def clear_render_jobs(self, render_jobs) -> None:
+        """
+        Очищаем render queue от всех созданных render jobs в процессе работы.
+        """
+        for job in render_jobs:
+            self.project.DeleteRenderJob(job)
+        logger.info(f"Очередь завершенных очередей рендера очищена")
 
     def export_timeline(self):
         """
@@ -606,11 +749,6 @@ class DeliveryPipline:
         """
         Логика конвеера рендера.
         """
-        self.resolve_api = self.get_api_resolve()
-        self.resolve = self.resolve_api.resolve
-        self.media_pool = self.resolve_api.mediapool
-        self.timeline = self.resolve_api.timeline
-        self.project = self.resolve_api.project
         self.palate_preset = self.user_config["plate_preset"]
         self.reference_preset = self.user_config["reference_preset"]
         self.frame_handles = int(self.user_config["handles"])
@@ -622,11 +760,33 @@ class DeliveryPipline:
         self.non_lin_retime_hndls = int(self.user_config["non_linear_retime_handles"])
         self.is_reference = False
 
-        video_tracks = self.get_tracks()
+        self.rj_to_clear = []
 
+        try:
+            self.resolve_api = self.get_api_resolve()
+        except Exception as e:
+            self.signals.error_signal.emit(str(e))
+            return False
+
+        self.resolve = self.resolve_api.resolve
+        self.media_pool = self.resolve_api.mediapool
+        self.timeline = self.resolve_api.timeline
+        self.project = self.resolve_api.project
+
+        if not self.is_connect_project():
+            return False    
+
+        self.timeline.DuplicateTimeline(self.timeline.GetName() + "_with_transform")
+        self.project.SetCurrentTimeline(self.timeline)
+
+        video_tracks = self.get_tracks()
         if video_tracks == []:
             self.signals.warning_signal.emit("Отсутствуют клипы для обработки.")
             return False
+
+        self.count_plate_tracks = self.is_multy_plates(self.timeline)
+
+        self.burn_in_off()
 
         # Цикл по дорожкам(по основному и допплейтам, если таковые имеются).
         for track in video_tracks:
@@ -675,6 +835,7 @@ class DeliveryPipline:
             self.stop_process()
             self.resolve.OpenPage("edit")
 
+        self.clear_render_jobs(self.rj_to_clear)
         self.set_enabled()
         if self.export_bool:    
             self.export_timeline()
