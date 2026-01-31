@@ -10,11 +10,12 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QEventLoop
 from dvr_tools.logger_config import get_logger
 from dvr_tools.css_style import apply_style
 from dvr_tools.resolve_utils import ResolveObjects
 from dvr_tools.resolve_utils import ResolveTimelineItemExtractor
+from config.global_config import GLOBAL_CONFIG
 
 logger = get_logger(__file__)
 
@@ -28,6 +29,15 @@ SETTINGS = {
     "ref_prefix": 'prm_bim_',
     "ref_suffix": '_rec709'
 }
+
+TRACK_POSTFIX = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["track_postfix"]
+COLORS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["colors"]
+EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["extentions"]
+FALSE_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["false_extentions"]
+PLATE_PROJECT_PRESETS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["plate_project_presets"]
+REF_PROJECT_PRESETS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["ref_project_presets"]
+COPTER_EXTENTIONS = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["copter_extentions"]
+LUT_PATH = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["LUT_win"]
 
 class NameSetter:
     """
@@ -265,7 +275,8 @@ class DvrTimelineObject():
     """
     Объект с атрибутами итема на таймлайне.
     """
-    def __init__(self, mp_item, track_type_ind, clip_start_tmln, source_start, source_end, clip_dur, clip_color):
+    def __init__(self, mp_item, track_type_ind, clip_start_tmln, 
+                 source_start, source_end, clip_dur, clip_color, timeline_item):
         self.mp_item = mp_item
         self.track_type_ind = track_type_ind
         self.clip_start = clip_start_tmln
@@ -274,6 +285,7 @@ class DvrTimelineObject():
         self.source_start = source_start
         self.source_end = source_end
         self.clip_color = clip_color
+        self.timeline_item = timeline_item
 
 class DeliveryPipline:
     """
@@ -327,7 +339,7 @@ class DeliveryPipline:
             filtred_items.append(DvrTimelineObject(item.GetMediaPoolItem(), item.GetTrackTypeAndIndex()[1],
                                 item.GetStart(), item.GetSourceStartFrame(),
                                 item.GetSourceEndFrame(), item.GetDuration(),
-                                item.GetClipColor()))
+                                item.GetClipColor(), item))
         return filtred_items
     
     def is_effect(self, track, track_type="video"):
@@ -667,15 +679,96 @@ class DeliveryPipline:
             self.signals.error_signal.emit(f"Не удалось установить разрешение рендера {resolution}")
             return False, None 
         
-    def skip_item(self, item) -> bool:
+    def is_question_items(self, warnings) -> bool:
+        """
+        Обрабатываем предупреждения через диалоговое окно потока gui.
+        """
+        text = "\n".join([f"• '{name}' на треке {track}" for name, track in warnings])
+        message = f"Обнаружены клипы, требующие Davinci YRGB Color Management.\nПроверьте настройки цвета, прежде чем продолжить:\n\n{text}\n\nХотите продолжить?"
+
+        loop = QEventLoop()
+        user_choice = {}
+
+        def callback(result):
+            user_choice["answer"] = result
+            loop.quit()
+
+        self.signals.warning_question_signal.emit(message, callback)
+
+        loop.exec_()  
+
+        if user_choice["answer"] == QMessageBox.No:
+            return True
+        
+    def validate(self, video_tracks) -> bool:
+        """
+        Валидирует итемы сразу на всей дорожке.
+        """
+        warnings = []
+        warnings_question = []
+        no_select = True
+        try:
+            for track_num, track in enumerate(video_tracks, start=1):
+                
+                if track_num > 1:
+                    track_items = self.get_mediapoolitems(start_track=track, end_track=track)
+                    for item in track_items:
+                        clip = item.mp_item
+                        # Проверка на расширения (".mov", ".mp4", ".jpg")
+                        if (clip.GetName().lower().endswith(FALSE_EXTENTIONS) or 
+                            clip.GetName().lower().endswith(COPTER_EXTENTIONS) or
+                            clip.GetClipProperty("Input Color Space") == "S-Gamut3.Cine/S-Log3") and not item.clip_color == COLORS[3]:
+                            warnings_question.append((clip.GetName(), track_num))    
+                    
+                        # Сбор статусов для проверки хотя бы одного ввыделенного клипа на таймлайне
+                        if not item.clip_color == COLORS[3]:
+                            no_select = False
+
+                        # Проверка на клип, покрашенный в невалидный цвет
+                        if item.clip_color not in COLORS:
+                            warnings.append(f"• Не валидный цвет клипа {clip.GetName()} на треке {track_num}")
+
+                        # Проверка на валидность расширения клипа
+                        if not clip.GetName().lower().endswith(EXTENTIONS) and not clip.GetName().lower().endswith(FALSE_EXTENTIONS):
+                            warnings.append(f"• Не валидное расширение клипа {clip.GetName()} на треке {track_num}")
+
+                        # Проверка на валидный ФПС
+                        if float(clip.GetClipProperty("FPS")) != float(self.fps):
+                            warnings.append(f"• FPS клипа {clip.GetName()} на треке {track_num} не соответствует проектному")
+                        
+                        # Проверка на наличие трансформа на клипе
+                        if self.detect_transform(item):
+                            warnings.append(f"• Уберите трансфомы/скейлы с клипов на треке {track}")
+                            break
+                    
+        except:
+            warnings.append(f"На таймлайне обнаружен объект, который невозможно верифицировать.\nПроверьте нет ли на таймлайне эффектов перехода или других эффектов.")
+
+        if no_select:
+            warnings.append("Не выбран ни один клип на таймлайне")
+
+        if warnings_question:
+            if self.is_question_items(warnings_question):
+                return False
+
+        if warnings:
+            self.signals.warning_signal.emit("\n".join(warnings))
+            return False
+        
+        return True
+        
+    def skip_item(self, item: DvrTimelineObject) -> bool:
         """
         Пропускает итем, для последующей обработки вручную, при условии,
         что у клипа установлен дефолтный цвет 'Blue'.
         """
-        if item.clip_color == SETTINGS["colors"][3] and item.track_type_ind != 1:
+        if item.track_type_ind != 1:
+            if item.clip_color == COLORS[3]:
+                return True
+        else:
             return True
-        
-    def detect_transform(self, item) -> bool:
+    
+    def detect_transform(self, item: DvrTimelineObject) -> bool:
         """
         Определяет есть ли трансформы и кроппинг на таймлайн итеме.
         """
@@ -759,6 +852,7 @@ class DeliveryPipline:
         self.lin_retime_hndls = int(self.user_config["linear_retime_handles"])
         self.non_lin_retime_hndls = int(self.user_config["non_linear_retime_handles"])
         self.is_reference = False
+        self.fps = 24
 
         self.rj_to_clear = []
 
@@ -785,6 +879,9 @@ class DeliveryPipline:
             return False
 
         self.count_plate_tracks = self.is_multy_plates(self.timeline)
+
+        if not self.validate(video_tracks):
+            return False
 
         self.burn_in_off()
 
@@ -818,6 +915,8 @@ class DeliveryPipline:
                 self.stop_process()
 
                 item_resolution = self.get_resolution_settings(item)
+                if not item_resolution:
+                    return False
 
                 render_preset_var = self.set_render_preset(handles_value)
                 if not render_preset_var:
@@ -848,6 +947,7 @@ class ThreadWorker(QThread):
     success_signal = pyqtSignal(str)
     warning_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
+    warning_question_signal = pyqtSignal(str, object)
 
     def __init__(self, parent, logic_class, user_config):
         super().__init__(parent)
@@ -882,7 +982,7 @@ class ConfigValidator:
                 "resolution_height": self.gui.height_input.text().strip(),
                 "resolution_width": self.gui.width_input.text().strip(),
                 "plate_preset": self.gui.preset_combo.currentText().strip(),
-                "reference_preset": self.gui.render_preset_combo.currentText().strip(),
+                "reference_preset": self.gui.reference_preset_combo.currentText().strip(),
                 "handles": self.gui.handle_input.text().strip(),
                 "linear_retime_handles": self.gui.retime_hndl_input.text().strip(),
                 "non_linear_retime_handles": self.gui.nonlinear_hndl_input.text().strip(),
@@ -955,14 +1055,14 @@ class ExrDelivery(QWidget):
         self.height_input.setFixedWidth(60)
 
         self.preset_combo = QComboBox()
-        self.preset_combo.addItems(self.get_project_preset())
+        self.preset_combo.addItems(PLATE_PROJECT_PRESETS)
         self.preset_combo.setCurrentText("aces1.2_smoother_preset")
         self.preset_combo.setMinimumWidth(180)
 
-        self.render_preset_combo = QComboBox()
-        self.render_preset_combo.addItems(self.get_project_preset())
-        self.render_preset_combo.setCurrentText("YRGB_ref_preset")
-        self.render_preset_combo.setMinimumWidth(180)
+        self.reference_preset_combo = QComboBox()
+        self.reference_preset_combo.addItems(REF_PROJECT_PRESETS)
+        self.reference_preset_combo.setCurrentText("YRGB_ref_preset")
+        self.reference_preset_combo.setMinimumWidth(180)
 
         self.export_cb = QCheckBox("Export .xml")
 
@@ -1029,7 +1129,7 @@ class ExrDelivery(QWidget):
         preset_layout.addWidget(self.preset_combo)
         preset_layout.addSpacing(20)
         preset_layout.addWidget(QLabel("Reference preset"))
-        preset_layout.addWidget(self.render_preset_combo)
+        preset_layout.addWidget(self.reference_preset_combo)
         preset_layout.addSpacing(20)
         preset_layout.addStretch()
         step3_layout.addLayout(preset_layout)
@@ -1149,6 +1249,18 @@ class ExrDelivery(QWidget):
         QMessageBox.critical(self, "Ошибка", message)
         logger.exception(message)
 
+
+    def on_question_signal(self, message, callback):
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        logger.warning(message)
+        callback(reply)
+
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Выбор папки")
         if folder:
@@ -1175,6 +1287,7 @@ class ExrDelivery(QWidget):
         thread.success_signal.connect(self.on_success_signal)
         thread.warning_signal.connect(self.on_warning_signal)
         thread.error_signal.connect(self.on_error_signal)
+        thread.warning_question_signal.connect(self.on_question_signal)
 
         if button:
             button.setEnabled(False)
