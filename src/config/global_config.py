@@ -60,6 +60,16 @@ GLOBAL_CONFIG = {
                 "copter_extentions": (".dng"),
                 "LUT_win": r"C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\BM_Film_Gen1_to_AP0_lin.cube"
                     },
+        "exr_delivery_fd": {
+                "track_postfix": '_VT',
+                "colors": ["Orange", "Beige", "Brown", "Blue"],
+                "extentions": (".mxf", ".braw", ".arri", ".r3d", ".dng", ".cine"),
+                "false_extentions": (".mov", ".mp4", ".jpg"),
+                "plate_project_presets": ["aces1.2_smoother_preset", "yrgb_smoother_preset", "python_cinemadng_preset"],
+                "ref_project_presets": ["YRGB_ref_preset"],
+                "copter_extentions": (".dng"),
+                "LUT_win": r"C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\LUT\BM_Film_Gen1_to_AP0_lin.cube"
+                    },
         "edl_processor": {
                 "exceptions": ["RETIME WARNING"],
                 "track_postfix": '_VT'
