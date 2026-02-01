@@ -89,19 +89,18 @@ class NameSetter:
         for track_index in range(2, self.count_of_tracks + 1):
             clips_under = self.timeline.GetItemListInTrack('video', track_index)
             for clip_under in clips_under:
-                if clip_under.GetMediaPoolItem() != None: 
-                    applied = False  # было ли имя присвоено этому текущему clip_under
-                    for name, timecode in markers:
-                        if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
-                            # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
-                            name_new = self.prefix + name + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
-                            clip_under.SetName(name_new)
-                            clip_under.AddVersion(name, 0)
-                            logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
-                            applied = True
+                applied = False  # было ли имя присвоено этому текущему clip_under
+                for name, timecode in markers:
+                    if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
+                        # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
+                        name_new = self.prefix + name + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
+                        clip_under.SetName(name_new)
+                        clip_under.AddVersion(name, 0)
+                        logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
+                        applied = True
 
-                    if not applied:
-                        self.warnings.append(f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
+                if not applied:
+                    self.warnings.append(f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
 
     def from_offline(self, items) -> None:
         """
@@ -111,20 +110,19 @@ class NameSetter:
             clips_under = self.timeline.GetItemListInTrack('video', track_index)
             for clip_under in clips_under:
                 applied = False 
-                if clip_under.GetMediaPoolItem() != None: 
-                    for item in items:
-                        if clip_under.GetStart() == item.GetStart():
-                            # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
-                            name = self.prefix + item.GetName() + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
-                            clip_under.SetName(name)
-                            clip_under.AddVersion(name, 0)
-                            logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
-                            applied = True
-                            break 
+                for item in items:
+                    if clip_under.GetStart() == item.GetStart():
+                        # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
+                        name = self.prefix + item.GetName() + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
+                        clip_under.SetName(name)
+                        clip_under.AddVersion(name, 0)
+                        logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
+                        applied = True
+                        break 
 
-                    if not applied:
-                        self.warnings.append(
-                            f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
+                if not applied:
+                    self.warnings.append(
+                        f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
 
     def set_name(self, items) -> bool:
         """
@@ -441,7 +439,7 @@ class DeliveryPipline:
         Проверка на предмет наличия дорожки с эффектами.
         """
         for item in self.timeline.GetItemListInTrack(track_type, track):
-            if item.GetName() == "Text+":
+            if item.GetMediaPoolItem() == None:
                 return True
             
     def get_tracks(self, start_track=1, track_type="video") -> list:
@@ -461,19 +459,57 @@ class DeliveryPipline:
 
         return no_empty_tracks
     
-    def set_project_preset(self, track) -> bool:
+    def set_project_preset(self, track, item: DvrTimelineObject) -> bool:
         """
         Установка пресета проекта.
         """
-        preset = (self.palate_preset, self.reference_preset)[track == 1]
 
-        set_preset_var = self.project.SetPreset(preset)
-        if set_preset_var is not None:
-            logger.info(f"Применен пресет проекта: {preset}")
-            return True
+        # Для референса
+        if track == 1:
+            preset =  REF_PROJECT_PRESETS[0]
+            set_preset_var = self.project.SetPreset(preset)
+            if set_preset_var is not None:
+                logger.info(f"Применен пресет проекта: {preset}")
+                return True
+            else:
+                self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
+                return False
+        
+        # Для плейтов
         else:
-            self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
-            return False
+            if self.palate_preset == PLATE_PROJECT_PRESETS[0]:
+                if (item.mp_item.GetName().lower().endswith(COPTER_EXTENTIONS) or 
+                    item.mp_item.GetName().lower().endswith(FALSE_EXTENTIONS) or 
+                    item.mp_item.GetClipProperty("Input Color Space") == "S-Gamut3.Cine/S-Log3"):
+                    preset = PLATE_PROJECT_PRESETS[1]
+                    set_preset_var = self.project.SetPreset(preset)
+                    #self.set_LUT(item)
+                    if set_preset_var is not None:
+                        logger.info(f"Применен пресет проекта: {preset}")
+                        return True
+                    else:
+                        self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
+                        return False
+                else:
+                    preset = PLATE_PROJECT_PRESETS[0]
+                    set_preset_var = self.project.SetPreset(preset)
+                    if set_preset_var is not None:
+                        logger.info(f"Применен пресет проекта: {preset}")
+                        return True
+                    else:
+                        self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
+                        return False
+                    
+            # Только YRGB RCM пресет.
+            else:
+                preset = PLATE_PROJECT_PRESETS[1]
+                set_preset_var = self.project.SetPreset(preset)
+                if set_preset_var is not None:
+                    logger.info(f"Применен пресет проекта: {preset}")
+                    return True
+                else:
+                    self.signals.error_signal.emit(f"Пресет проекта не применен {preset}")
+                    return False
 
     def set_disabled(self, current_track_number):
         '''
@@ -489,7 +525,7 @@ class DeliveryPipline:
                     enabled = True
                 else:
                     items = self.timeline.GetItemListInTrack("video", track_number)
-                    enabled = any(item.GetName() == "Text+" for item in items)
+                    enabled = any(item.GetMediaPoolItem() == None for item in items)
             else:
                 enabled = (track_number == current_track_number)
 
@@ -726,7 +762,7 @@ class DeliveryPipline:
         else:
             preset_name = SETTINGS["reference_render_preset"]
             self.project.LoadRenderPreset(preset_name)
-            logger.info(f"Установлен пресет рендера: {handles_value}")
+            logger.info(f"Установлен пресет рендера: {preset_name}")
             return True
         
     def set_project_resolution(self, height_res, width_res):
@@ -764,6 +800,7 @@ class DeliveryPipline:
         
         set_render = self.project.SetRenderSettings(render_settings)
         render_job = self.project.AddRenderJob()
+        render_settings.clear()
 
         if set_render is not None and render_job is not None:
             self.rj_to_clear.append(render_job)
@@ -856,8 +893,7 @@ class DeliveryPipline:
         Пропускает итем, для последующей обработки вручную, при условии,
         что у клипа установлен дефолтный цвет 'Blue'.
         """
-        # return item.clip_color == COLORS[3]
-        return False
+        return item.clip_color == COLORS[3]
     
     def detect_transform(self, item: DvrTimelineObject) -> bool:
         """
@@ -947,7 +983,7 @@ class DeliveryPipline:
 
         self.rj_to_clear = []
         self.shots_tracks = {}
-        
+
         try:
             self.resolve_api = self.get_api_resolve()
         except Exception as e:
@@ -983,10 +1019,6 @@ class DeliveryPipline:
             track_items = self.get_mediapoolitems(start_track=track, end_track=track)
 
             self.set_disabled(track)
-        
-            project_preset_var = self.set_project_preset(track)
-            if not project_preset_var:
-                return False
 
             # Цикл по клипам на дорожке.
             for item in track_items:
@@ -1006,6 +1038,10 @@ class DeliveryPipline:
                 # Ставится до установки render preset что бы не перезатирать пресеты при цикле.
                 self.stop_process()
 
+                project_preset_var = self.set_project_preset(track, item)
+                if not project_preset_var:
+                    return False
+
                 item_resolution = self.get_resolution_settings(item)
                 if not item_resolution:
                     return False
@@ -1024,6 +1060,7 @@ class DeliveryPipline:
 
             # Ожидаем, переключаемся на вкладку edit и уходим на новый трек.
             self.stop_process()
+            self.timeline.ClearMarkInOut(type="all")
             self.resolve.OpenPage("edit")
 
         self.clear_render_jobs(self.rj_to_clear)
