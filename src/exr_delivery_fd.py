@@ -5,10 +5,10 @@ import math
 import time
 from pprint import pformat
 from pathlib import Path
-
+from timecode import Timecode as tc
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox
+    QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QMessageBox, QGroupBox, QCheckBox, QFrame
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QEventLoop
 from dvr_tools.logger_config import get_logger
@@ -26,8 +26,8 @@ SETTINGS = {
     "effects": ('RTS+', 'Counter'),
     "plate_prefix": 'bim_',
     "plate_suffix": '_src_v001_VT',
-    "ref_prefix": 'prm_bim_',
-    "ref_suffix": '_rec709'
+    "ref_prefix": '',
+    "ref_suffix": ''
 }
 
 TRACK_POSTFIX = GLOBAL_CONFIG["scripts_settings"]["exr_delivery_fd"]["track_postfix"]
@@ -58,70 +58,164 @@ class NameSetter:
         except RuntimeError as re:
             raise
 
-    def set_markers(self, item, clip_name):
+    def set_markers(self, item, clip_name) -> None:
         """
         Установка маркера посередине клипа на таймлайне.
         """
         clip_start = int((item.GetStart() + (item.GetStart() + item.GetDuration())) / 2) - self.timeline_start_tc
         self.timeline.AddMarker(clip_start, 'Blue', clip_name, "", 1, 'Renamed')
 
-    def is_effect(self, track, track_type="video"):
-        """
-        Проверка на предмет наличия дорожки с эффектами.
-        """
-        for item in self.timeline.GetItemListInTrack(track_type, track):
-            if item.GetName() == "Text+":
-                return True
+    def get_markers(self) -> list: 
+        '''
+        Получение маркеров для работы других методов.
+        '''
+        try:
+            markers_list = []
+            for timecode, name in self.timeline.GetMarkers().items():
+                name = name[self.marker_from].strip()
+                timecode_marker = tc(self.fps, frames=timecode + self.timeline_start_tc)   
+                markers_list.append((name, timecode_marker))
+            return markers_list
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка получения данных об объектах маркеров: {e}")
+            return False
 
-    def set_name(self, items):
+    def from_markers(self) -> None:
         """
-        Устанавливает имена на все итемы лежащие ниже дорожки с оффлайн клипами.
+        Присвоение имен из маркеров, согласно шаблону из gui.
         """
-        for item in items:
-            clipName = item.GetName()
+        markers = self.get_markers()
 
-            for track_index in range(1, self.count_of_tracks):
-                clips_under = self.timeline.GetItemListInTrack('video', track_index)
-                if clips_under:
-                    
-                    for clip_under in clips_under:
+        for track_index in range(2, self.count_of_tracks + 1):
+            clips_under = self.timeline.GetItemListInTrack('video', track_index)
+            for clip_under in clips_under:
+                if clip_under.GetMediaPoolItem() != None: 
+                    applied = False  # было ли имя присвоено этому текущему clip_under
+                    for name, timecode in markers:
+                        if clip_under.GetStart() <= timecode < (clip_under.GetStart() + clip_under.GetDuration()):
+                            # Вычитаем - 1, чтобы отсчет плейтов был с первой дорожки, а не второй
+                            name_new = self.prefix + name + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
+                            clip_under.SetName(name_new)
+                            clip_under.AddVersion(name, 0)
+                            logger.info(f'Добавлено кастомное имя "{name_new}" в клип на треке {track_index}')
+                            applied = True
 
+                    if not applied:
+                        self.warnings.append(f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
+
+    def from_offline(self, items) -> None:
+        """
+        Присвоение имен из оффлайн клипов, согласно шаблону из gui.
+        """
+        for track_index in range(2, self.count_of_tracks + 1):
+            clips_under = self.timeline.GetItemListInTrack('video', track_index)
+            for clip_under in clips_under:
+                applied = False 
+                if clip_under.GetMediaPoolItem() != None: 
+                    for item in items:
                         if clip_under.GetStart() == item.GetStart():
+                            # Вычитаем - 1 чтобы отсчет плейтов был с первой дорожки, а не второй
+                            name = self.prefix + item.GetName() + self.postfix + ("", TRACK_POSTFIX + str(track_index - 1))[self.set_track_id]
+                            clip_under.SetName(name)
+                            clip_under.AddVersion(name, 0)
+                            logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
+                            applied = True
+                            break 
 
-                            if track_index == 1 or self.is_effect(track_index):
-                                name = SETTINGS["ref_prefix"] + clipName + SETTINGS["ref_suffix"]
-                                clip_under.AddVersion(name, 0)
-                                logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
-                            else: 
-                                # Вычитаем - 1 что бы отсчет плейтов был с первой дорожки, а не второй
-                                name = SETTINGS["plate_prefix"] + clipName + SETTINGS["plate_suffix"] + str(track_index - 1)
-                                clip_under.AddVersion(name, 0)
-                                logger.info(f'Добавлено кастомное имя "{name}" в клип на треке {track_index}')
+                    if not applied:
+                        self.warnings.append(
+                            f"Для клипа {clip_under.GetName()} на треке {track_index} не было установлено имя")
 
-    def run(self):
+    def set_name(self, items) -> bool:
+        """
+        Метод устанавливает имя полученное из маркеров или оффлайн клипов на таймлайне Resolve 
+        и применяет его в имена клипов по двум принципам.
+        В случае получения имен из оффлайн клипов - имена применяются на все итемы лежащие ниже оффлайн клипа.
+        Стартовый таймкод оффлайн клипа должен пересекаться со стартовыми таймкодами итемов, лежащими под ним.
+        В случае получения имен из маркеров - имена применяются на все клипы, которые лежат ниже маркера. 
+        Таймкод маркера должен быть внутри таймкода такого клипа.
+        """
+        self.warnings = []
+
+        try:
+            if self.name_from_markers:
+                self.from_markers()
+
+            elif self.name_from_track:
+                self.from_offline(items)
+
+            if self.warnings:
+                self.signals.warning_signal.emit("\n".join(self.warnings))
+                return False
+            else:
+                logger.info("Имена успешно применены на клипы.")
+            return True
+        
+        except Exception as e:
+            self.signals.error_signal.emit(f"Ошибка копирования имен: {e}")
+            return False 
+
+    def is_connect_project(self) -> bool:
+        """
+        Проверяет все ли объекты резолв получены для дальнейшей работы.
+        """
+        if self.resolve is None:
+            self.signals.error_signal.emit("Не найден Резолв")
+            return False
+        
+        if self.media_pool is None:
+            self.signals.error.emit("Не найден медиапул")
+            return False
+        
+        if self.timeline is None:
+            self.signals.error_signal.emit("Не найдена таймлиния")
+            return False
+        
+        return True   
+
+    def run(self) -> None:
         """
         Основная логика.
         """
-        resolve = self.get_api_resolve()
-        self.timeline = resolve.timeline
-        self.media_pool = resolve.mediapool
+        try:
+            self.resolve_api = self.get_api_resolve()
+        except Exception as e:
+            self.signals.error_signal.emit(str(e))
+            return False
+        
+        self.resolve = self.resolve_api.resolve
+        self.media_pool = self.resolve_api.mediapool
+        self.timeline = self.resolve_api.timeline
+
+        if not self.is_connect_project():
+            return False
         self.timeline_start_tc = self.timeline.GetStartFrame()
 
         self.track_number = int(self.user_config["track_number"])
+        self.name_from_track = self.user_config["set_name_from_track"]
+        self.name_from_markers = self.user_config["set_name_from_markers"]
+        self.fps = int(self.user_config["fps"])
+        self.marker_from = self.user_config["locator_from"]
+        self.prefix = self.user_config["prefix_name"]
+        self.postfix = self.user_config["postfix_name"]
+        self.set_track_id = self.user_config["set_track_id"]
+
         self.count_of_tracks = self.timeline.GetTrackCount('video')
 
         items = self.timeline.GetItemListInTrack('video', self.track_number)
 
-        if items is None:
-            self.signals.warning_signal.emit(f"Дорожка {self.track_number} не существует.")
-            return
-        if items == []:
-            self.signals.warning_signal.emit(f"На дорожке {self.track_number} отсутствуют объекты.")
-            return
+        if self.name_from_track:
+            if items is None:
+                self.signals.warning_signal.emit(f"Дорожка {self.track_number} не существует.")
+                return
+            if items == []:
+                self.signals.warning_signal.emit(f"На дорожке {self.track_number} отсутствуют объекты.")
+                return
         
-        self.set_name(items)
+        if not self.set_name(items):
+            return
 
-        self.signals.success_signal.emit("Имена из оффлайн клипов успешно применены")
+        self.signals.success_signal.emit("Имена успешно применены!")
 
 class EffectsAppender:
     """
@@ -762,11 +856,8 @@ class DeliveryPipline:
         Пропускает итем, для последующей обработки вручную, при условии,
         что у клипа установлен дефолтный цвет 'Blue'.
         """
-        if item.track_type_ind != 1:
-            if item.clip_color == COLORS[3]:
-                return True
-        else:
-            return True
+        # return item.clip_color == COLORS[3]
+        return False
     
     def detect_transform(self, item: DvrTimelineObject) -> bool:
         """
@@ -852,10 +943,11 @@ class DeliveryPipline:
         self.lin_retime_hndls = int(self.user_config["linear_retime_handles"])
         self.non_lin_retime_hndls = int(self.user_config["non_linear_retime_handles"])
         self.is_reference = False
-        self.fps = 24
+        self.fps = self.user_config["fps"]
 
         self.rj_to_clear = []
-
+        self.shots_tracks = {}
+        
         try:
             self.resolve_api = self.get_api_resolve()
         except Exception as e:
@@ -987,11 +1079,20 @@ class ConfigValidator:
                 "linear_retime_handles": self.gui.retime_hndl_input.text().strip(),
                 "non_linear_retime_handles": self.gui.nonlinear_hndl_input.text().strip(),
                 "render_path": self.gui.render_path.text().strip(),
-                "export_xml": self.gui.export_cb.isChecked()
+                "export_xml": self.gui.export_cb.isChecked(),
+                "fps": self.gui.fps_entry.text(),
             }
         
         if self.mode == "names":
-            return {"track_number": self.gui.from_track_qline.text().strip()}
+            return {"track_number": self.gui.from_track_qline.text().strip(),
+                    "set_name_from_markers": self.gui.from_markers_cb.isChecked(),
+                    "set_name_from_track": self.gui.from_track_cb.isChecked(),
+                    "fps": self.gui.fps_entry.text(),
+                    "locator_from": self.gui.locator_from_combo.currentText(),
+                    "prefix_name": self.gui.prefix.text() + ("_", "")[self.gui.prefix.text() == ""],
+                    "postfix_name": ("_", "")[self.gui.postfix.text() == ""] + self.gui.postfix.text(),
+                    "set_track_id": self.gui.set_track_id.isChecked()
+                    }
         
         if self.mode == "effects":
             pass
@@ -1022,6 +1123,10 @@ class ConfigValidator:
                 int(user_config["track_number"])
             except ValueError:
                 self.errors.append("Значения должны быть целыми числами")
+
+            if not any([user_config["set_name_from_markers"], user_config["set_name_from_track"]]):
+                self.errors.append("Укажите метод установки имени")
+
             return not self.errors
         
         if self.mode == "effects":
@@ -1040,10 +1145,20 @@ class ExrDelivery(QWidget):
         self.set_effects_btn = QPushButton("Set Burn-in")
         self.set_effects_btn.clicked.connect(lambda: self.run(EffectsAppender, mode="effects", button=self.set_effects_btn))
 
-        self.from_track_label = QLabel("From Track:")
-        self.from_track_qline = QLineEdit()
+        self.fps_label = QLabel("FPS:")
+        self.fps_entry = QLineEdit("24")
+        self.fps_entry.setFixedWidth(50)
+
+        self.locator_label = QLabel("from field:")
+        self.locator_from_combo = QComboBox()
+        self.locator_from_combo.setFixedWidth(70)
+        self.locator_from_combo.addItems(["name", "note"])
+
+        self.from_track_cb = QCheckBox("from track:")
+        self.from_track_qline = QLineEdit("1")
         self.from_track_qline.setMaximumWidth(40)
-        self.set_names_btn = QPushButton("Set Shot name")
+        self.from_markers_cb = QCheckBox("from markers")
+        self.set_names_btn = QPushButton("Start")
         self.set_names_btn.clicked.connect(lambda: self.run(NameSetter, mode="names", button=self.set_names_btn))
 
         self.res_group = QGroupBox("Film Resolution")
@@ -1076,6 +1191,26 @@ class ExrDelivery(QWidget):
         self.nonlinear_hndl_input = QLineEdit("5")
         self.nonlinear_hndl_input.setMaximumWidth(40)
 
+        self.prefix_label = QLabel("add prefix")
+        self.postfix_label = QLabel("add postfix")
+        self.prefix = QLineEdit("")
+        self.prefix.setMaximumWidth(50)
+        self.prefix.editingFinished.connect(lambda: self.get_shot_name())
+        self.postfix = QLineEdit("")
+        self.postfix.setMaximumWidth(50)
+        self.postfix.editingFinished.connect(lambda: self.get_shot_name())
+        self.shot_name_view = QLabel("###_####")
+        self.set_track_id = QCheckBox("track id")
+        self.set_track_id.stateChanged.connect(lambda: self.get_shot_name())
+        self.set_track_id.setChecked(True)
+
+        self.separator_set_name = QFrame()
+        self.separator_set_name.setFrameShape(QFrame.HLine)
+        self.separator_set_name.setStyleSheet("""
+                                    QFrame {color: #555;
+                                            background-color: #555}
+                                        """)
+
         self.render_path = QLineEdit()
         self.browse_btn = QPushButton("Choose")
         self.browse_btn.clicked.connect(self.select_folder)
@@ -1095,15 +1230,41 @@ class ExrDelivery(QWidget):
 
         # -- Группа установки имен клипов
         step2_group = QGroupBox("Step 2")
-        step2_group.setMinimumHeight(120)
+        step2_group.setMinimumHeight(160)
         names_layout = QVBoxLayout()
         input_track_layout = QHBoxLayout()
         btn_layout = QHBoxLayout()
-        input_track_layout.addWidget(self.from_track_label)
+        shot_name_layout = QHBoxLayout()
+
+        input_track_layout.addWidget(self.from_track_cb)
         input_track_layout.addWidget(self.from_track_qline)
+        input_track_layout.addSpacing(40)
+        input_track_layout.addWidget(self.from_markers_cb)
+        input_track_layout.addSpacing(20)
+        input_track_layout.addWidget(self.locator_label)
+        input_track_layout.addWidget(self.locator_from_combo)
+        input_track_layout.addSpacing(20)
+        input_track_layout.addWidget(self.fps_label)
+        input_track_layout.addWidget(self.fps_entry)
         input_track_layout.addStretch()
+
+        shot_name_layout.addWidget(self.prefix_label)
+        shot_name_layout.addWidget(self.prefix)
+        shot_name_layout.addSpacing(20)
+        shot_name_layout.addWidget(self.postfix_label)
+        shot_name_layout.addWidget(self.postfix)
+        shot_name_layout.addSpacing(20)
+        shot_name_layout.addWidget(self.set_track_id)
+        shot_name_layout.addSpacing(100)
+        shot_name_layout.addWidget(self.shot_name_view)
+        shot_name_layout.addStretch()
+
         btn_layout.addWidget(self.set_names_btn)
+        
+        names_layout.addSpacing(10)
         names_layout.addLayout(input_track_layout)
+        names_layout.addWidget(self.separator_set_name)
+        names_layout.addLayout(shot_name_layout)
         names_layout.addLayout(btn_layout)
         step2_group.setLayout(names_layout)
         layout.addWidget(step2_group)
@@ -1237,6 +1398,11 @@ class ExrDelivery(QWidget):
         main_layout.addLayout(color_layout)
         palette_group.setLayout(main_layout)
         return palette_group
+    
+    def get_shot_name(self):
+        self.base_shot_name = "###_####"
+        result_shot_name = self.prefix.text() + ("_", "")[self.prefix.text() == ""] + self.base_shot_name + ("_", "")[self.postfix.text() == ""] + self.postfix.text() + ("", "_VT1")[self.set_track_id.isChecked()]
+        self.shot_name_view.setText(result_shot_name)
 
     def on_success_signal(self, message):
         QMessageBox.information(self, "Успех", message)
