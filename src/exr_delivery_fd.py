@@ -771,6 +771,43 @@ class DeliveryPipline:
         """
         self.project.SetSetting("timelineResolutionHeight", height_res)
         self.project.SetSetting("timelineResolutionWidth", width_res)
+
+    def get_render_path(self, clip: DvrTimelineObject) -> str:
+        """
+        Формирование путей рендера для альтернативной структуры выданных плейтов.
+        """
+        clip_name = clip.timeline_item.GetName()
+        track_num = clip.track_type_ind
+
+        # Путь для CGF пайплайна
+        if track_num > 1 and self.count_plate_tracks[clip_name] > 1:
+            base_path = Path(self.render_path) / f"{clip_name}_src_l{track_num - 1}_v001"
+            base_path.mkdir(parents=True, exist_ok=True)
+
+        elif track_num > 1 and self.count_plate_tracks[clip_name] == 1:
+            base_path = Path(self.render_path) / f"{clip_name}_src_v001"
+            base_path.mkdir(parents=True, exist_ok=True)
+
+        else:
+            base_path = self.render_path
+ 
+        return str(base_path)
+    
+    def get_render_clip_name(self, clip: DvrTimelineObject):
+
+        clip_name = clip.timeline_item.GetName()
+        track_num = clip.track_type_ind
+
+        if track_num > 1 and self.count_plate_tracks[clip_name] > 1:
+            base_name = clip_name + f"_src_l{track_num - 1}_v001."
+
+        elif track_num > 1 and self.count_plate_tracks[clip_name] == 1:
+            base_name = clip_name + f"_src_v001."
+
+        else:
+            base_name = clip_name + f"_prm_rec709_v001"
+
+        return base_name
             
     def set_render_settings(self, clip, clip_resolution):
         '''
@@ -791,9 +828,10 @@ class DeliveryPipline:
 
         render_settings = {
             "SelectAllFrames": False,
+            "CustomName": str(self.get_render_clip_name(clip)),
             "MarkIn": clip.clip_start,
             "MarkOut": clip.clip_end,
-            "TargetDir": str(self.render_path),
+            "TargetDir": str(self.get_render_path(clip)),
             "FormatWidth": int(width),
             "FormatHeight": int(height)
             }
@@ -923,6 +961,7 @@ class DeliveryPipline:
         extractor_obj = ResolveTimelineItemExtractor(timeline)
         timeline_items = [i.GetName() for i in extractor_obj.get_timeline_items(start_track=2, end_track=timeline.GetTrackCount("video")) if i != "" or i is not None]
         count_plate_tracks = Counter(timeline_items)
+        print(count_plate_tracks)
         return count_plate_tracks
 
     def burn_in_off(self) -> None:
