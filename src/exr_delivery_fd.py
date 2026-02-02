@@ -961,7 +961,6 @@ class DeliveryPipline:
         extractor_obj = ResolveTimelineItemExtractor(timeline)
         timeline_items = [i.GetName() for i in extractor_obj.get_timeline_items(start_track=2, end_track=timeline.GetTrackCount("video")) if i != "" or i is not None]
         count_plate_tracks = Counter(timeline_items)
-        print(count_plate_tracks)
         return count_plate_tracks
 
     def burn_in_off(self) -> None:
@@ -1064,13 +1063,6 @@ class DeliveryPipline:
                 
                 if self.skip_item(item):
                     continue
-
-                logger.debug("\n".join(("\n", f"timline duration: {item.clip_duration}",
-                             f"source duration: {item.source_end - item.source_start}",
-                             f"timline start: {item.clip_start}",
-                             f"timeline end: {item.clip_end}",
-                             f"source start: {item.source_start}",
-                             f"source end: {item.source_end}")))
 
                 handles_value = self.get_handles(item)
 
