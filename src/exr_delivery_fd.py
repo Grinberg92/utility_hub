@@ -86,7 +86,7 @@ class NameSetter:
         """
         markers = self.get_markers()
 
-        for track_index in range(2, self.count_of_tracks + 1):
+        for track_index in range(1, self.count_of_tracks + 1):
             clips_under = self.timeline.GetItemListInTrack('video', track_index)
             for clip_under in clips_under:
                 applied = False  # было ли имя присвоено этому текущему clip_under
@@ -106,7 +106,7 @@ class NameSetter:
         """
         Присвоение имен из оффлайн клипов, согласно шаблону из gui.
         """
-        for track_index in range(2, self.count_of_tracks + 1):
+        for track_index in range(1, self.count_of_tracks + 1):
             clips_under = self.timeline.GetItemListInTrack('video', track_index)
             for clip_under in clips_under:
                 applied = False 
